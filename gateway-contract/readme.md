@@ -18,6 +18,25 @@ This is a Cargo workspace containing the following contracts and shared modules:
 - **`shared/`** - Common utilities, types, and functions shared across contracts including cryptographic primitives and data structures
 - **`tests/`** - End-to-end integration tests for the entire gateway protocol
 
+## Quick Start
+
+Get started with Alien Gateway Contracts in just a few commands:
+
+```bash
+# 1. Install prerequisites
+rustup target add wasm32v1-none
+cargo install --locked stellar-cli
+
+# 2. Build all contracts
+cargo build --target wasm32v1-none --release
+
+# 3. Run tests
+cargo test
+
+# 4. Deploy to testnet
+stellar contract deploy --wasm target/wasm32v1-none/release/core_contract.wasm --network testnet
+```
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
@@ -33,6 +52,9 @@ Before you begin, ensure you have the following installed:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 
+# Install Rust target for WASM
+rustup target add wasm32v1-none
+
 # Install Stellar CLI
 cargo install --locked stellar-cli
 
@@ -42,50 +64,57 @@ cargo install --locked soroban-cli
 
 ## Build Instructions
 
-### Build for WASM target
+### Build All Contracts
+
+To build all contracts in the workspace for release:
 
 ```bash
-# Build all contracts for WASM32 target
-cargo build --target wasm32-unknown-unknown --release
+# Build all contracts optimized for WASM
+cargo build --target wasm32v1-none --release
 
-# Or build specific contract
-cargo build --target wasm32-unknown-unknown --release -p core_contract
-cargo build --target wasm32-unknown-unknown --release -p escrow_contract
-cargo build --target wasm32-unknown-unknown --release -p factory_contract
-cargo build --target wasm32-unknown-unknown --release -p auction_contract
-```
-
-### Build using Stellar contract build
-
-```bash
-# Build all contracts using Stellar CLI
+# Alternative using Stellar CLI
 stellar contract build
-
-# Or build specific contract
-stellar contract build --contracts/core_contract
-stellar contract build --contracts/escrow_contract
-stellar contract build --contracts/factory_contract
-stellar contract build --contracts/auction_contract
 ```
 
-The built WASM files will be located in the `target/wasm32-unknown-unknown/release/` directory.
+### Build Individual Contracts
+
+```bash
+# Build specific contract
+cargo build --target wasm32v1-none --release -p core_contract
+cargo build --target wasm32v1-none --release -p escrow_contract
+cargo build --target wasm32v1-none --release -p factory_contract
+cargo build --target wasm32v1-none --release -p auction_contract
+```
+
+The compiled WASM files will be located in:
+```
+target/wasm32v1-none/release/
+├── core_contract.wasm
+├── escrow_contract.wasm
+├── factory_contract.wasm
+└── auction_contract.wasm
+```
 
 ## Test Instructions
 
-### Run unit tests
+### Run All Tests
 
 ```bash
-# Run all tests
+# Run all unit and integration tests
 cargo test
 
-# Run tests for specific contract
+# Run tests with output
+cargo test -- --nocapture
+```
+
+### Test Individual Contracts
+
+```bash
+# Test specific contract
 cargo test -p core_contract
 cargo test -p escrow_contract
 cargo test -p factory_contract
 cargo test -p auction_contract
-
-# Run tests with output
-cargo test -- --nocapture
 ```
 
 ### Run integration tests
@@ -134,73 +163,158 @@ cargo fmt -p auction_contract
 
 ## Deployment Instructions
 
-### Deploy to Testnet
+### Prerequisites for Deployment
 
-1. **Set up Stellar testnet account**
+1. **Stellar Testnet Account**: Create a testnet account at [Stellar Laboratory](https://laboratory.stellar.org/)
+2. **Get Testnet Lumens**: Fund your account using the [Stellar Testnet Faucet](https://friendbot.stellar.org/)
+3. **Configure Stellar CLI**: Set up your network and account
 
-```bash
-# Create a new testnet account
-stellar keys generate --network testnet --alice
-
-# Or use existing account
-stellar keys add --network testnet <your-secret-key>
-```
-
-2. **Fund the testnet account**
+### Configure Stellar CLI
 
 ```bash
-# Request testnet funds
-stellar friendbot <your-public-key>
+# Set network to testnet
+stellar --network testnet
+
+# Add your secret key (use environment variables for security)
+export STELLAR_SECRET_KEY="your_secret_key_here"
+
+# Or use a config file
+stellar config set network testnet
+stellar config set secret-key your_secret_key_here
 ```
 
-3. **Deploy contracts**
+### Deploy Contracts to Testnet
+
+#### Deploy Core Contract
 
 ```bash
 # Deploy core contract
-stellar contract deploy --wasm target/wasm32-unknown-unknown/release/core_contract.wasm --source <your-account> --network testnet
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/core_contract.wasm \
+  --network testnet \
+  --source-account your_public_key_here
 
-# Deploy escrow contract
-stellar contract deploy --wasm target/wasm32-unknown-unknown/release/escrow_contract.wasm --source <your-account> --network testnet
-
-# Deploy factory contract
-stellar contract deploy --wasm target/wasm32-unknown-unknown/release/factory_contract.wasm --source <your-account> --network testnet
-
-# Deploy auction contract
-stellar contract deploy --wasm target/wasm32-unknown-unknown/release/auction_contract.wasm --source <your-account> --network testnet
+# Note the contract ID from the output
 ```
 
-4. **Initialize contracts**
+#### Deploy Supporting Contracts
 
-After deployment, you'll need to initialize the contracts with the appropriate parameters. Refer to each contract's documentation for specific initialization instructions.
+```bash
+# Deploy escrow contract
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/escrow_contract.wasm \
+  --network testnet \
+  --source-account your_public_key_here
 
-### Deploy to Mainnet
+# Deploy factory contract
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/factory_contract.wasm \
+  --network testnet \
+  --source-account your_public_key_here
 
-For mainnet deployment, follow the same steps but use `--network mainnet` instead of `--network testnet`. Ensure you have sufficient XLM tokens to cover deployment costs.
+# Deploy auction contract
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/auction_contract.wasm \
+  --network testnet \
+  --source-account your_public_key_here
+```
+
+### Verify Deployment
+
+```bash
+# Check contract status
+stellar contract info \
+  --contract-id your_contract_id_here \
+  --network testnet
+
+# Read contract ledger entries
+stellar contract read \
+  --contract-id your_contract_id_here \
+  --network testnet
+```
 
 ## Development Workflow
 
-1. **Make changes** to contract source code
-2. **Run tests** to verify functionality: `cargo test`
-3. **Run linting**: `cargo clippy`
-4. **Format code**: `cargo fmt`
-5. **Build contracts**: `cargo build --target wasm32-unknown-unknown --release`
-6. **Test on testnet** before mainnet deployment
+### 1. Make Changes
 
-## Contract Documentation
+Edit contract source code in the respective `contracts/*/src/` directories.
 
-Each contract contains detailed documentation:
+### 2. Run Tests
 
-- [`core_contract/core.md`](contracts/core_contract/core.md) - Core contract documentation
-- [`escrow_contract/escrow.md`](contracts/escrow_contract/escrow.md) - Escrow contract documentation
-- [`factory_contract/factory.md`](contracts/factory_contract/factory.md) - Factory contract documentation
-- [`auction_contract/auction.md`](contracts/auction_contract/auction.md) - Auction contract documentation
+```bash
+cargo test
+cargo clippy
+cargo fmt
+```
 
-## Security Notes
+### 3. Build
 
-- Always review the [SECURITY_NOTE.md](contracts/core_contract/SECURITY_NOTE.md) before deployment
-- Test thoroughly on testnet before mainnet deployment
-- Use proper access controls and permissions
-- Consider getting a professional security audit for mainnet deployments
+```bash
+cargo build --target wasm32v1-none --release
+```
+
+### 4. Deploy to Testnet
+
+```bash
+stellar contract deploy --wasm target/wasm32v1-none/release/your_contract.wasm --network testnet
+```
+
+## Useful Commands
+
+### Contract Interaction
+
+```bash
+# Invoke contract method
+stellar contract invoke \
+  --contract-id your_contract_id_here \
+  --method your_method_name \
+  --arg1 value1 \
+  --arg2 value2 \
+  --network testnet
+
+# Get contract ledger entries
+stellar contract read \
+  --contract-id your_contract_id_here \
+  --network testnet
+```
+
+### Network Management
+
+```bash
+# Switch between networks
+stellar config set network testnet
+stellar config set network public
+stellar config set network future
+
+# View current configuration
+stellar config show
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Build Failures**: Ensure you have the correct Rust target installed:
+   ```bash
+   rustup target add wasm32v1-none
+   ```
+
+2. **Testnet Funding**: Use the friendbot to fund your testnet account:
+   ```bash
+   curl "https://friendbot.stellar.org?addr=your_public_key_here"
+   ```
+
+3. **Contract Size**: Stellar has a 32KB contract size limit. Use release builds with optimization.
+
+4. **Gas Fees**: Ensure your testnet account has enough lumens for deployment and transactions.
+
+### Debug Mode
+
+For development with logging, use the release-with-logs profile:
+
+```bash
+cargo build --target wasm32v1-none --profile release-with-logs
+```
 
 ## Contributing
 
@@ -210,16 +324,13 @@ Each contract contains detailed documentation:
 4. Run tests and linting
 5. Submit a pull request
 
-## Troubleshooting
+## Security Notes
 
-### Common Issues
+- Always review the [SECURITY_NOTE.md](contracts/core_contract/SECURITY_NOTE.md) before deployment
+- Test thoroughly on testnet before mainnet deployment
+- Use proper access controls and permissions
+- Consider getting a professional security audit for mainnet deployments
 
-- **Build fails**: Ensure you have the latest Rust and Soroban SDK versions
-- **Test failures**: Check that all dependencies are properly configured
-- **Deployment fails**: Verify your account has sufficient XLM and proper permissions
+## License
 
-### Getting Help
-
-- Check the [Stellar Documentation](https://developers.stellar.org/)
-- Review [Soroban Documentation](https://soroban.stellar.org/)
-- Open an issue in the repository for specific problems
+This project is licensed under the MIT License - see the main repository for details.
