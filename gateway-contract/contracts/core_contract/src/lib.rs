@@ -1,31 +1,29 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, Env};
 
 #[contract]
 pub struct CoreContract;
 
 #[contractimpl]
 impl CoreContract {
-    pub fn hello(env: Env, to: Symbol) -> Symbol {
-        let hello = soroban_sdk::symbol!("Hello");
-        hello.concat(to)
+    pub fn initialize(_env: Env) {
+        // Basic initialization function
+    }
+    
+    pub fn get_version(_env: Env) -> u32 {
+        1
     }
 }
 
 #[cfg(test)]
 mod test {
-    use soroban_sdk::symbol;
+    use soroban_sdk::Env;
 
     use super::*;
 
     #[test]
-    fn test_hello() {
+    fn test_version() {
         let env = Env::default();
-        let contract_id = env.register_contract(None, CoreContract);
-        let client = CoreContractClient::new(&env, &contract_id);
-
-        let word = symbol!("world");
-        let expected = symbol!("Hello, world!");
-        assert_eq!(client.hello(&word), expected);
+        assert_eq!(CoreContract::get_version(&env), 1);
     }
 }
