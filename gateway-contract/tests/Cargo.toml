@@ -5,8 +5,6 @@ edition = "2021"
 
 [dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-
-[dev-dependencies]
 core_contract = { path = "../contracts/core_contract" }
 escrow_contract = { path = "../contracts/escrow_contract" }
 factory_contract = { path = "../contracts/factory_contract" }
