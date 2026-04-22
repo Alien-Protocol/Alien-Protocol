@@ -7,3 +7,10 @@ fn test_integration() {
     // Basic integration test structure
     assert!(true); // Simple assertion to make test pass
 }
+
+#[test]
+fn test_env_creation() {
+    let env = Env::default();
+    // Test that we can create an environment
+    assert!(true);
+}

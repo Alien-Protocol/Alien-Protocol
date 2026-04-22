@@ -2,13 +2,10 @@
 name = "tests"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [lib]
 crate-type = ["rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-core_contract = { path = "../contracts/core_contract" }
-escrow_contract = { path = "../contracts/escrow_contract" }
-factory_contract = { path = "../contracts/factory_contract" }
-auction_contract = { path = "../contracts/auction_contract" }
