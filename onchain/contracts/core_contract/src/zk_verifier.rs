@@ -13,7 +13,7 @@ impl ZkVerifier {
             return false;
         }
 
-        let is_all_zero = (0..proof.len()).all(|i| proof.get(i).unwrap_or(0) == 0);
+        let is_all_zero = (0..proof.len()).all(|i| proof.get(i).unwrap_or(&0) == &0);
         if is_all_zero {
             return false;
         }

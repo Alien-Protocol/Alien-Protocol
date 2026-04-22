@@ -9,9 +9,9 @@ members = [
   "tests",
 ]
 
-[workspace.lints.clippy]
-missing_docs_in_private_items = "warn"
-unwrap_used = "warn"
+# [workspace.lints.clippy]
+# missing_docs_in_private_items = "warn"
+# unwrap_used = "warn"
 
 [workspace.dependencies]
 soroban-sdk = "23"

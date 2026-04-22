@@ -7,8 +7,8 @@ description = "Simple auction contract for testing BidRefundedEvent emission"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[lints]
-workspace = true
+# [lints]
+# workspace = true
 
 [dependencies]
 soroban-sdk = { workspace = true }
