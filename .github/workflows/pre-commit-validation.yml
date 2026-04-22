@@ -2,9 +2,9 @@ name: Pre-commit Hook Validation
 
 on:
   push:
-    branches: [main, dev, staging]
+    branches: [main, dev, staging, "docs/*"]
   pull_request:
-    branches: [main, dev, staging]
+    branches: [main, dev, staging, "docs/*"]
 
 jobs:
   validate-pre-commit:

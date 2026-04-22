@@ -1,0 +1,11 @@
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+core_contract = { workspace = true }
+escrow_contract = { workspace = true }
+factory_contract = { workspace = true }
+auction_contract = { workspace = true }

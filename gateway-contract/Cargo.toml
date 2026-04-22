@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = [
+  "contracts/core_contract",
+  "contracts/escrow_contract", 
+  "contracts/factory_contract",
+  "contracts/auction_contract",
+  "shared",
+  "tests",
+]
+
+[workspace.lints.clippy]
+missing_docs_in_private_items = "warn"
+unwrap_used = "warn"
+
+[workspace.dependencies]
+soroban-sdk = "23"
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+# For more information about this profile see https://soroban.stellar.org/docs/basic-tutorials/logging#cargotoml-profile
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
