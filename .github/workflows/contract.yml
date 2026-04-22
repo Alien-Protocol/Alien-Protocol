@@ -28,7 +28,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
-        targets: wasm32v1-none
+        targets: wasm32-unknown-unknown
 
     - name: Check formatting
       run: cargo fmt --all --check
@@ -58,14 +58,14 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
-        targets: wasm32v1-none
+        targets: wasm32-unknown-unknown
 
-    - name: Build Soroban contracts (wasm32v1-none)
+    - name: Build Soroban contracts (wasm32-unknown-unknown)
       run: |
         # Build all contracts - handle different workspace structures
         if [[ "${{ matrix.workspace }}" == "gateway-contract" ]]; then
           # Build gateway-contract workspace
-          cargo build --target wasm32v1-none --release --verbose || true
+          cargo build --target wasm32-unknown-unknown --release --verbose || true
         else
           # Build onchain workspace with specific packages
           cargo build \
@@ -73,7 +73,7 @@ jobs:
             -p core_contract \
             -p escrow_contract \
             -p factory_contract \
-            --target wasm32v1-none \
+            --target wasm32-unknown-unknown \
             --release \
             --verbose
         fi
