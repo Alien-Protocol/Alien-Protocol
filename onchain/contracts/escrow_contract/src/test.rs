@@ -1670,7 +1670,10 @@ fn test_is_paused_false_after_initialize() {
 
     client.initialize(&admin, &reg_id);
 
-    assert!(!client.is_paused(), "contract must not be paused after initialize");
+    assert!(
+        !client.is_paused(),
+        "contract must not be paused after initialize"
+    );
 }
 
 #[test]
@@ -1683,10 +1686,16 @@ fn test_set_paused_by_admin_toggles_state() {
     assert!(!client.is_paused());
 
     client.set_paused(&true);
-    assert!(client.is_paused(), "contract must be paused after set_paused(true)");
+    assert!(
+        client.is_paused(),
+        "contract must be paused after set_paused(true)"
+    );
 
     client.set_paused(&false);
-    assert!(!client.is_paused(), "contract must be unpaused after set_paused(false)");
+    assert!(
+        !client.is_paused(),
+        "contract must be unpaused after set_paused(false)"
+    );
 }
 
 #[test]
@@ -1774,10 +1783,11 @@ fn test_rotate_admin_emits_event() {
     client.rotate_admin(&new_admin);
 
     let events = env.events().all();
-    let has_escrow_event = events
-        .iter()
-        .any(|(contract, _, _)| contract == escrow_id);
-    assert!(has_escrow_event, "expected at least one escrow event after rotate_admin");
+    let has_escrow_event = events.iter().any(|(contract, _, _)| contract == escrow_id);
+    assert!(
+        has_escrow_event,
+        "expected at least one escrow event after rotate_admin"
+    );
 }
 
 #[test]
@@ -1790,10 +1800,11 @@ fn test_set_paused_emits_event() {
     client.set_paused(&true);
 
     let events = env.events().all();
-    let has_escrow_event = events
-        .iter()
-        .any(|(contract, _, _)| contract == escrow_id);
-    assert!(has_escrow_event, "expected at least one escrow event after set_paused");
+    let has_escrow_event = events.iter().any(|(contract, _, _)| contract == escrow_id);
+    assert!(
+        has_escrow_event,
+        "expected at least one escrow event after set_paused"
+    );
 }
 
 #[test]
@@ -1927,10 +1938,25 @@ fn test_read_only_queries_work_while_paused() {
     client.set_paused(&true);
 
     assert!(client.is_paused(), "is_paused must return true");
-    assert!(client.get_admin().is_some(), "get_admin must work while paused");
-    assert_eq!(client.get_balance(&commitment), Some(500), "get_balance must work while paused");
-    assert_eq!(client.is_vault_active(&commitment), Some(true), "is_vault_active must work while paused");
-    assert_eq!(client.get_auto_pay_count(), 0, "get_auto_pay_count must work while paused");
+    assert!(
+        client.get_admin().is_some(),
+        "get_admin must work while paused"
+    );
+    assert_eq!(
+        client.get_balance(&commitment),
+        Some(500),
+        "get_balance must work while paused"
+    );
+    assert_eq!(
+        client.is_vault_active(&commitment),
+        Some(true),
+        "is_vault_active must work while paused"
+    );
+    assert_eq!(
+        client.get_auto_pay_count(),
+        0,
+        "get_auto_pay_count must work while paused"
+    );
 }
 
 #[test]

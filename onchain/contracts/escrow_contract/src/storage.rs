@@ -139,9 +139,7 @@ pub fn read_escrow_admin(env: &Env) -> Option<Address> {
 }
 
 pub fn write_escrow_admin(env: &Env, admin: &Address) {
-    env.storage()
-        .instance()
-        .set(&DataKey::EscrowAdmin, admin);
+    env.storage().instance().set(&DataKey::EscrowAdmin, admin);
 }
 
 pub fn read_paused(env: &Env) -> bool {

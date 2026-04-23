@@ -195,7 +195,11 @@ impl Events {
     }
 
     pub fn admin_rotated(env: &Env, old_admin: Address, new_admin: Address) {
-        AdminRotatedEvent { old_admin, new_admin }.publish(env);
+        AdminRotatedEvent {
+            old_admin,
+            new_admin,
+        }
+        .publish(env);
     }
 
     pub fn pause_toggled(env: &Env, paused: bool) {
