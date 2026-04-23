@@ -133,3 +133,24 @@ pub fn delete_auto_pay(env: &Env, from: &BytesN<32>, rule_id: u32) {
     let key = DataKey::AutoPay(from.clone(), rule_id as u64);
     env.storage().persistent().remove(&key);
 }
+
+pub fn read_escrow_admin(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::EscrowAdmin)
+}
+
+pub fn write_escrow_admin(env: &Env, admin: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::EscrowAdmin, admin);
+}
+
+pub fn read_paused(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
+}
+
+pub fn write_paused(env: &Env, paused: bool) {
+    env.storage().instance().set(&DataKey::Paused, &paused);
+}
