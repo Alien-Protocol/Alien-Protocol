@@ -40,7 +40,33 @@ export class EscrowContractClient {
     const response = await this.server.sendTransaction(prepared);
 
     if (response.status === 'ERROR') {
-      throw new Error(`Transaction failed: ${response.errorResult || 'unknown'}`);
+      const errorXdr = response.errorResult
+        ? response.errorResult.toXDR('base64')
+        : 'unknown';
+      throw new Error(`Transaction failed: ${errorXdr}`);
     }
+
+    if (response.status === 'TRY_AGAIN_LATER') {
+      throw new Error('Transaction temporarily rejected: try again later');
+    }
+
+    if (response.status === 'PENDING') {
+      const hash = response.hash;
+      const maxRetries = 15;
+      for (let i = 0; i < maxRetries; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const result = await this.server.getTransaction(hash);
+        if (result.status === 'SUCCESS') {
+          return;
+        }
+        if (result.status === 'NOT_FOUND') {
+          continue;
+        }
+        throw new Error(`Transaction failed on-chain: ${result.status}`);
+      }
+      throw new Error('Transaction polling timed out');
+    }
+
+    // DUPLICATE: transaction already in flight, which is acceptable
   }
 }

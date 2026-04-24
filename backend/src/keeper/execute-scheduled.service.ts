@@ -11,6 +11,7 @@ export class ExecuteScheduledService {
   private readonly logger = new Logger(ExecuteScheduledService.name);
   private readonly enabled: boolean;
   private readonly secretKey: string | undefined;
+  private isRunning = false;
 
   constructor(
     private readonly configService: ConfigService,
@@ -33,24 +34,38 @@ export class ExecuteScheduledService {
       return;
     }
 
-    const now = new Date();
-    const duePayments = await this.paymentRepository.find({
-      where: {
-        executed: false,
-        releaseAt: LessThanOrEqual(now),
-      },
-    });
+    if (this.isRunning) {
+      this.logger.warn('Previous keeper run still in progress, skipping');
+      return;
+    }
 
-    for (const payment of duePayments) {
-      try {
-        await this.escrowClient.executeScheduled(payment.paymentId, this.secretKey);
-        payment.executed = true;
-        await this.paymentRepository.save(payment);
-        this.logger.log(`Executed scheduled payment ${payment.paymentId}`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.error(`Failed to execute payment ${payment.paymentId}: ${message}`);
+    this.isRunning = true;
+    try {
+      const now = new Date();
+      const duePayments = await this.paymentRepository.find({
+        where: {
+          executed: false,
+          releaseAt: LessThanOrEqual(now),
+        },
+      });
+
+      for (const payment of duePayments) {
+        try {
+          await this.escrowClient.executeScheduled(payment.paymentId, this.secretKey);
+          payment.executed = true;
+          await this.paymentRepository.save(payment);
+          this.logger.log(`Executed scheduled payment ${payment.paymentId}`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const stack = error instanceof Error ? error.stack : undefined;
+          this.logger.error(
+            `Failed to execute payment ${payment.paymentId}: ${message}`,
+            stack,
+          );
+        }
       }
+    } finally {
+      this.isRunning = false;
     }
   }
 }
