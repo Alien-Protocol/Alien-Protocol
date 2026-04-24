@@ -1,6 +1,6 @@
 #![no_std]
-
-/// Error types for the factory contract.
+//! Factory Contract.
+/// Error types returned by the factory contract.
 mod errors;
 /// Event definitions and emitters for the factory contract.
 mod events;
