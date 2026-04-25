@@ -1,6 +1,6 @@
 #![no_std]
-
-/// Error types for the factory contract.
+//! Factory Contract.
+/// Error types returned by the factory contract.
 mod errors;
 /// Event definitions and emitters for the factory contract.
 mod events;
@@ -85,21 +85,20 @@ impl FactoryContract {
         get_operator(&env)
     }
 
-    pub fn deploy_username(env: Env, username_hash: BytesN<32>, owner: Address) {
-        let auction_contract = match read_auction_contract(&env) {
-            Some(address) => address,
-            None => panic_with_error!(&env, FactoryError::Unauthorized),
-        };
+    pub fn deploy_username(
+        env: Env,
+        username_hash: BytesN<32>,
+        owner: Address,
+    ) -> Result<(), FactoryError> {
+        let auction_contract = read_auction_contract(&env).ok_or(FactoryError::Unauthorized)?;
         auction_contract.require_auth();
 
         if has_username(&env, &username_hash) {
-            panic_with_error!(&env, FactoryError::AlreadyDeployed);
+            return Err(FactoryError::AlreadyDeployed);
         }
 
-        let core_contract = match read_core_contract(&env) {
-            Some(address) => address,
-            None => panic_with_error!(&env, FactoryError::CoreContractNotConfigured),
-        };
+        let core_contract =
+            read_core_contract(&env).ok_or(FactoryError::CoreContractNotConfigured)?;
 
         let record = UsernameRecord {
             username_hash: username_hash.clone(),
@@ -115,22 +114,25 @@ impl FactoryContract {
             &record.owner,
             record.registered_at,
         );
+        Ok(())
     }
 
-    pub fn transfer_username(env: Env, username_hash: BytesN<32>, new_owner: Address) {
-        let auction_contract = match read_auction_contract(&env) {
-            Some(address) => address,
-            None => panic_with_error!(&env, FactoryError::Unauthorized),
-        };
+    pub fn transfer_username(
+        env: Env,
+        username_hash: BytesN<32>,
+        new_owner: Address,
+    ) -> Result<(), FactoryError> {
+        let auction_contract = read_auction_contract(&env).ok_or(FactoryError::Unauthorized)?;
         auction_contract.require_auth();
 
-        let mut record = get_username(&env, &username_hash).expect("Username not deployed");
+        let mut record = get_username(&env, &username_hash).ok_or(FactoryError::Unauthorized)?;
 
         let old_owner = record.owner.clone();
         record.owner = new_owner.clone();
 
         set_username(&env, &username_hash, &record);
         emit_ownership_transferred(&env, &username_hash, &old_owner, &new_owner);
+        Ok(())
     }
 
     pub fn get_username_record(env: Env, username_hash: BytesN<32>) -> Option<UsernameRecord> {
