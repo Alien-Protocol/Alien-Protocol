@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   Keypair,
   SorobanRpc,
+  Transaction,
   TransactionBuilder,
   Contract,
   BASE_FEE,
@@ -23,18 +24,7 @@ export class EscrowContractClient {
     this.contract = new Contract(contractId);
   }
 
-  async executeScheduled(paymentId: number, signerSecret: string): Promise<void> {
-    const signer = Keypair.fromSecret(signerSecret);
-    const source = await this.server.getAccount(signer.publicKey());
-
-    const tx = new TransactionBuilder(source, {
-      fee: BASE_FEE,
-      networkPassphrase: this.networkPassphrase,
-    })
-      .addOperation(this.contract.call('execute_scheduled', xdr.ScVal.scvU32(paymentId)))
-      .setTimeout(30)
-      .build();
-
+  private async submitAndAwait(tx: Transaction, signer: Keypair): Promise<void> {
     const prepared = await this.server.prepareTransaction(tx);
     prepared.sign(signer);
     const response = await this.server.sendTransaction(prepared);
@@ -68,5 +58,50 @@ export class EscrowContractClient {
     }
 
     // DUPLICATE: transaction already in flight, which is acceptable
+  }
+
+  async executeScheduled(paymentId: number, signerSecret: string): Promise<void> {
+    const signer = Keypair.fromSecret(signerSecret);
+    const source = await this.server.getAccount(signer.publicKey());
+
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(this.contract.call('execute_scheduled', xdr.ScVal.scvU32(paymentId)))
+      .setTimeout(30)
+      .build();
+
+    await this.submitAndAwait(tx, signer);
+  }
+
+  async triggerAutoPay(fromCommitment: string, ruleId: number, signerSecret: string): Promise<void> {
+    const normalized = fromCommitment.trim();
+    const hex = normalized.startsWith('0x') ? normalized.slice(2) : normalized;
+    if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) {
+      throw new Error(`Invalid fromCommitment: expected even-length hex string, got "${fromCommitment}"`);
+    }
+    if (hex.length !== 64) {
+      throw new Error(`Invalid fromCommitment: expected 32 bytes (64 hex chars), got ${hex.length} chars`);
+    }
+
+    const signer = Keypair.fromSecret(signerSecret);
+    const source = await this.server.getAccount(signer.publicKey());
+
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(
+        this.contract.call(
+          'trigger_auto_pay',
+          xdr.ScVal.scvBytes(Buffer.from(hex, 'hex')),
+          xdr.ScVal.scvU32(ruleId),
+        ),
+      )
+      .setTimeout(30)
+      .build();
+
+    await this.submitAndAwait(tx, signer);
   }
 }
