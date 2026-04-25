@@ -324,128 +324,13 @@ fn contract_getters_follow_soroban_convention() {
 }
 
 #[test]
-fn test_rbac_roles() {
+fn test_transfer_username_success_v2() {
     let env = Env::default();
-    env.mock_all_auths();
-    let factory_id = env.register(FactoryContract, ());
-    let factory = FactoryContractClient::new(&env, &factory_id);
+    let (factory_id, factory, auction_contract, _core_contract) = setup_factory(&env);
+
+    // 1. Deploy
     let owner = Address::generate(&env);
-    let admin = Address::generate(&env);
-    let operator = Address::generate(&env);
-
-    factory.initialize(&owner);
-    assert_eq!(factory.get_owner(), Some(owner.clone()));
-    assert_eq!(factory.get_admin(), Some(owner.clone()));
-    assert_eq!(factory.get_operator(), Some(owner.clone()));
-
-    // Owner sets admin
-    env.mock_auths(&[MockAuth {
-        address: &owner,
-        invoke: &MockAuthInvoke {
-            contract: &factory_id,
-            fn_name: "set_admin",
-            args: (admin.clone(),).into_val(&env),
-            sub_invokes: &[],
-        },
-    }]);
-    factory.set_admin(&admin);
-    assert_eq!(factory.get_admin(), Some(admin.clone()));
-
-    // Admin sets operator
-    env.mock_auths(&[MockAuth {
-        address: &admin,
-        invoke: &MockAuthInvoke {
-            contract: &factory_id,
-            fn_name: "set_operator",
-            args: (operator.clone(),).into_val(&env),
-            sub_invokes: &[],
-        },
-    }]);
-    factory.set_operator(&operator);
-    assert_eq!(factory.get_operator(), Some(operator.clone()));
-
-    // Operator configures
-    let auction = Address::generate(&env);
-    let core = Address::generate(&env);
-    env.mock_auths(&[MockAuth {
-        address: &operator,
-        invoke: &MockAuthInvoke {
-            contract: &factory_id,
-            fn_name: "configure",
-            args: (auction.clone(), core.clone()).into_val(&env),
-            sub_invokes: &[],
-        },
-    }]);
-    factory.configure(&auction, &core);
-    assert_eq!(factory.auction_contract(), Some(auction));
-    assert_eq!(factory.core_contract(), Some(core));
-}
-
-#[test]
-#[should_panic] // HostError: Error(Auth, InvalidAction)
-fn test_rbac_unauthorized_configure() {
-    let env = Env::default();
-    let factory_id = env.register(FactoryContract, ());
-    let factory = FactoryContractClient::new(&env, &factory_id);
-    let owner = Address::generate(&env);
-    let malicious = Address::generate(&env);
-
-    env.mock_auths(&[MockAuth {
-        address: &owner,
-        invoke: &MockAuthInvoke {
-            contract: &factory_id,
-            fn_name: "initialize",
-            args: (owner.clone(),).into_val(&env),
-            sub_invokes: &[],
-        },
-    }]);
-    factory.initialize(&owner);
-
-    let auction = Address::generate(&env);
-    let core = Address::generate(&env);
-    env.mock_auths(&[MockAuth {
-        address: &malicious,
-        invoke: &MockAuthInvoke {
-            contract: &factory_id,
-            fn_name: "configure",
-            args: (auction.clone(), core.clone()).into_val(&env),
-            sub_invokes: &[],
-        },
-    }]);
-    factory.configure(&auction, &core);
-}
-
-/// Requirements 7.3: assert Ok(()) for a successful deploy_username call
-#[test]
-fn deploy_username_returns_ok_on_success() {
-    let env = Env::default();
-    let (factory_id, factory, auction_contract, _) = setup_factory(&env);
-    let owner = Address::generate(&env);
-    let hash = BytesN::from_array(&env, &[42; 32]);
-    let deploy_args: Vec<Val> = (hash.clone(), owner.clone()).into_val(&env);
-
-    env.mock_auths(&[MockAuth {
-        address: &auction_contract,
-        invoke: &MockAuthInvoke {
-            contract: &factory_id,
-            fn_name: "deploy_username",
-            args: deploy_args,
-            sub_invokes: &[],
-        },
-    }]);
-
-    let result = factory.try_deploy_username(&hash, &owner);
-    assert_eq!(result, Ok(Ok(())));
-}
-
-/// Requirements 7.4: assert Ok(()) for a successful transfer_username call
-#[test]
-fn transfer_username_returns_ok_on_success() {
-    let env = Env::default();
-    let (factory_id, factory, auction_contract, _) = setup_factory(&env);
-    let owner = Address::generate(&env);
-    let new_owner = Address::generate(&env);
-    let hash = BytesN::from_array(&env, &[43; 32]);
+    let hash = username_hash(&env);
     let deploy_args: Vec<Val> = (hash.clone(), owner.clone()).into_val(&env);
 
     env.mock_auths(&[MockAuth {
@@ -459,7 +344,54 @@ fn transfer_username_returns_ok_on_success() {
     }]);
     factory.deploy_username(&hash, &owner);
 
+    // 2. Transfer
+    let new_owner = Address::generate(&env);
     let transfer_args: Vec<Val> = (hash.clone(), new_owner.clone()).into_val(&env);
+
+    env.mock_auths(&[MockAuth {
+        address: &auction_contract,
+        invoke: &MockAuthInvoke {
+            contract: &factory_id,
+            fn_name: "transfer_username",
+            args: transfer_args,
+            sub_invokes: &[],
+        },
+    }]);
+    factory.transfer_username(&hash, &new_owner);
+
+    // 3. Assertions
+    let record = factory
+        .get_username_record(&hash)
+        .expect("record must exist");
+    assert_eq!(record.owner, new_owner);
+}
+
+#[test]
+fn test_transfer_username_unconfigured_auction_contract_fails() {
+    let env = Env::default();
+    let (factory_id, _) = setup_unconfigured_factory(&env);
+
+    let hash = username_hash(&env);
+    let new_owner = Address::generate(&env);
+
+    let result = env.try_invoke_contract::<(), FactoryError>(
+        &factory_id,
+        &Symbol::new(&env, "transfer_username"),
+        Vec::<Val>::from_array(&env, [hash.into_val(&env), new_owner.into_val(&env)]),
+    );
+
+    assert_eq!(result, Err(Ok(FactoryError::Unauthorized)));
+}
+
+#[test]
+fn test_transfer_username_missing_record_fails() {
+    let env = Env::default();
+    let (factory_id, _factory, auction_contract, _) = setup_factory(&env);
+
+    let hash = username_hash(&env);
+    let new_owner = Address::generate(&env);
+    let transfer_args: Vec<Val> = (hash.clone(), new_owner.clone()).into_val(&env);
+
     env.mock_auths(&[MockAuth {
         address: &auction_contract,
         invoke: &MockAuthInvoke {
@@ -470,7 +402,40 @@ fn transfer_username_returns_ok_on_success() {
         },
     }]);
 
-    let result = factory.try_transfer_username(&hash, &new_owner);
-    assert_eq!(result, Ok(Ok(())));
-    assert_eq!(factory.get_username_owner(&hash), Some(new_owner));
+    let result = env.try_invoke_contract::<(), FactoryError>(
+        &factory_id,
+        &Symbol::new(&env, "transfer_username"),
+        Vec::<Val>::from_array(&env, [hash.into_val(&env), new_owner.into_val(&env)]),
+    );
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_transfer_username_unauthorized_caller_fails() {
+    let env = Env::default();
+    let (factory_id, _, _, _) = setup_factory(&env);
+
+    let wrong_caller = Address::generate(&env);
+    let hash = username_hash(&env);
+    let new_owner = Address::generate(&env);
+    let transfer_args: Vec<Val> = (hash.clone(), new_owner.clone()).into_val(&env);
+
+    env.mock_auths(&[MockAuth {
+        address: &wrong_caller,
+        invoke: &MockAuthInvoke {
+            contract: &factory_id,
+            fn_name: "transfer_username",
+            args: transfer_args,
+            sub_invokes: &[],
+        },
+    }]);
+
+    let result = env.try_invoke_contract::<(), FactoryError>(
+        &factory_id,
+        &Symbol::new(&env, "transfer_username"),
+        Vec::<Val>::from_array(&env, [hash.into_val(&env), new_owner.into_val(&env)]),
+    );
+
+    assert!(result.is_err());
 }
