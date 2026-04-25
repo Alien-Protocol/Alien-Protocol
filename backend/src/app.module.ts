@@ -1,4 +1,20 @@
 import { Module } from '@nestjs/common';
+
+import { DatabaseModule } from './database/database.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { ConfigModule } from './config/config.module';
+import { ConfigService } from './config/config.service';
+import { StellarModule } from './stellar/stellar.module';
+
+@Module({
+  imports: [
+    ConfigModule,
+    DatabaseModule,
+    StellarModule,
+  ],
+  controllers: [AppController],
+
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -20,5 +36,6 @@ import { KeeperModule } from './keeper/keeper.module';
     }),
     KeeperModule,
   ],
+
 })
 export class AppModule {}
