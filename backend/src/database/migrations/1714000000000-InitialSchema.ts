@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table } from "typeorm";
+import { MigrationInterface, QueryRunner, Table, TableIndex } from "typeorm";
 
 export class InitialSchema1714000000000 implements MigrationInterface {
     name = 'InitialSchema1714000000000'
@@ -51,12 +51,19 @@ export class InitialSchema1714000000000 implements MigrationInterface {
                 { name: "amount", type: "bigint" },
                 { name: "interval", type: "bigint" },
                 { name: "lastPaid", type: "bigint", default: "'0'" },
-                { name: "isActive", type: "boolean", default: true }
+                { name: "isActive", type: "boolean", default: true },
+                { name: "needsAttention", type: "boolean", default: false }
             ]
         }), true);
+
+        await queryRunner.createIndex("auto_pay_rules", new TableIndex({
+            name: "IDX_auto_pay_rules_isActive_lastPaid_interval",
+            columnNames: ["isActive", "lastPaid", "interval"],
+        }));
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.dropIndex("auto_pay_rules", "IDX_auto_pay_rules_isActive_lastPaid_interval");
         await queryRunner.dropTable("auto_pay_rules");
         await queryRunner.dropTable("payments");
         await queryRunner.dropTable("vaults");
