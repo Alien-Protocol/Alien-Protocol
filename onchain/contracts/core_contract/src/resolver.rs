@@ -4,7 +4,7 @@ use crate::errors::CoreError;
 use crate::events::{privacy_set_event, REGISTER_EVENT};
 use crate::registration::Registration;
 use crate::storage;
-use crate::types::{PrivacyMode, PublicSignals, ResolveData};
+use crate::types::{Permission, PrivacyMode, PublicSignals, ResolveData};
 use crate::{smt_root, zk_verifier};
 
 pub struct Resolver;
@@ -51,12 +51,23 @@ impl Resolver {
             .publish((REGISTER_EVENT,), (commitment, caller));
     }
 
-    pub fn set_memo(env: Env, commitment: BytesN<32>, memo_id: u64) {
+    pub fn set_memo(env: Env, caller: Address, commitment: BytesN<32>, memo_id: u64) {
+        caller.require_auth();
+
         let mut data = env
             .storage()
             .persistent()
             .get::<storage::DataKey, ResolveData>(&storage::DataKey::Resolver(commitment.clone()))
             .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+
+        let owner = Registration::get_owner(env.clone(), commitment.clone())
+            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+
+        if owner != caller
+            && !storage::has_permission(&env, &commitment, &caller, Permission::SetMemo)
+        {
+            panic_with_error!(&env, CoreError::Unauthorized);
+        }
 
         data.memo = Some(memo_id);
         env.storage()
@@ -64,10 +75,22 @@ impl Resolver {
             .set(&storage::DataKey::Resolver(commitment), &data);
     }
 
-    pub fn set_privacy_mode(env: Env, username_hash: BytesN<32>, mode: PrivacyMode) {
+    pub fn set_privacy_mode(
+        env: Env,
+        caller: Address,
+        username_hash: BytesN<32>,
+        mode: PrivacyMode,
+    ) {
+        caller.require_auth();
+
         let owner = Registration::get_owner(env.clone(), username_hash.clone())
             .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
-        owner.require_auth();
+
+        if owner != caller
+            && !storage::has_permission(&env, &username_hash, &caller, Permission::SetPrivacyMode)
+        {
+            panic_with_error!(&env, CoreError::Unauthorized);
+        }
 
         storage::set_privacy_mode(&env, &username_hash, &mode);
 

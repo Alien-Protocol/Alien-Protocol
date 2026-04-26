@@ -2,40 +2,76 @@ use soroban_sdk::{Address, BytesN, Env};
 
 use crate::types::{DataKey, DeployConfig, UsernameRecord};
 
-/// Number of ledgers to bump persistent storage entries by.
+/// The amount of ledger entries to bump persistent storage by.
 pub(crate) const PERSISTENT_BUMP_AMOUNT: u32 = 518_400;
-/// Minimum remaining ledgers before a persistent entry is bumped.
+/// The threshold for persistent storage TTL to trigger an auto-bump.
 pub(crate) const PERSISTENT_LIFETIME_THRESHOLD: u32 = 120_960;
 
-/// Stores the auction contract address in instance storage.
+/// Sets the auction contract address.
 pub fn set_auction_contract(env: &Env, auction_contract: &Address) {
     env.storage()
         .instance()
         .set(&DataKey::AuctionContract, auction_contract);
 }
 
-/// Retrieves the auction contract address from instance storage.
+/// Returns the auction contract address.
 pub fn get_auction_contract(env: &Env) -> Option<Address> {
     env.storage()
         .instance()
         .get::<DataKey, Address>(&DataKey::AuctionContract)
 }
 
-/// Stores the core contract address in instance storage.
+/// Sets the contract owner.
+pub fn set_owner(env: &Env, owner: &Address) {
+    env.storage().instance().set(&DataKey::Owner, owner);
+}
+
+/// Returns the contract owner.
+pub fn get_owner(env: &Env) -> Option<Address> {
+    env.storage()
+        .instance()
+        .get::<DataKey, Address>(&DataKey::Owner)
+}
+
+/// Sets the contract admin.
+pub fn set_admin(env: &Env, admin: &Address) {
+    env.storage().instance().set(&DataKey::Admin, admin);
+}
+
+/// Returns the contract admin.
+pub fn get_admin(env: &Env) -> Option<Address> {
+    env.storage()
+        .instance()
+        .get::<DataKey, Address>(&DataKey::Admin)
+}
+
+/// Sets the contract operator.
+pub fn set_operator(env: &Env, operator: &Address) {
+    env.storage().instance().set(&DataKey::Operator, operator);
+}
+
+/// Returns the contract operator.
+pub fn get_operator(env: &Env) -> Option<Address> {
+    env.storage()
+        .instance()
+        .get::<DataKey, Address>(&DataKey::Operator)
+}
+
+/// Sets the core contract address.
 pub fn set_core_contract(env: &Env, core_contract: &Address) {
     env.storage()
         .instance()
         .set(&DataKey::CoreContract, core_contract);
 }
 
-/// Retrieves the core contract address from instance storage.
+/// Returns the core contract address.
 pub fn get_core_contract(env: &Env) -> Option<Address> {
     env.storage()
         .instance()
         .get::<DataKey, Address>(&DataKey::CoreContract)
 }
 
-/// Stores a username record in persistent storage under its hash key.
+/// Stores a username record.
 pub fn set_username(env: &Env, hash: &BytesN<32>, record: &UsernameRecord) {
     let key = DataKey::Username(hash.clone());
     env.storage().persistent().set(&key, record);
@@ -46,7 +82,7 @@ pub fn set_username(env: &Env, hash: &BytesN<32>, record: &UsernameRecord) {
     );
 }
 
-/// Retrieves a username record from persistent storage by its hash.
+/// Returns a username record.
 pub fn get_username(env: &Env, hash: &BytesN<32>) -> Option<UsernameRecord> {
     let key = DataKey::Username(hash.clone());
     let record = env
@@ -63,7 +99,7 @@ pub fn get_username(env: &Env, hash: &BytesN<32>) -> Option<UsernameRecord> {
     record
 }
 
-/// Returns true if a username record exists for the given hash.
+/// Checks if a username hash is registered.
 pub fn has_username(env: &Env, hash: &BytesN<32>) -> bool {
     env.storage()
         .persistent()
@@ -72,6 +108,7 @@ pub fn has_username(env: &Env, hash: &BytesN<32>) -> bool {
 
 /// Retrieves the deploy configuration from persistent storage.
 #[allow(dead_code)]
+/// Returns the deployment configuration.
 pub fn get_config(env: &Env) -> Option<DeployConfig> {
     env.storage()
         .persistent()
@@ -80,6 +117,7 @@ pub fn get_config(env: &Env) -> Option<DeployConfig> {
 
 /// Stores the deploy configuration in persistent storage.
 #[allow(dead_code)]
+/// Sets the deployment configuration.
 pub fn set_config(env: &Env, config: &DeployConfig) {
     let key = DataKey::Config;
     env.storage().persistent().set(&key, config);

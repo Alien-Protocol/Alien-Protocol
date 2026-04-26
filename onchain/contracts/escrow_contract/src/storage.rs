@@ -2,9 +2,9 @@ use crate::errors::EscrowError;
 use crate::types::{AutoPay, DataKey, LegacyVault, ScheduledPayment, VaultConfig, VaultState};
 use soroban_sdk::{Address, BytesN, Env};
 
-/// Number of ledgers to bump persistent storage entries by.
+/// The amount of ledger entries to bump persistent storage by.
 pub(crate) const PERSISTENT_BUMP_AMOUNT: u32 = 518_400;
-/// Minimum remaining ledgers before a persistent entry is bumped.
+/// The threshold for persistent storage TTL to trigger an auto-bump.
 pub(crate) const PERSISTENT_LIFETIME_THRESHOLD: u32 = 120_960;
 
 pub fn read_vault_config(env: &Env, commitment: &BytesN<32>) -> Option<VaultConfig> {

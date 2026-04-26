@@ -3,37 +3,46 @@ use soroban_sdk::{contracttype, Address, BytesN};
 /// Storage keys used by the factory contract.
 #[contracttype]
 #[derive(Clone)]
+/// Storage keys for the factory contract.
 pub enum DataKey {
-    /// Key for the auction contract address.
+    /// The contract owner.
+    Owner,
+    /// The contract admin.
+    Admin,
+    /// The contract operator.
+    Operator,
+    /// The auction contract address.
     AuctionContract,
-    /// Key for the core contract address.
+    /// The core resolver contract address.
     CoreContract,
-    /// Key for a username record identified by its hash.
+    /// A username record mapping.
     Username(BytesN<32>),
-    /// Key for the deploy configuration.
+    /// Deployment configuration.
     Config,
 }
 
 /// A record representing a deployed username and its associated metadata.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// A record representing a deployed username.
 pub struct UsernameRecord {
-    /// The hash of the username.
+    /// SHA-256 hash of the username.
     pub username_hash: BytesN<32>,
-    /// The current owner of the username.
+    /// Address of the username owner.
     pub owner: Address,
-    /// The ledger timestamp when the username was registered.
+    /// Ledger timestamp when the username was registered.
     pub registered_at: u64,
-    /// The core contract associated with this username.
+    /// Address of the core resolver contract.
     pub core_contract: Address,
 }
 
 /// Configuration used when deploying new username contracts.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Deployment configuration for the factory.
 pub struct DeployConfig {
-    /// The WASM hash of the core contract to deploy.
+    /// WASM hash of the core contract.
     pub core_contract_wasm_hash: BytesN<32>,
-    /// The admin address with deployment privileges.
+    /// Admin address for the deployment.
     pub admin: Address,
 }

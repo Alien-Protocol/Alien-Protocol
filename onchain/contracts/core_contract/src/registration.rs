@@ -1,7 +1,7 @@
 use crate::errors::CoreError;
-use crate::events::{username_registered_event, REGISTER_EVENT};
+use crate::events::{username_registered_event, DELEGATE_GNT, DELEGATE_RVN, REGISTER_EVENT};
 use crate::storage::{self, PERSISTENT_BUMP_AMOUNT, PERSISTENT_LIFETIME_THRESHOLD};
-use crate::types::{Proof, PublicSignals};
+use crate::types::{PermissionSet, Proof, PublicSignals};
 use crate::{smt_root, zk_verifier};
 use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
 
@@ -77,5 +77,47 @@ impl Registration {
 
     pub fn get_created_at(env: Env, commitment: BytesN<32>) -> Option<u64> {
         storage::get_created_at(&env, &commitment)
+    }
+
+    pub fn grant_delegate(
+        env: Env,
+        owner: Address,
+        username_hash: BytesN<32>,
+        delegate: Address,
+        permissions: PermissionSet,
+    ) {
+        owner.require_auth();
+
+        let real_owner = Self::get_owner(env.clone(), username_hash.clone())
+            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+
+        if real_owner != owner {
+            panic_with_error!(&env, CoreError::Unauthorized);
+        }
+
+        storage::set_delegate_permissions(&env, &username_hash, &delegate, &permissions);
+
+        #[allow(deprecated)]
+        env.events().publish(
+            (DELEGATE_GNT,),
+            (username_hash, delegate, permissions.permissions),
+        );
+    }
+
+    pub fn revoke_delegate(env: Env, owner: Address, username_hash: BytesN<32>, delegate: Address) {
+        owner.require_auth();
+
+        let real_owner = Self::get_owner(env.clone(), username_hash.clone())
+            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+
+        if real_owner != owner {
+            panic_with_error!(&env, CoreError::Unauthorized);
+        }
+
+        storage::remove_delegate_permissions(&env, &username_hash, &delegate);
+
+        #[allow(deprecated)]
+        env.events()
+            .publish((DELEGATE_RVN,), (username_hash, delegate));
     }
 }

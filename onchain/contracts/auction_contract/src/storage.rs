@@ -1,9 +1,10 @@
+use crate::errors::AuctionError;
 use crate::types::{AuctionState, AuctionStatus, Bid, InstanceKey};
 use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
-/// Number of ledgers to bump persistent storage entries by (30 days worth).
+/// The amount of ledger entries to bump persistent storage by.
 pub(crate) const PERSISTENT_BUMP_AMOUNT: u32 = 518_400; // 30 * 24 * 3600 / 5
-/// Minimum remaining ledgers before a persistent entry is bumped (7 days worth).
+/// The threshold for persistent storage TTL to trigger an auto-bump.
 pub(crate) const PERSISTENT_LIFETIME_THRESHOLD: u32 = 120_960; // 7 * 24 * 3600 / 5
 
 #[contracttype]
@@ -91,11 +92,11 @@ pub fn auction_set_status(env: &Env, id: u32, status: crate::types::AuctionStatu
     );
 }
 
-pub fn auction_get_seller(env: &Env, id: u32) -> Address {
+pub fn auction_get_seller(env: &Env, id: u32) -> Result<Address, AuctionError> {
     env.storage()
         .persistent()
         .get(&AuctionKey::Seller(id))
-        .expect("seller must be set before auction close")
+        .ok_or(AuctionError::InvalidState)
 }
 
 pub fn auction_set_seller(env: &Env, id: u32, seller: &Address) {
@@ -108,11 +109,11 @@ pub fn auction_set_seller(env: &Env, id: u32, seller: &Address) {
     );
 }
 
-pub fn auction_get_asset(env: &Env, id: u32) -> Address {
+pub fn auction_get_asset(env: &Env, id: u32) -> Result<Address, AuctionError> {
     env.storage()
         .persistent()
         .get(&AuctionKey::Asset(id))
-        .expect("asset must be set at auction creation")
+        .ok_or(AuctionError::InvalidState)
 }
 
 pub fn auction_set_asset(env: &Env, id: u32, asset: &Address) {

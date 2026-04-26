@@ -417,7 +417,7 @@ impl EscrowContract {
     }
 }
 
-/// Resolves the address associated with the given commitment.
+/// Resolves a commitment to its owner address.
 fn resolve(env: &Env, commitment: &BytesN<32>) -> Address {
     let config = read_vault_config(env, commitment)
         .unwrap_or_else(|| panic_with_error!(env, EscrowError::VaultNotFound));

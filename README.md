@@ -2,7 +2,6 @@
 # 🌉 Alien Gateway
 
 [![Smart Contracts CI](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/contract.yml/badge.svg)](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/contract.yml)
-
 [![Validator CI](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/pre-commit-validation.yml/badge.svg)](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/pre-commit-validation.yml)
 
 
