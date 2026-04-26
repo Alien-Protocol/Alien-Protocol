@@ -63,6 +63,8 @@ pub enum EscrowError {
     AlreadyInitialized = 2016,
     /// Self-payment is not allowed (from == to).
     SelfPaymentNotAllowed = 2017,
+    /// Arithmetic overflow or underflow occurred.
+    ArithmeticError = 2018,
 }
 
 #[contracterror]
