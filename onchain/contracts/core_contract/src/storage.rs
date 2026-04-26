@@ -2,7 +2,9 @@ use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 use crate::types::PrivacyMode;
 
+/// Number of ledgers to bump persistent storage entries by.
 pub(crate) const PERSISTENT_BUMP_AMOUNT: u32 = 518_400;
+/// Minimum remaining ledgers before a persistent entry is bumped.
 pub(crate) const PERSISTENT_LIFETIME_THRESHOLD: u32 = 120_960;
 
 #[contracttype]

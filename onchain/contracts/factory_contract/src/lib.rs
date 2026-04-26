@@ -1,8 +1,12 @@
 #![no_std]
 
+/// Error types for the factory contract.
 mod errors;
+/// Event emission helpers for the factory contract.
 mod events;
+/// Storage read/write helpers for the factory contract.
 mod storage;
+/// Shared types used across the factory contract.
 mod types;
 
 #[cfg(test)]

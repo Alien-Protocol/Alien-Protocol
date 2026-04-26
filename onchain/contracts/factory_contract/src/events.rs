@@ -1,9 +1,12 @@
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol};
 
+/// Event symbol emitted when a username is deployed.
 pub const USERNAME_DEPLOYED: Symbol = symbol_short!("USR_DEP");
+/// Event symbol emitted when username ownership is transferred.
 #[allow(dead_code)]
 pub const OWNERSHIP_TRANSFERRED: Symbol = symbol_short!("OWN_TRF");
 
+/// Emits an event when a new username is deployed.
 #[allow(deprecated)]
 pub fn emit_username_deployed(
     env: &Env,
@@ -17,6 +20,7 @@ pub fn emit_username_deployed(
     );
 }
 
+/// Emits an event when username ownership is transferred to a new owner.
 #[allow(dead_code)]
 #[allow(deprecated)]
 pub fn emit_ownership_transferred(

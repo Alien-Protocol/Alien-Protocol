@@ -12,7 +12,7 @@ use crate::errors::AuctionError;
 use crate::events::{AUCTION_CLOSED, AUCTION_CREATED, BID_PLACED, BID_REFUNDED, USERNAME_CLAIMED};
 use crate::types::AuctionStatus;
 
-#[allow(dead_code)]
+/// Touches event symbols to ensure they are included in the compiled output.
 fn _touch_event_symbols() {
     let _ = (
         AUCTION_CREATED,
