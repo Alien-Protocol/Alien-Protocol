@@ -1,24 +1,15 @@
 import { Module } from '@nestjs/common';
-
-import { DatabaseModule } from './database/database.module';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { ConfigModule } from './config/config.module';
-import { ConfigService } from './config/config.service';
-import { StellarModule } from './stellar/stellar.module';
-
-@Module({
-  imports: [
-    ConfigModule,
-    DatabaseModule,
-    StellarModule,
-  ],
-  controllers: [AppController],
-
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { VaultModule } from './vault/vault.module';
 import { KeeperModule } from './keeper/keeper.module';
+import { AuthModule } from './auth/auth.module';
+import { ApiKeyGuard } from './auth/guards/api-key.guard';
 
 @Module({
   imports: [
@@ -34,8 +25,17 @@ import { KeeperModule } from './keeper/keeper.module';
       }),
       inject: [ConfigService],
     }),
+    VaultModule,
     KeeperModule,
+    AuthModule,
   ],
-
+  controllers: [AppController],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ApiKeyGuard,
+    },
+  ],
 })
 export class AppModule {}
