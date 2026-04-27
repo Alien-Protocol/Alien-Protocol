@@ -3,7 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.InitialSchema1714000000000 = void 0;
 const typeorm_1 = require("typeorm");
 class InitialSchema1714000000000 {
-    name = 'InitialSchema1714000000000';
+    constructor() {
+        this.name = 'InitialSchema1714000000000';
+    }
     async up(queryRunner) {
         await queryRunner.createTable(new typeorm_1.Table({
             name: "usernames",
@@ -49,11 +51,17 @@ class InitialSchema1714000000000 {
                 { name: "amount", type: "bigint" },
                 { name: "interval", type: "bigint" },
                 { name: "lastPaid", type: "bigint", default: "'0'" },
-                { name: "isActive", type: "boolean", default: true }
+                { name: "isActive", type: "boolean", default: true },
+                { name: "needsAttention", type: "boolean", default: false }
             ]
         }), true);
+        await queryRunner.createIndex("auto_pay_rules", new typeorm_1.TableIndex({
+            name: "IDX_auto_pay_rules_isActive_lastPaid_interval",
+            columnNames: ["isActive", "lastPaid", "interval"],
+        }));
     }
     async down(queryRunner) {
+        await queryRunner.dropIndex("auto_pay_rules", "IDX_auto_pay_rules_isActive_lastPaid_interval");
         await queryRunner.dropTable("auto_pay_rules");
         await queryRunner.dropTable("payments");
         await queryRunner.dropTable("vaults");

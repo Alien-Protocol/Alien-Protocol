@@ -15,11 +15,9 @@ const common_1 = require("@nestjs/common");
 const stellar_sdk_1 = require("@stellar/stellar-sdk");
 const config_service_1 = require("../config/config.service");
 let StellarService = StellarService_1 = class StellarService {
-    configService;
-    logger = new common_1.Logger(StellarService_1.name);
-    server;
     constructor(configService) {
         this.configService = configService;
+        this.logger = new common_1.Logger(StellarService_1.name);
         this.server = new stellar_sdk_1.rpc.Server(this.configService.stellarRpcUrl);
     }
     async onModuleInit() {
