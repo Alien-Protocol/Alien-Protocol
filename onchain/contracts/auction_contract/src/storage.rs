@@ -143,6 +143,23 @@ pub fn auction_set_min_bid(env: &Env, id: u32, min_bid: i128) {
     );
 }
 
+pub fn auction_get_min_bid_increment(env: &Env, id: u32) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&AuctionKey::MinBidIncrement(id))
+        .unwrap_or(0)
+}
+
+pub fn auction_set_min_bid_increment(env: &Env, id: u32, min_bid_increment: i128) {
+    let key = AuctionKey::MinBidIncrement(id);
+    env.storage().persistent().set(&key, &min_bid_increment);
+    env.storage().persistent().extend_ttl(
+        &key,
+        PERSISTENT_LIFETIME_THRESHOLD,
+        PERSISTENT_BUMP_AMOUNT,
+    );
+}
+
 pub fn auction_get_end_time(env: &Env, id: u32) -> u64 {
     env.storage()
         .persistent()

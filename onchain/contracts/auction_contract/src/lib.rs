@@ -61,9 +61,10 @@ impl AuctionContract {
         seller: Address,
         asset: Address,
         min_bid: i128,
+        min_bid_increment: i128,
         end_time: u64,
     ) -> Result<(), errors::AuctionError> {
-        indexed::create_auction(&env, id, seller, asset, min_bid, end_time)
+        indexed::create_auction(&env, id, seller, asset, min_bid, min_bid_increment, end_time)
     }
 
     pub fn place_bid(
@@ -138,6 +139,7 @@ impl AuctionContract {
             Address,
             Address,
             i128,
+            i128,
             u64,
             i128,
             Option<Address>,
@@ -153,6 +155,7 @@ impl AuctionContract {
             storage::auction_get_seller(&env, id)?,
             storage::auction_get_asset(&env, id)?,
             storage::auction_get_min_bid(&env, id),
+            storage::auction_get_min_bid_increment(&env, id),
             storage::auction_get_end_time(&env, id),
             storage::auction_get_highest_bid(&env, id),
             storage::auction_get_highest_bidder(&env, id),
