@@ -1300,6 +1300,28 @@ fn test_invalid_evm_address_wrong_length_panics() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #4012)")]
+fn test_register_username_empty_string_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_, client) = setup(&env);
+
+    let empty_username = Bytes::from_slice(&env, b"");
+    client.register_username(&empty_username);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #4012)")]
+fn test_register_username_whitespace_only_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_, client) = setup(&env);
+
+    let whitespace_username = Bytes::from_slice(&env, b"   ");
+    client.register_username(&whitespace_username);
+}
+
+#[test]
 #[should_panic]
 fn test_invalid_evm_address_no_prefix_panics() {
     let env = Env::default();

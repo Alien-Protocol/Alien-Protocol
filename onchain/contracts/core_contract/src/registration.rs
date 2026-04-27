@@ -3,7 +3,7 @@ use crate::events::{username_registered_event, DELEGATE_GNT, DELEGATE_RVN, REGIS
 use crate::storage::{self, PERSISTENT_BUMP_AMOUNT, PERSISTENT_LIFETIME_THRESHOLD};
 use crate::types::{PermissionSet, Proof, PublicSignals};
 use crate::{smt_root, zk_verifier};
-use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, Bytes, BytesN, Env};
 
 #[contracttype]
 #[derive(Clone)]
@@ -119,5 +119,18 @@ impl Registration {
         #[allow(deprecated)]
         env.events()
             .publish((DELEGATE_RVN,), (username_hash, delegate));
+    }
+
+    pub fn register_username(env: Env, username: Bytes) {
+        // Convert bytes to string for validation
+        let username_str = core::str::from_utf8(username.as_ref())
+            .unwrap_or("");
+        
+        // Trim leading/trailing whitespace and validate
+        let trimmed = username_str.trim();
+        
+        if trimmed.is_empty() {
+            panic_with_error!(&env, CoreError::InvalidUsername);
+        }
     }
 }

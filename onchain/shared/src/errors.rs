@@ -104,6 +104,8 @@ pub enum CoreError {
     AlreadyRegistered = 4010,
     /// The new SMT root matches the existing on-chain root.
     RootUnchanged = 4011,
+    /// The username is empty or contains only whitespace.
+    InvalidUsername = 4012,
 }
 
 #[contracterror]

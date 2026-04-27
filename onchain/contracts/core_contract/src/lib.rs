@@ -97,4 +97,8 @@ impl Contract {
     pub fn revoke_delegate(e: Env, o: Address, h: BytesN<32>, d: Address) {
         Registration::revoke_delegate(e, o, h, d);
     }
+
+    pub fn register_username(e: Env, u: Bytes) {
+        Registration::register_username(e, u);
+    }
 }
