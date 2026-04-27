@@ -106,6 +106,7 @@ pub fn has_username(env: &Env, hash: &BytesN<32>) -> bool {
         .has(&DataKey::Username(hash.clone()))
 }
 
+/// Retrieves the deploy configuration from persistent storage.
 #[allow(dead_code)]
 /// Returns the deployment configuration.
 pub fn get_config(env: &Env) -> Option<DeployConfig> {
@@ -114,6 +115,7 @@ pub fn get_config(env: &Env) -> Option<DeployConfig> {
         .get::<DataKey, DeployConfig>(&DataKey::Config)
 }
 
+/// Stores the deploy configuration in persistent storage.
 #[allow(dead_code)]
 /// Sets the deployment configuration.
 pub fn set_config(env: &Env, config: &DeployConfig) {

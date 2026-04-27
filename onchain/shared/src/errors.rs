@@ -63,6 +63,10 @@ pub enum EscrowError {
     AlreadyInitialized = 2016,
     /// Self-payment is not allowed (from == to).
     SelfPaymentNotAllowed = 2017,
+    /// Caller is not the escrow admin.
+    Unauthorized = 2018,
+    /// The contract is paused; money-moving operations are blocked.
+    ContractPaused = 2019,
 }
 
 #[contracterror]
