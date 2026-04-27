@@ -12,13 +12,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Payment = void 0;
 const typeorm_1 = require("typeorm");
 let Payment = class Payment {
-    paymentId;
-    fromCommitment;
-    toCommitment;
-    amount;
-    releaseAt;
-    executed;
-    token;
 };
 exports.Payment = Payment;
 __decorate([
