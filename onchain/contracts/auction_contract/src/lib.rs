@@ -64,7 +64,15 @@ impl AuctionContract {
         min_bid_increment: i128,
         end_time: u64,
     ) -> Result<(), errors::AuctionError> {
-        indexed::create_auction(&env, id, seller, asset, min_bid, min_bid_increment, end_time)
+        indexed::create_auction(
+            &env,
+            id,
+            seller,
+            asset,
+            min_bid,
+            min_bid_increment,
+            end_time,
+        )
     }
 
     pub fn place_bid(

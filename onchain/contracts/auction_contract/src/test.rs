@@ -676,16 +676,16 @@ fn test_place_bid_increment_accepted() {
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
     client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
-    
+
     let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &asset);
     let bidder1 = Address::generate(&env);
     let bidder2 = Address::generate(&env);
     token_admin.mint(&bidder1, &200);
     token_admin.mint(&bidder2, &200);
-    
+
     client.place_bid(&1, &bidder1, &100);
     client.place_bid(&1, &bidder2, &110);
-    
+
     let info = client.get_auction_info(&1).expect("expected auction info");
     assert_eq!(info.5, 110); // highest_bid
 }
@@ -697,13 +697,13 @@ fn test_place_bid_increment_rejected() {
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
     client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
-    
+
     let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &asset);
     let bidder1 = Address::generate(&env);
     let bidder2 = Address::generate(&env);
     token_admin.mint(&bidder1, &200);
     token_admin.mint(&bidder2, &200);
-    
+
     client.place_bid(&1, &bidder1, &100);
     client.place_bid(&1, &bidder2, &105);
 }
