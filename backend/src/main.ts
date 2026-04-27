@@ -1,29 +1,27 @@
 import { NestFactory } from '@nestjs/core';
-p
-import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    transform: true,
-    forbidNonWhitelisted: true,
-  }));
-  await app.listen(process.env.PORT ?? 3000);
 
-import { AppModule } from './app.module';
+  const config = new DocumentBuilder()
+    .setTitle('Alien Gateway API')
+    .setVersion('1.0')
+    .setDescription(
+      'Alien Gateway is a privacy-preserving username system for the Stellar network. ' +
+      'It allows users to send and receive payments using human-readable identities like @username ' +
+      'instead of long Stellar wallet addresses. Usernames are stored as zero-knowledge commitments, ' +
+      'protecting user identity and wallet associations.',
+    )
+    .addTag('resolver', 'Username resolution and registration')
+    .addTag('vault', 'Vault balance and payment management')
+    .addTag('auction', 'Username auction system')
+    .build();
 
-async function bootstrap() {
-  try {
-    const app = await NestFactory.create(AppModule);
-    const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-    await app.listen(port);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`Failed to start application: ${message}`);
-    process.exit(1);
-  }
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
 
+  await app.listen(3000);
 }
 bootstrap();
