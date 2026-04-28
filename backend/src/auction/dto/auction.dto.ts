@@ -1,3 +1,4 @@
+import { IsNotEmpty, IsNumberString, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AuctionInfoDto {
@@ -28,11 +29,18 @@ export class AuctionInfoDto {
 
 export class PlaceBidDto {
   @ApiProperty({ description: 'Bidder Stellar address', example: 'GXYZ9876STELLAR1234BIDDERADDRESS' })
+  @IsNotEmpty()
+  @Matches(/^G[A-Z2-7]{55}$/, {
+    message: 'Invalid Stellar wallet address format',
+  })
   bidder: string;
 
   @ApiProperty({ description: 'Bid amount in XLM', example: '150.00' })
+  @IsNotEmpty()
+  @IsNumberString()
   amount: string;
 }
+
 
 export class BidResponseDto {
   @ApiProperty({ description: 'Whether the bid was accepted', example: true })
