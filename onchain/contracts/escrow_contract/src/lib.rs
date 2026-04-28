@@ -11,9 +11,9 @@ use crate::errors::EscrowError;
 use crate::events::Events;
 use crate::storage::{
     delete_auto_pay, increment_auto_pay_id, increment_payment_id, read_auto_pay,
-    read_auto_pay_count, read_registration_contract, read_vault_config, read_vault_state,
-    write_auto_pay, write_registration_contract, write_scheduled_payment, write_vault_config,
-    write_vault_state,
+    read_auto_pay_count, read_escrow_admin, read_paused, read_registration_contract,
+    read_vault_config, read_vault_state, write_auto_pay, write_escrow_admin, write_paused,
+    write_registration_contract, write_scheduled_payment, write_vault_config, write_vault_state,
 };
 use crate::types::{AutoPay, DataKey, ScheduledPayment, VaultConfig, VaultState};
 use soroban_sdk::{
@@ -31,9 +31,38 @@ impl EscrowContract {
             panic_with_error!(&env, EscrowError::AlreadyInitialized);
         }
         write_registration_contract(&env, &registration_contract);
+        write_escrow_admin(&env, &admin);
+    }
+
+    pub fn rotate_admin(env: Env, new_admin: Address) {
+        let old_admin = read_escrow_admin(&env)
+            .unwrap_or_else(|| panic_with_error!(&env, EscrowError::Unauthorized));
+        old_admin.require_auth();
+        write_escrow_admin(&env, &new_admin);
+        Events::admin_rotated(&env, old_admin, new_admin);
+    }
+
+    pub fn set_paused(env: Env, paused: bool) {
+        let admin = read_escrow_admin(&env)
+            .unwrap_or_else(|| panic_with_error!(&env, EscrowError::Unauthorized));
+        admin.require_auth();
+        write_paused(&env, paused);
+        Events::pause_toggled(&env, paused);
+    }
+
+    pub fn get_admin(env: Env) -> Option<Address> {
+        read_escrow_admin(&env)
+    }
+
+    pub fn is_paused(env: Env) -> bool {
+        read_paused(&env)
     }
 
     pub fn create_vault(env: Env, commitment: BytesN<32>, token: Address) {
+        if read_paused(&env) {
+            panic_with_error!(&env, EscrowError::ContractPaused);
+        }
+
         let registration = read_registration_contract(&env)
             .unwrap_or_else(|| panic_with_error!(&env, EscrowError::CommitmentNotRegistered));
 
@@ -78,6 +107,10 @@ impl EscrowContract {
             return Err(EscrowError::InvalidAmount);
         }
 
+        if read_paused(&env) {
+            return Err(EscrowError::ContractPaused);
+        }
+
         let config = read_vault_config(&env, &commitment).ok_or(EscrowError::VaultNotFound)?;
         let mut state = read_vault_state(&env, &commitment).ok_or(EscrowError::VaultNotFound)?;
 
@@ -103,6 +136,10 @@ impl EscrowContract {
     pub fn withdraw(env: Env, commitment: BytesN<32>, amount: i128) {
         if amount <= 0 {
             panic_with_error!(&env, EscrowError::InvalidAmount);
+        }
+
+        if read_paused(&env) {
+            panic_with_error!(&env, EscrowError::ContractPaused);
         }
 
         let config = read_vault_config(&env, &commitment)
@@ -147,6 +184,10 @@ impl EscrowContract {
             return Err(EscrowError::PastReleaseTime);
         }
 
+        if read_paused(&env) {
+            return Err(EscrowError::ContractPaused);
+        }
+
         let config = read_vault_config(&env, &from).ok_or(EscrowError::VaultNotFound)?;
         let mut state = read_vault_state(&env, &from).ok_or(EscrowError::VaultNotFound)?;
 
@@ -188,6 +229,10 @@ impl EscrowContract {
     }
 
     pub fn execute_scheduled(env: Env, payment_id: u32) -> Result<(), EscrowError> {
+        if read_paused(&env) {
+            return Err(EscrowError::ContractPaused);
+        }
+
         let key = DataKey::ScheduledPayment(payment_id);
         let mut payment: ScheduledPayment = env
             .storage()
@@ -300,6 +345,10 @@ impl EscrowContract {
     }
 
     pub fn trigger_auto_pay(env: Env, from: BytesN<32>, rule_id: u32) {
+        if read_paused(&env) {
+            panic_with_error!(&env, EscrowError::ContractPaused);
+        }
+
         let mut auto_pay = read_auto_pay(&env, &from, rule_id)
             .unwrap_or_else(|| panic_with_error!(&env, EscrowError::AutoPayNotFound));
 

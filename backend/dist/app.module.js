@@ -8,23 +8,37 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
-const database_module_1 = require("./database/database.module");
+const core_1 = require("@nestjs/core");
+const config_1 = require("@nestjs/config");
+const schedule_1 = require("@nestjs/schedule");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
-const config_module_1 = require("./config/config.module");
-const stellar_module_1 = require("./stellar/stellar.module");
+const database_module_1 = require("./database/database.module");
+const vault_module_1 = require("./vault/vault.module");
+const keeper_module_1 = require("./keeper/keeper.module");
+const auth_module_1 = require("./auth/auth.module");
+const api_key_guard_1 = require("./auth/guards/api-key.guard");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            config_module_1.ConfigModule,
+            config_1.ConfigModule.forRoot({ isGlobal: true }),
+            schedule_1.ScheduleModule.forRoot(),
             database_module_1.DatabaseModule,
-            stellar_module_1.StellarModule,
+            vault_module_1.VaultModule,
+            keeper_module_1.KeeperModule,
+            auth_module_1.AuthModule,
         ],
         controllers: [app_controller_1.AppController],
-        providers: [app_service_1.AppService],
+        providers: [
+            app_service_1.AppService,
+            {
+                provide: core_1.APP_GUARD,
+                useClass: api_key_guard_1.ApiKeyGuard,
+            },
+        ],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

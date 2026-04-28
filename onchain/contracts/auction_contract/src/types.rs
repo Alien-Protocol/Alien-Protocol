@@ -24,6 +24,7 @@ pub enum AuctionKey {
     Seller(u32),
     Asset(u32),
     MinBid(u32),
+    MinBidIncrement(u32),
     EndTime(u32),
     HighestBidder(u32),
     HighestBid(u32),
@@ -41,6 +42,7 @@ pub struct AuctionConfig {
     pub start_time: u64,
     pub end_time: u64,
     pub min_bid: i128,
+    pub min_bid_increment: i128,
 }
 
 #[contracttype]

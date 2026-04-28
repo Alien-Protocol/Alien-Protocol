@@ -1,5 +1,6 @@
 use soroban_sdk::{contracttype, Address, BytesN};
 
+/// Storage keys used by the factory contract.
 #[contracttype]
 #[derive(Clone)]
 /// Storage keys for the factory contract.
@@ -20,6 +21,7 @@ pub enum DataKey {
     Config,
 }
 
+/// A record representing a deployed username and its associated metadata.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// A record representing a deployed username.
@@ -34,6 +36,7 @@ pub struct UsernameRecord {
     pub core_contract: Address,
 }
 
+/// Configuration used when deploying new username contracts.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// Deployment configuration for the factory.

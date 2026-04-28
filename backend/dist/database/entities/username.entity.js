@@ -12,12 +12,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Username = void 0;
 const typeorm_1 = require("typeorm");
 let Username = class Username {
-    hash;
-    owner;
-    stellarAddress;
-    chainAddresses;
-    registeredAt;
-    updatedAt;
 };
 exports.Username = Username;
 __decorate([

@@ -11,6 +11,8 @@ pub enum DataKey {
     AutoPayCounter,
     Vault(BytesN<32>),
     RegistrationContract,
+    EscrowAdmin,
+    Paused,
 }
 
 #[contracttype]
