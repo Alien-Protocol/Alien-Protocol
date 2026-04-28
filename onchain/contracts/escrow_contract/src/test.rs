@@ -657,6 +657,19 @@ fn test_deposit_invalid_amount() {
 }
 
 #[test]
+fn test_deposit_zero_amount_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (contract_id, client, token, _token_admin, from, _to) = setup_test(&env);
+
+    let owner = Address::generate(&env);
+    create_vault(&env, &contract_id, &from, &owner, &token, 100);
+
+    let result = client.try_deposit(&from, &0);
+    assert_eq!(result, Err(Ok(EscrowError::InvalidAmount)));
+}
+
+#[test]
 fn test_withdraw_success() {
     let env = Env::default();
     env.mock_all_auths();
