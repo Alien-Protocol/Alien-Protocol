@@ -44,3 +44,17 @@ export class AutoPayDto {
   @ApiProperty({ description: 'Whether the rule is active', example: true })
   active: boolean;
 }
+
+export class VaultListItemDto {
+  @ApiProperty({ description: 'Vault commitment (unique identifier)', example: '0x123abc...' })
+  id: string;
+
+  @ApiProperty({ description: 'Vault balance in XLM', example: '250.50' })
+  balance: string;
+
+  @ApiProperty({ description: 'Vault status', example: 'active', enum: ['active', 'inactive'] })
+  status: string;
+
+  @ApiProperty({ description: 'Timestamp when vault was created', example: '2026-04-24T05:00:00Z' })
+  createdAt: string;
+}
