@@ -1,11 +1,14 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { AutoPayDto, PaymentDto, VaultBalanceDto } from './dto/vault.dto';
+import { AutoPayDto, PaymentDto, VaultBalanceDto, VaultListItemDto } from './dto/vault.dto';
 import { StellarAddressPipe } from '../stellar/stellar-address.pipe';
+import { VaultService } from './vault.service';
 
 @ApiTags('vault')
 @Controller('vault')
 export class VaultController {
+  constructor(private readonly vaultService: VaultService) {}
+
   @Get(':address/balance')
   @ApiOperation({ summary: 'Get vault balance for a Stellar address' })
   @ApiParam({
@@ -36,7 +39,7 @@ export class VaultController {
     return [{ txId: 'tx_abc123', from: 'alice', to: 'bob', amount: '10.00', timestamp: '2026-04-24T05:00:00Z' }];
   }
 
-  @Get(':address/autopay')
+   @Get(':address/autopay')
   @ApiOperation({ summary: 'Get auto-pay rules for a Stellar address' })
   @ApiParam({
     name: 'address',
@@ -49,6 +52,20 @@ export class VaultController {
   @ApiResponse({ status: 500, description: 'Internal server error' })
   getAutoPay(@Param('address', StellarAddressPipe) address: string): AutoPayDto[] {
     return [{ id: 'ap_xyz789', recipient: 'bob', amount: '5.00', interval: 'monthly', active: true }];
+  }
+
+  @Get('users/:id/vaults')
+  @ApiOperation({ summary: 'Get all vaults owned by a user' })
+  @ApiParam({
+    name: 'id',
+    description: 'User Stellar address (56 chars, starts with G)',
+    example: 'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN',
+  })
+  @ApiResponse({ status: 200, description: 'Vault list retrieved', type: [VaultListItemDto] })
+  @ApiResponse({ status: 404, description: 'User not found or has no vaults' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async getVaultsByUser(@Param('id', StellarAddressPipe) id: string): Promise<VaultListItemDto[]> {
+    return this.vaultService.getVaultsByOwner(id);
   }
 }
 
