@@ -105,12 +105,12 @@ export class VaultService {
   }
 
   /**
-   * Determines the existence and active status of a vault.
-   * Disambiguates between non-existent and cancelled vaults by checking on-chain if necessary.
-   * 
-   * @param commitment - The unique vault commitment string.
-   * @returns A promise that resolves to an object indicating if the vault exists and its active status.
-   */
+    * Determines the existence and active status of a vault.
+    * Disambiguates between non-existent and cancelled vaults by checking on-chain if necessary.
+    * 
+    * @param commitment - The unique vault commitment string.
+    * @returns A promise that resolves to an object indicating if the vault exists and its active status.
+    */
   async getStatus(commitment: string) {
     const vault = await this.prisma.vault.findUnique({
       where: { commitment },
@@ -126,5 +126,36 @@ export class VaultService {
       exists: isActive !== null,
       isActive: isActive,
     };
+  }
+
+  /**
+    * Retrieves all vaults owned by a specific user (Stellar address).
+    * 
+    * @param owner - The Stellar address of the vault owner.
+    * @returns A promise that resolves to an array of vaults with id, balance, status, and createdAt.
+    * @throws {NotFoundException} If no vaults are found for the given owner.
+    */
+  async getVaultsByOwner(owner: string) {
+    const vaults = await this.prisma.vault.findMany({
+      where: { owner },
+      select: {
+        commitment: true,
+        balance: true,
+        isActive: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (vaults.length === 0) {
+      throw new NotFoundException(`No vaults found for owner ${owner}`);
+    }
+
+    return vaults.map((v) => ({
+      id: v.commitment,
+      balance: v.balance,
+      status: v.isActive ? 'active' : 'inactive',
+      createdAt: new Date(Number(v.createdAt) * 1000).toISOString(),
+    }));
   }
 }
