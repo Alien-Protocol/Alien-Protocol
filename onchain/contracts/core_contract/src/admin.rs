@@ -1,57 +1,61 @@
-use shared::auth as shared_auth;
-use soroban_sdk::{panic_with_error, Address, BytesN, Env};
+use soroban_sdk::{panic_with_error, symbol_short, Address, BytesN, Env};
 
 use crate::errors::CoreError;
-use crate::events::INIT_EVENT;
+use crate::events::{INIT_EVENT, ROLE_GRANTED};
 use crate::{smt_root, storage};
 
 pub struct Admin;
 
 impl Admin {
-    /// Initializes the contract with the contract owner.
-    ///
-    /// This function must be called exactly once during contract deployment.
-    /// Only the owner can authorize this call. Prevents reinitialization.
-    ///
-    /// ### Arguments
-    /// - `env`: The Soroban contract environment.
-    /// - `owner`: The address to be set as the contract owner. Must be authorized.
-    ///
-    /// ### Errors
-    /// - `AlreadyInitialized`: If the contract has already been initialized.
-    ///
-    /// ### Events
-    /// - Emits `INIT_EVENT` with the owner address.
+    /// Initializes the contract with an owner. The owner is also set as the initial admin and operator.
     pub fn initialize(env: Env, owner: Address) {
-        shared_auth::require_address_auth(&owner);
         if storage::is_initialized(&env) {
             panic_with_error!(&env, CoreError::AlreadyInitialized);
         }
+        owner.require_auth();
         storage::set_owner(&env, &owner);
+        // By default, owner is also admin and operator
+        storage::set_admin(&env, &owner);
+        storage::set_operator(&env, &owner);
         #[allow(deprecated)]
         env.events().publish((INIT_EVENT,), (owner,));
     }
 
-    /// Retrieves the contract owner's address.
-    ///
-    /// ### Returns
-    /// The address of the contract owner.
-    ///
-    /// ### Errors
-    /// - `NotFound`: If the contract has not been initialized.
+    /// Returns the current contract owner address.
     pub fn get_contract_owner(env: Env) -> Address {
         shared_auth::unwrap_or_panic(&env, storage::get_owner(&env), CoreError::NotFound)
     }
 
-    /// Retrieves the current Sparse Merkle Tree (SMT) root hash.
-    ///
-    /// This root is used to validate zero-knowledge proofs during registration and transfers.
-    ///
-    /// ### Returns
-    /// A 32-byte hash representing the current SMT root.
-    ///
-    /// ### Errors
-    /// - `RootNotSet`: If the SMT root has not yet been set.
+    /// Returns the current admin address.
+    pub fn get_admin(env: Env) -> Address {
+        storage::get_admin(&env).unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound))
+    }
+
+    /// Returns the current operator address.
+    pub fn get_operator(env: Env) -> Address {
+        storage::get_operator(&env).unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound))
+    }
+
+    /// Sets a new admin address. Only the owner can call this.
+    pub fn set_admin(env: Env, new_admin: Address) {
+        let owner = Self::get_contract_owner(env.clone());
+        owner.require_auth();
+        storage::set_admin(&env, &new_admin);
+        #[allow(deprecated)]
+        env.events()
+            .publish((ROLE_GRANTED, symbol_short!("admin")), (new_admin,));
+    }
+
+    /// Sets a new operator address. Only the admin can call this.
+    pub fn set_operator(env: Env, new_operator: Address) {
+        let admin = Self::get_admin(env.clone());
+        admin.require_auth();
+        storage::set_operator(&env, &new_operator);
+        #[allow(deprecated)]
+        env.events()
+            .publish((ROLE_GRANTED, symbol_short!("operator")), (new_operator,));
+    }
+
     pub fn get_smt_root(env: Env) -> BytesN<32> {
         shared_auth::unwrap_or_panic(
             &env,
@@ -60,26 +64,14 @@ impl Admin {
         )
     }
 
-    /// Updates the SMT root as an authenticated public entry point.
-    ///
-    /// Allows the contract owner to update the Sparse Merkle Tree root. This is used when
-    /// off-chain ZK proofs are verified and a new root needs to be committed on-chain.
-    /// Only the contract owner can authorize this call.
-    ///
-    /// ### Arguments
-    /// - `env`: The Soroban contract environment.
-    /// - `new_root`: The 32-byte new SMT root to set.
-    ///
-    /// ### Errors
-    /// - `NotFound`: If the contract owner has not been initialized.
-    /// - Panics if the caller is not authorized by the owner.
-    ///
-    /// ### Events
-    /// - Emits `ROOT_UPDATED` event with (old_root, new_root).
+    /// Updates the Sparse Merkle Tree root. Only the operator can call this.
     pub fn update_smt_root(env: Env, new_root: BytesN<32>) {
         let owner =
             shared_auth::unwrap_or_panic(&env, storage::get_owner(&env), CoreError::NotFound);
         shared_auth::require_address_auth(&owner);
+        let operator = storage::get_operator(&env)
+            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+        operator.require_auth();
 
         if let Some(current) = env
             .storage()

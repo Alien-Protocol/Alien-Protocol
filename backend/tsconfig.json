@@ -15,4 +15,8 @@
     "skipLibCheck": true
   },
   "include": ["src/**/*.ts"]
+  
+    "strictNullChecks": false,
+    "noImplicitAny": false
+  }
 }

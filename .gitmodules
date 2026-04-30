@@ -1,9 +1,0 @@
-[submodule "Cougr"]
-    path = Cougr
-    url = https://github.com/Spagero763/Cougr.git
-[submodule "Stellar-forge"]
-    path = Stellar-forge
-    url = https://github.com/Spagero763/Stellar-forge.git
-[submodule "nftopia-stellar"]
-    path = nftopia-stellar
-    url = https://github.com/Spagero763/nftopia-stellar.git

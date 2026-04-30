@@ -185,6 +185,24 @@ AFTER PHASE 3:
 
 ---
 
+## Pre-Deployment Readiness
+
+Before any testnet or mainnet deployment the following blockers must be resolved. See
+[docs/DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) for the full checklist and
+step-by-step configuration guide.
+
+| ID | Severity | Description |
+|----|----------|-------------|
+| B-01 | Critical | ZK verifier is a stub — always returns `true` (Phase 4 dependency) |
+| B-02 | Critical | `FactoryContract::configure()` has no auth guard |
+| B-03 | High | `CoreContract::set_memo()` has no auth guard |
+| B-04 | High | `FactoryContract::configure()` has no idempotency protection |
+| B-05 | High | No entry point to seed the SMT root at deployment time |
+| B-06 | Medium | Phase 2 ZK circuits incomplete — root updates are owner-trusted |
+| B-09 | Medium | `AuctionContract` has no `configure_factory` entry point |
+
+---
+
 ## Contribution
 
 Each phase issue should be opened as a GitHub Issue following the format in [CONTRIBUTING.md](./CONTRIBUTING.md).

@@ -3,37 +3,46 @@ use soroban_sdk::{contracttype, Address, BytesN};
 /// Storage keys used by the factory contract.
 #[contracttype]
 #[derive(Clone)]
+/// Storage keys for the factory contract.
 pub enum DataKey {
-    /// Address of the auction contract authorised to deploy usernames.
+    /// The contract owner.
+    Owner,
+    /// The contract admin.
+    Admin,
+    /// The contract operator.
+    Operator,
+    /// The auction contract address.
     AuctionContract,
-    /// Address of the core contract associated with new usernames.
+    /// The core resolver contract address.
     CoreContract,
-    /// Record for a registered username, keyed by its 32-byte hash.
+    /// A username record mapping.
     Username(BytesN<32>),
-    /// Optional deployment configuration for the factory.
+    /// Deployment configuration.
     Config,
 }
 
+/// A record representing a deployed username and its associated metadata.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-/// On-chain record for a registered username.
+/// A record representing a deployed username.
 pub struct UsernameRecord {
-    /// 32-byte hash that uniquely identifies the username.
+    /// SHA-256 hash of the username.
     pub username_hash: BytesN<32>,
-    /// Address that owns this username.
+    /// Address of the username owner.
     pub owner: Address,
-    /// Ledger timestamp at which the username was registered.
+    /// Ledger timestamp when the username was registered.
     pub registered_at: u64,
-    /// Core contract address associated with this username.
+    /// Address of the core resolver contract.
     pub core_contract: Address,
 }
 
+/// Configuration used when deploying new username contracts.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-/// Configuration required to deploy a new core contract instance.
+/// Deployment configuration for the factory.
 pub struct DeployConfig {
-    /// WASM hash of the core contract to be instantiated.
+    /// WASM hash of the core contract.
     pub core_contract_wasm_hash: BytesN<32>,
-    /// Admin address authorised to manage the factory.
+    /// Admin address for the deployment.
     pub admin: Address,
 }

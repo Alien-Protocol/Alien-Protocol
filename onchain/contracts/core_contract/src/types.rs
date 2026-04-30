@@ -29,12 +29,25 @@ pub enum PrivacyMode {
     Shielded,
 }
 
-/// Serialized Groth16 proof bytes submitted by the caller.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Permission {
+    SetMemo = 1,
+    SetPrivacyMode = 2,
+    AddChainAddress = 3,
+    RemoveChainAddress = 4,
+    AddStellarAddress = 5,
+    RemoveStellarAddress = 6,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PermissionSet {
+    pub permissions: soroban_sdk::Vec<Permission>,
+}
+
 pub type Proof = Bytes;
 
-/// Public signals extracted from a Groth16 non-inclusion proof.
-/// `old_root` must match the current on-chain SMT root.
-/// `new_root` becomes the new SMT root after a successful registration.
 #[contracttype]
 #[derive(Clone)]
 pub struct PublicSignals {

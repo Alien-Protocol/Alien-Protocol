@@ -1,3 +1,4 @@
+use crate::errors::AuctionError;
 use crate::types::{AuctionState, AuctionStatus, Bid, InstanceKey};
 use shared::storage as shared_storage;
 use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
@@ -57,7 +58,6 @@ pub fn set_highest_bid(env: &Env, bid: u128) {
     shared_storage::set_instance(env, &InstanceKey::HighestBid, &bid);
 }
 
-// --- id-scoped auction storage ---
 use crate::types::AuctionKey;
 
 pub fn auction_exists(env: &Env, id: u32) -> bool {
@@ -76,11 +76,11 @@ pub fn auction_set_status(env: &Env, id: u32, status: crate::types::AuctionStatu
     shared_storage::set_persistent(env, &key, &status);
 }
 
-pub fn auction_get_seller(env: &Env, id: u32) -> Address {
+pub fn auction_get_seller(env: &Env, id: u32) -> Result<Address, AuctionError> {
     env.storage()
         .persistent()
         .get(&AuctionKey::Seller(id))
-        .expect("seller must be set before auction close")
+        .ok_or(AuctionError::InvalidState)
 }
 
 pub fn auction_set_seller(env: &Env, id: u32, seller: &Address) {
@@ -88,11 +88,11 @@ pub fn auction_set_seller(env: &Env, id: u32, seller: &Address) {
     shared_storage::set_persistent(env, &key, seller);
 }
 
-pub fn auction_get_asset(env: &Env, id: u32) -> Address {
+pub fn auction_get_asset(env: &Env, id: u32) -> Result<Address, AuctionError> {
     env.storage()
         .persistent()
         .get(&AuctionKey::Asset(id))
-        .expect("asset must be set at auction creation")
+        .ok_or(AuctionError::InvalidState)
 }
 
 pub fn auction_set_asset(env: &Env, id: u32, asset: &Address) {
@@ -110,6 +110,23 @@ pub fn auction_get_min_bid(env: &Env, id: u32) -> i128 {
 pub fn auction_set_min_bid(env: &Env, id: u32, min_bid: i128) {
     let key = AuctionKey::MinBid(id);
     shared_storage::set_persistent(env, &key, &min_bid);
+}
+
+pub fn auction_get_min_bid_increment(env: &Env, id: u32) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&AuctionKey::MinBidIncrement(id))
+        .unwrap_or(0)
+}
+
+pub fn auction_set_min_bid_increment(env: &Env, id: u32, min_bid_increment: i128) {
+    let key = AuctionKey::MinBidIncrement(id);
+    env.storage().persistent().set(&key, &min_bid_increment);
+    env.storage().persistent().extend_ttl(
+        &key,
+        PERSISTENT_LIFETIME_THRESHOLD,
+        PERSISTENT_BUMP_AMOUNT,
+    );
 }
 
 pub fn auction_get_end_time(env: &Env, id: u32) -> u64 {
@@ -194,8 +211,6 @@ pub fn auction_set_bid_refunded(env: &Env, id: u32, bidder: &Address) {
     let key = AuctionKey::BidRefunded(id, bidder.clone());
     shared_storage::set_persistent(env, &key, &true);
 }
-
-// --- persistent storage helpers for AuctionState and Bid ---
 
 pub fn get_auction(env: &Env, hash: &BytesN<32>) -> Option<AuctionState> {
     shared_storage::get_persistent(env, &DataKey::Auction(hash.clone()))

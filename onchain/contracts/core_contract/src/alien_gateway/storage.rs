@@ -1,7 +1,5 @@
 use soroban_sdk::{Address, BytesN, Env, Symbol};
 
-/// Storage key builders for the Core contract tests and runtime.
-/// Keep these centralized to avoid typos when constructing keys inline.
 pub fn stellar_address_key(env: &Env, _addr: &Address) -> Symbol {
     Symbol::new(env, "StellarAddress")
 }

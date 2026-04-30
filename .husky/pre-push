@@ -7,8 +7,8 @@ echo "🌿 Validating branch name..."
 branch=$(git symbolic-ref --short HEAD)
 branch_regex='^(feat|fix|docs|refactor|test|chore)\/[a-z0-9][a-z0-9\-]*[a-z0-9]$'
 
-# Allow main, develop, staging to push freely
-if [ "$branch" = "main" ] || [ "$branch" = "develop" ] || [ "$branch" = "staging" ]; then
+# Allow protected integration branches to push freely
+if [ "$branch" = "main" ] || [ "$branch" = "dev" ] || [ "$branch" = "develop" ] || [ "$branch" = "staging" ]; then
     echo "✅ On protected branch '$branch' — skipping branch name check."
 else
     if echo "$branch" | grep -qE "$branch_regex"; then

@@ -1,9 +1,9 @@
 
 # 🌉 Alien Gateway
 
-[![Smart Contracts CI](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/build_test.yml/badge.svg)](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/build_test.yml)
-[![Checks](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/checks.yml/badge.svg)](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/checks.yml)
-[![ZK Circuits CI](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/zk_circuits.yml/badge.svg)](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/zk_circuits.yml)
+[![Smart Contracts CI](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/contract.yml/badge.svg)](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/contract.yml)
+[![Validator CI](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/pre-commit-validation.yml/badge.svg)](https://github.com/Alien-Protocol/Alien-Gateway/actions/workflows/pre-commit-validation.yml)
+
 
 <p align="center">
   <img 

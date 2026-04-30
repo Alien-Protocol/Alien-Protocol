@@ -3,3 +3,10 @@ node_modules
 .deployments
 # Soroban test snapshots — now committed as regression guards
 # gateway-contract/contracts/**/test_snapshots/
+zk/soroban/bls_setup/*.ptau
+
+# Backend
+backend/node_modules
+backend/dist
+backend/.env
+backend/coverage

@@ -1,0 +1,47 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Vault {
+  commitment String  @id // Hex string (64 chars + 0x)
+  owner      String  // Stellar address
+  token      String  // Token address
+  balance    String  // i128 as string
+  isActive   Boolean @default(true)
+  createdAt  BigInt  // Ledger timestamp
+  updatedAt  DateTime @updatedAt
+
+  paymentsSent     ScheduledPayment[] @relation("SentPayments")
+  paymentsReceived ScheduledPayment[] @relation("ReceivedPayments")
+  autoPayRules     AutoPayRule[]
+}
+
+model ScheduledPayment {
+  id        Int     @id // Contract payment_id
+  from      String
+  to        String
+  token     String
+  amount    String
+  releaseAt BigInt  // Ledger timestamp
+  executed  Boolean @default(false)
+
+  sender   Vault @relation("SentPayments", fields: [from], references: [commitment])
+  receiver Vault @relation("ReceivedPayments", fields: [to], references: [commitment])
+}
+
+model AutoPayRule {
+  id       Int    @id // Contract rule_id
+  from     String
+  to       String
+  token    String
+  amount   String
+  interval BigInt // Seconds
+  lastPaid BigInt // Ledger timestamp
+
+  vault Vault @relation(fields: [from], references: [commitment])
+}
