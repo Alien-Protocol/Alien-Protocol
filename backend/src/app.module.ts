@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { ResolverModule } from './resolver/resolver.module';
 import { VaultModule } from './vault/vault.module';
 import { AuctionModule } from './auction/auction.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
-  imports: [
+imports: [
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL || 'info',
@@ -33,5 +35,8 @@ import { HealthModule } from './health/health.module';
     AuctionModule,
     HealthModule,
   ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
+

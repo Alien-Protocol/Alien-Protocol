@@ -1,3 +1,4 @@
+import { IsBoolean, IsIn, IsNotEmpty, IsNumberString, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class VaultBalanceDto {
@@ -30,17 +31,40 @@ export class PaymentDto {
 
 export class AutoPayDto {
   @ApiProperty({ description: 'Auto-pay rule ID', example: 'ap_xyz789' })
+  @IsString()
+  @IsNotEmpty()
   id: string;
 
   @ApiProperty({ description: 'Recipient username', example: 'bob' })
+  @IsString()
+  @IsNotEmpty()
   recipient: string;
 
   @ApiProperty({ description: 'Amount per interval in XLM', example: '5.00' })
+  @IsNotEmpty()
+  @IsNumberString()
   amount: string;
 
   @ApiProperty({ description: 'Payment interval', example: 'monthly', enum: ['daily', 'weekly', 'monthly'] })
+  @IsNotEmpty()
+  @IsIn(['daily', 'weekly', 'monthly'])
   interval: string;
 
   @ApiProperty({ description: 'Whether the rule is active', example: true })
+  @IsBoolean()
   active: boolean;
+}
+
+export class VaultListItemDto {
+  @ApiProperty({ description: 'Vault commitment (unique identifier)', example: '0x123abc...' })
+  id: string;
+
+  @ApiProperty({ description: 'Vault balance in XLM', example: '250.50' })
+  balance: string;
+
+  @ApiProperty({ description: 'Vault status', example: 'active', enum: ['active', 'inactive'] })
+  status: string;
+
+  @ApiProperty({ description: 'Timestamp when vault was created', example: '2026-04-24T05:00:00Z' })
+  createdAt: string;
 }

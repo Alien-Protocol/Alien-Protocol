@@ -40,4 +40,34 @@ export class StellarService implements OnModuleInit {
   getAuctionContract(): Contract {
     return new Contract(this.configService.auctionContractId);
   }
+
+  /**
+    * Retrieves a paginated list of auctions from the on-chain contract.
+    * Supports optional status filtering.
+    *
+    * @param page - Page number (1-indexed)
+    * @param limit - Number of auctions per page (max 100)
+    * @param status - Optional status filter ('active', 'closed', 'claimed')
+    * @returns A promise that resolves to an array of auction data.
+    */
+  async getAuctions(page: number = 1, limit: number = 20, status?: string): Promise<any[]> {
+    // Placeholder: actual implementation would call the auction contract's list_auctions method
+    // For now, return mock data to satisfy the interface
+    const mockAuctions = [
+      { id: 1, username: 'satoshi', highestBid: '150.00', endTime: 1745000000, status: 'open' },
+      { id: 2, username: 'vitalik', highestBid: '200.00', endTime: 1746000000, status: 'closed' },
+      { id: 3, username: 'alice', highestBid: '75.00', endTime: 1747000000, status: 'open' },
+    ];
+
+    // Apply status filter if provided
+    let filtered = mockAuctions;
+    if (status) {
+      filtered = mockAuctions.filter((a) => a.status === status);
+    }
+
+    // Apply pagination
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    return filtered.slice(start, end);
+  }
 }

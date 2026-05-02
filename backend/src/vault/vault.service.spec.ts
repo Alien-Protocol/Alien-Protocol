@@ -12,6 +12,7 @@ describe('VaultService', () => {
   const mockPrisma = {
     vault: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
     },
     scheduledPayment: {
       findUnique: jest.fn(),
@@ -90,6 +91,50 @@ describe('VaultService', () => {
 
       const result = await service.getPaymentById(1);
       expect(result).toEqual(mockContractPayment);
+    });
+  });
+
+  describe('getVaultsByOwner', () => {
+    it('should return list of vaults for existing owner', async () => {
+      const mockVaults = [
+        {
+          commitment: '0xabc123',
+          balance: '1000',
+          isActive: true,
+          createdAt: BigInt('1740000000000'),
+        },
+        {
+          commitment: '0xdef456',
+          balance: '2000',
+          isActive: false,
+          createdAt: BigInt('1741000000000'),
+        },
+      ];
+      (prisma.vault.findMany as jest.Mock).mockResolvedValue(mockVaults);
+
+      const result = await service.getVaultsByOwner('GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN');
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        id: '0xabc123',
+        balance: '1000',
+        status: 'active',
+        createdAt: expect.any(String),
+      });
+      expect(result[1]).toEqual({
+        id: '0xdef456',
+        balance: '2000',
+        status: 'inactive',
+        createdAt: expect.any(String),
+      });
+    });
+
+    it('should throw NotFoundException when no vaults found for owner', async () => {
+      (prisma.vault.findMany as jest.Mock).mockResolvedValue([]);
+
+      await expect(service.getVaultsByOwner('GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });
