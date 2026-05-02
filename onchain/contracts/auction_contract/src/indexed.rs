@@ -69,10 +69,8 @@ pub fn place_bid(
         if amount < min_bid {
             return Err(errors::AuctionError::BidTooLow);
         }
-    } else {
-        if amount < highest_bid + min_increment {
-            return Err(errors::AuctionError::BidTooLow);
-        }
+    } else if amount < highest_bid + min_increment {
+        return Err(errors::AuctionError::BidTooLow);
     }
     let asset = storage::auction_get_asset(env, id)?;
     let token = soroban_sdk::token::Client::new(env, &asset);

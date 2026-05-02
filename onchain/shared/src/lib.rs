@@ -2,108 +2,78 @@
 
 pub mod errors;
 
-/// Shared authorization and panic helpers for onchain contracts.
-pub mod auth {
-    use soroban_sdk::{Address, Env, Error};
+use soroban_sdk::{panic_with_error, Env};
 
-    /// Requires auth from the provided address.
-    pub fn require_address_auth(address: &Address) {
-        address.require_auth();
-    }
+// ─── Authorization Helpers ──────────────────────────────────────────────────
 
-    /// Returns the value or panics with the provided contract error.
-    pub fn unwrap_or_panic<T, E>(env: &Env, value: Option<T>, error: E) -> T
-    where
-        E: Copy + Into<Error>,
-    {
-        value.unwrap_or_else(|| env.panic_with_error(error))
-    }
-
-    /// Requires the caller to authorize and match the expected owner.
-    pub fn require_matching_auth<E>(env: &Env, caller: &Address, owner: &Address, error: E)
-    where
-        E: Copy + Into<Error>,
-    {
-        caller.require_auth();
-        if caller != owner {
-            env.panic_with_error(error);
-        }
+/// Unwraps an `Option<T>` stored in contract storage, panicking with a contract
+/// error if the value is absent.
+///
+/// # Arguments
+/// * `env`   – The current Soroban environment.
+/// * `opt`   – The `Option<T>` to unwrap.
+/// * `error` – A `#[contracterror]` value to panic with if `opt` is `None`.
+///
+/// # Example
+/// ```ignore
+/// let addr = get_or_panic(&env, get_auction_contract(&env), FactoryError::Unauthorized);
+/// ```
+#[inline]
+pub fn get_or_panic<T, E>(env: &Env, opt: Option<T>, error: E) -> T
+where
+    E: Into<soroban_sdk::Error> + Copy,
+{
+    match opt {
+        Some(v) => v,
+        None => panic_with_error!(env, error),
     }
 }
 
-/// Shared storage helpers for persistent TTL handling.
-pub mod storage {
-    use core::fmt::Debug;
-
-    use soroban_sdk::{Env, IntoVal, TryFromVal, Val};
-
-    /// Bump amount: ~30 days (at ~5s per ledger close).
-    pub const PERSISTENT_BUMP_AMOUNT: u32 = 518_400;
-    /// Lifetime threshold: ~7 days — entries are extended when remaining TTL drops below this.
-    pub const PERSISTENT_LIFETIME_THRESHOLD: u32 = 120_960;
-
-    /// Extends the TTL for a persistent storage key using the shared policy.
-    pub fn bump_persistent<K>(env: &Env, key: &K)
-    where
-        K: IntoVal<Env, Val>,
-    {
-        env.storage().persistent().extend_ttl(
-            key,
-            PERSISTENT_LIFETIME_THRESHOLD,
-            PERSISTENT_BUMP_AMOUNT,
-        );
+/// Asserts an `Option<T>` is `None`, panicking with a contract error if a value
+/// already exists.  Useful for "must not already be registered" guards.
+///
+/// # Arguments
+/// * `env`   – The current Soroban environment.
+/// * `opt`   – The `Option<T>` to check.
+/// * `error` – A `#[contracterror]` value to panic with if `opt` is `Some`.
+#[inline]
+pub fn assert_none_or_panic<T, E>(env: &Env, opt: Option<T>, error: E)
+where
+    E: Into<soroban_sdk::Error> + Copy,
+{
+    if opt.is_some() {
+        panic_with_error!(env, error);
     }
+}
 
-    /// Writes a persistent value and bumps its TTL.
-    pub fn set_persistent<K, V>(env: &Env, key: &K, value: &V)
-    where
-        K: IntoVal<Env, Val>,
-        V: IntoVal<Env, Val>,
-    {
-        env.storage().persistent().set(key, value);
-        bump_persistent(env, key);
-    }
+// ─── TTL / Timestamp Helpers ─────────────────────────────────────────────────
 
-    /// Reads a persistent value.
-    pub fn get_persistent<K, V>(env: &Env, key: &K) -> Option<V>
-    where
-        V::Error: Debug,
-        K: IntoVal<Env, Val>,
-        V: TryFromVal<Env, Val>,
-    {
-        env.storage().persistent().get(key)
-    }
+/// Returns `true` if `release_at` is strictly in the future relative to the
+/// current ledger timestamp.
+#[inline]
+pub fn is_future_timestamp(env: &Env, release_at: u64) -> bool {
+    release_at > env.ledger().timestamp()
+}
 
-    /// Reads a persistent value and bumps its TTL if present.
-    pub fn get_persistent_with_ttl<K, V>(env: &Env, key: &K) -> Option<V>
-    where
-        V::Error: Debug,
-        K: IntoVal<Env, Val>,
-        V: TryFromVal<Env, Val>,
-    {
-        let value = env.storage().persistent().get(key);
-        if value.is_some() {
-            bump_persistent(env, key);
-        }
-        value
-    }
+// ─── Counter Helpers ─────────────────────────────────────────────────────────
 
-    /// Reads an instance value.
-    pub fn get_instance<K, V>(env: &Env, key: &K) -> Option<V>
-    where
-        V::Error: Debug,
-        K: IntoVal<Env, Val>,
-        V: TryFromVal<Env, Val>,
-    {
-        env.storage().instance().get(key)
-    }
-
-    /// Writes an instance value.
-    pub fn set_instance<K, V>(env: &Env, key: &K, value: &V)
-    where
-        K: IntoVal<Env, Val>,
-        V: IntoVal<Env, Val>,
-    {
-        env.storage().instance().set(key, value);
-    }
+/// Reads the current `u32` value at `key` from instance storage (defaulting to
+/// 0), increments it by 1, stores the new value, and **returns the old value**
+/// as the allocated ID.
+///
+/// Returns `Err(overflow_error)` if the counter would overflow `u32::MAX`.
+///
+/// Callers supply a concrete `#[contracterror]` variant so the helper stays
+/// generic and avoids coupling to any particular contract's error enum.
+#[inline]
+pub fn increment_instance_counter<K, E>(env: &Env, key: &K, overflow_error: E) -> Result<u32, E>
+where
+    K: soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val>
+        + soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
+    E: Copy,
+{
+    let id: u32 = env.storage().instance().get(key).unwrap_or(0);
+    let next = id.checked_add(1).ok_or(overflow_error)?;
+    env.storage().instance().set(key, &next);
+    Ok(id)
 }

@@ -1,6 +1,18 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
-import { rpc, Contract } from '@stellar/stellar-sdk';
+import { rpc, Contract, Address, xdr } from '@stellar/stellar-sdk';
 import { ConfigService } from '../config/config.service';
+import { StellarRpcException } from './stellar.exceptions';
+import {
+  ChainType,
+  GetOwnerResult,
+  ResolveStellarResult,
+  GetChainAddressResult,
+  GetVaultBalanceResult,
+  GetScheduledPaymentResult,
+  IsVaultActiveResult,
+  GetCreatedAtResult,
+  ScheduledPayment,
+} from './stellar.types';
 
 @Injectable()
 export class StellarService implements OnModuleInit {
