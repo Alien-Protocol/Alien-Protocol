@@ -1,7 +1,7 @@
-use soroban_sdk::{panic_with_error, Address, Bytes, BytesN, Env};
+use soroban_sdk::{Address, Bytes, BytesN, Env};
 
 use crate::errors::CoreError;
-use crate::events::TRANSFER_EVENT;
+use crate::events::emit_transfer;
 use crate::registration;
 use crate::types::PublicSignals;
 use crate::{smt_root, zk_verifier};
@@ -10,66 +10,63 @@ pub struct Transfer;
 
 impl Transfer {
     pub fn transfer_ownership(
-        env: Env,
+        e: Env,
         caller: Address,
         commitment: BytesN<32>,
         new_owner: Address,
-    ) {
+    ) -> Result<(), CoreError> {
         caller.require_auth();
         let key = registration::DataKey::Commitment(commitment.clone());
-        let current_owner: Address = env
+        let current_owner: Address = e
             .storage()
             .persistent()
             .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+            .ok_or(CoreError::NotFound)?;
         if caller != current_owner {
-            panic_with_error!(&env, CoreError::Unauthorized);
+            return Err(CoreError::Unauthorized);
         }
         if new_owner == current_owner {
-            panic_with_error!(&env, CoreError::SameOwner);
+            return Err(CoreError::SameOwner);
         }
-        env.storage().persistent().set(&key, &new_owner);
-        #[allow(deprecated)]
-        env.events()
-            .publish((TRANSFER_EVENT,), (commitment, caller, new_owner));
+        e.storage().persistent().set(&key, &new_owner);
+        emit_transfer(&e, &commitment, &current_owner, &new_owner);
+        Ok(())
     }
 
     pub fn transfer(
-        env: Env,
+        e: Env,
         caller: Address,
         commitment: BytesN<32>,
         new_owner: Address,
         proof: Bytes,
         public_signals: PublicSignals,
-    ) {
+    ) -> Result<(), CoreError> {
         caller.require_auth();
         let key = registration::DataKey::Commitment(commitment.clone());
-        let current_owner: Address = env
+        let current_owner: Address = e
             .storage()
             .persistent()
             .get(&key)
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+            .ok_or(CoreError::NotFound)?;
         if caller != current_owner {
-            panic_with_error!(&env, CoreError::Unauthorized);
+            return Err(CoreError::Unauthorized);
         }
         if new_owner == current_owner {
-            panic_with_error!(&env, CoreError::SameOwner);
+            return Err(CoreError::SameOwner);
         }
-        let current_root = smt_root::SmtRoot::get_root(env.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::RootNotSet));
+        let current_root = smt_root::SmtRoot::get_root(e.clone()).ok_or(CoreError::RootNotSet)?;
         if public_signals.old_root != current_root {
-            panic_with_error!(&env, CoreError::StaleRoot);
+            return Err(CoreError::StaleRoot);
         }
         if public_signals.commitment != commitment {
-            panic_with_error!(&env, CoreError::InvalidProof);
+            return Err(CoreError::InvalidProof);
         }
-        if !zk_verifier::ZkVerifier::verify_groth16_proof(&env, &proof, &public_signals) {
-            panic_with_error!(&env, CoreError::InvalidProof);
+        if !zk_verifier::ZkVerifier::verify_groth16_proof(&e, &proof, &public_signals) {
+            return Err(CoreError::InvalidProof);
         }
-        env.storage().persistent().set(&key, &new_owner);
-        smt_root::SmtRoot::update_root(&env, public_signals.new_root);
-        #[allow(deprecated)]
-        env.events()
-            .publish((TRANSFER_EVENT,), (commitment, caller, new_owner));
+        e.storage().persistent().set(&key, &new_owner);
+        smt_root::SmtRoot::update_root(&e, public_signals.new_root);
+        emit_transfer(&e, &commitment, &current_owner, &new_owner);
+        Ok(())
     }
 }

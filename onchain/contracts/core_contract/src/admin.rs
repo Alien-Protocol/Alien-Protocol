@@ -1,82 +1,73 @@
-use soroban_sdk::{panic_with_error, symbol_short, Address, BytesN, Env};
+use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
 use crate::errors::CoreError;
-use crate::events::{INIT_EVENT, ROLE_GRANTED};
+use crate::events::{emit_init, emit_role_granted, emit_root_updated, EVENT_ADMIN_SET, EVENT_OPER_SET, EVENT_ROOT_UPD};
 use crate::{smt_root, storage};
 
 pub struct Admin;
 
 impl Admin {
-    /// Initializes the contract with an owner. The owner is also set as the initial admin and operator.
-    pub fn initialize(env: Env, owner: Address) {
-        if storage::is_initialized(&env) {
-            panic_with_error!(&env, CoreError::AlreadyInitialized);
+    pub fn initialize(e: Env, owner: Address) -> Result<(), CoreError> {
+        if storage::is_initialized(&e) {
+            return Err(CoreError::AlreadyInitialized);
         }
         owner.require_auth();
-        storage::set_owner(&env, &owner);
-        // By default, owner is also admin and operator
-        storage::set_admin(&env, &owner);
-        storage::set_operator(&env, &owner);
-        #[allow(deprecated)]
-        env.events().publish((INIT_EVENT,), (owner,));
+        storage::set_owner(&e, &owner);
+        storage::set_admin(&e, &owner);
+        storage::set_operator(&e, &owner);
+        emit_init(&e, &owner);
+        Ok(())
     }
 
-    /// Returns the current contract owner address.
-    pub fn get_contract_owner(env: Env) -> Address {
-        storage::get_owner(&env).unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound))
+    pub fn get_contract_owner(e: Env) -> Address {
+        storage::get_owner(&e).unwrap()
     }
 
-    /// Returns the current admin address.
-    pub fn get_admin(env: Env) -> Address {
-        storage::get_admin(&env).unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound))
+    pub fn get_admin(e: Env) -> Address {
+        storage::get_admin(&e).unwrap()
     }
 
-    /// Returns the current operator address.
-    pub fn get_operator(env: Env) -> Address {
-        storage::get_operator(&env).unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound))
+    pub fn get_operator(e: Env) -> Address {
+        storage::get_operator(&e).unwrap()
     }
 
-    /// Sets a new admin address. Only the owner can call this.
-    pub fn set_admin(env: Env, new_admin: Address) {
-        let owner = Self::get_contract_owner(env.clone());
+    pub fn set_admin(e: Env, new_admin: Address) -> Result<(), CoreError> {
+        let owner = storage::get_owner(&e).ok_or(CoreError::NotFound)?;
         owner.require_auth();
-        storage::set_admin(&env, &new_admin);
-        #[allow(deprecated)]
-        env.events()
-            .publish((ROLE_GRANTED, symbol_short!("admin")), (new_admin,));
+        storage::set_admin(&e, &new_admin);
+        emit_role_granted(&e, &symbol_short!("admin"), &new_admin);
+        Ok(())
     }
 
-    /// Sets a new operator address. Only the admin can call this.
-    pub fn set_operator(env: Env, new_operator: Address) {
-        let admin = Self::get_admin(env.clone());
+    pub fn set_operator(e: Env, new_operator: Address) -> Result<(), CoreError> {
+        let admin = storage::get_admin(&e).ok_or(CoreError::NotFound)?;
         admin.require_auth();
-        storage::set_operator(&env, &new_operator);
-        #[allow(deprecated)]
-        env.events()
-            .publish((ROLE_GRANTED, symbol_short!("operator")), (new_operator,));
+        storage::set_operator(&e, &new_operator);
+        emit_role_granted(&e, &symbol_short!("operator"), &new_operator);
+        Ok(())
     }
 
-    pub fn get_smt_root(env: Env) -> BytesN<32> {
-        smt_root::SmtRoot::get_root(env.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::RootNotSet))
+    pub fn get_smt_root(e: Env) -> BytesN<32> {
+        smt_root::SmtRoot::get_root(e.clone()).unwrap()
     }
 
-    /// Updates the Sparse Merkle Tree root. Only the operator can call this.
-    pub fn update_smt_root(env: Env, new_root: BytesN<32>) {
-        let operator = storage::get_operator(&env)
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+    pub fn update_smt_root(e: Env, new_root: BytesN<32>) -> Result<(), CoreError> {
+        let operator = storage::get_operator(&e).ok_or(CoreError::NotFound)?;
         operator.require_auth();
 
-        if let Some(current) = env
+        let old_root = e
             .storage()
             .instance()
-            .get::<_, soroban_sdk::BytesN<32>>(&storage::DataKey::SmtRoot)
-        {
+            .get::<_, soroban_sdk::BytesN<32>>(&storage::DataKey::SmtRoot);
+
+        if let Some(current) = old_root.clone() {
             if current == new_root {
-                panic_with_error!(&env, CoreError::RootUnchanged);
+                return Err(CoreError::RootUnchanged);
             }
         }
 
-        smt_root::SmtRoot::update_root(&env, new_root);
+        smt_root::SmtRoot::update_root(&e, new_root.clone());
+        emit_root_updated(&e, old_root.as_ref(), &new_root);
+        Ok(())
     }
 }

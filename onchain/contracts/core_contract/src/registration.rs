@@ -1,9 +1,9 @@
 use crate::errors::CoreError;
-use crate::events::{username_registered_event, DELEGATE_GNT, DELEGATE_RVN, REGISTER_EVENT};
+use crate::events::{emit_delegate_granted, emit_delegate_revoked, emit_register, emit_username_reg, EVENT_DLG_GNT, EVENT_DLG_RVN, EVENT_REGISTER, EVENT_USERNAME};
 use crate::storage::{self, PERSISTENT_BUMP_AMOUNT, PERSISTENT_LIFETIME_THRESHOLD};
 use crate::types::{PermissionSet, Proof, PublicSignals};
 use crate::{smt_root, zk_verifier};
-use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 #[contracttype]
 #[derive(Clone)]
@@ -14,110 +14,101 @@ pub enum DataKey {
 pub struct Registration;
 
 impl Registration {
-    pub fn submit_proof(env: Env, caller: Address, proof: Proof, public_signals: PublicSignals) {
+    pub fn submit_proof(e: Env, caller: Address, proof: Proof, public_signals: PublicSignals) -> Result<(), CoreError> {
         caller.require_auth();
 
         let commitment = public_signals.commitment.clone();
         let key = DataKey::Commitment(commitment.clone());
-        if env.storage().persistent().has(&key) {
-            panic_with_error!(&env, CoreError::AlreadyRegistered);
+        if e.storage().persistent().has(&key) {
+            return Err(CoreError::AlreadyRegistered);
         }
 
-        let current_root = smt_root::SmtRoot::get_root(env.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::RootNotSet));
+        let current_root = smt_root::SmtRoot::get_root(e.clone()).ok_or(CoreError::RootNotSet)?;
         if public_signals.old_root != current_root {
-            panic_with_error!(&env, CoreError::StaleRoot);
+            return Err(CoreError::StaleRoot);
         }
 
-        if !zk_verifier::ZkVerifier::verify_groth16_proof(&env, &proof, &public_signals) {
-            panic_with_error!(&env, CoreError::InvalidProof);
+        if !zk_verifier::ZkVerifier::verify_groth16_proof(&e, &proof, &public_signals) {
+            return Err(CoreError::InvalidProof);
         }
 
-        env.storage().persistent().set(&key, &caller);
-        env.storage().persistent().extend_ttl(
+        e.storage().persistent().set(&key, &caller);
+        e.storage().persistent().extend_ttl(
             &key,
             PERSISTENT_LIFETIME_THRESHOLD,
             PERSISTENT_BUMP_AMOUNT,
         );
 
-        storage::set_created_at(&env, &commitment, env.ledger().timestamp());
-        smt_root::SmtRoot::update_root(&env, public_signals.new_root);
+        storage::set_created_at(&e, &commitment, e.ledger().timestamp());
+        smt_root::SmtRoot::update_root(&e, public_signals.new_root);
 
-        #[allow(deprecated)]
-        env.events()
-            .publish((username_registered_event(&env),), commitment);
+        emit_username_reg(&e, &commitment);
+        Ok(())
     }
 
-    pub fn register(env: Env, caller: Address, commitment: BytesN<32>) {
+    pub fn register(e: Env, caller: Address, commitment: BytesN<32>) -> Result<(), CoreError> {
         caller.require_auth();
 
         let key = DataKey::Commitment(commitment.clone());
-        if env.storage().persistent().has(&key) {
-            panic_with_error!(&env, CoreError::AlreadyRegistered);
+        if e.storage().persistent().has(&key) {
+            return Err(CoreError::AlreadyRegistered);
         }
 
-        env.storage().persistent().set(&key, &caller);
-        env.storage().persistent().extend_ttl(
+        e.storage().persistent().set(&key, &caller);
+        e.storage().persistent().extend_ttl(
             &key,
             PERSISTENT_LIFETIME_THRESHOLD,
             PERSISTENT_BUMP_AMOUNT,
         );
 
-        storage::set_created_at(&env, &commitment, env.ledger().timestamp());
+        storage::set_created_at(&e, &commitment, e.ledger().timestamp());
 
-        #[allow(deprecated)]
-        env.events()
-            .publish((REGISTER_EVENT,), (commitment, caller));
+        emit_register(&e, &commitment, &caller);
+        Ok(())
     }
 
-    pub fn get_owner(env: Env, commitment: BytesN<32>) -> Option<Address> {
+    pub fn get_owner(e: Env, commitment: BytesN<32>) -> Option<Address> {
         let key = DataKey::Commitment(commitment);
-        env.storage().persistent().get(&key)
+        e.storage().persistent().get(&key)
     }
 
-    pub fn get_created_at(env: Env, commitment: BytesN<32>) -> Option<u64> {
-        storage::get_created_at(&env, &commitment)
+    pub fn get_created_at(e: Env, commitment: BytesN<32>) -> Option<u64> {
+        storage::get_created_at(&e, &commitment)
     }
 
     pub fn grant_delegate(
-        env: Env,
+        e: Env,
         owner: Address,
         username_hash: BytesN<32>,
         delegate: Address,
         permissions: PermissionSet,
-    ) {
+    ) -> Result<(), CoreError> {
         owner.require_auth();
 
-        let real_owner = Self::get_owner(env.clone(), username_hash.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+        let real_owner = Self::get_owner(e.clone(), username_hash.clone()).ok_or(CoreError::NotFound)?;
 
         if real_owner != owner {
-            panic_with_error!(&env, CoreError::Unauthorized);
+            return Err(CoreError::Unauthorized);
         }
 
-        storage::set_delegate_permissions(&env, &username_hash, &delegate, &permissions);
+        storage::set_delegate_permissions(&e, &username_hash, &delegate, &permissions);
 
-        #[allow(deprecated)]
-        env.events().publish(
-            (DELEGATE_GNT,),
-            (username_hash, delegate, permissions.permissions),
-        );
+        emit_delegate_granted(&e, &username_hash, &delegate, permissions.permissions.len() as u32);
+        Ok(())
     }
 
-    pub fn revoke_delegate(env: Env, owner: Address, username_hash: BytesN<32>, delegate: Address) {
+    pub fn revoke_delegate(e: Env, owner: Address, username_hash: BytesN<32>, delegate: Address) -> Result<(), CoreError> {
         owner.require_auth();
 
-        let real_owner = Self::get_owner(env.clone(), username_hash.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+        let real_owner = Self::get_owner(e.clone(), username_hash.clone()).ok_or(CoreError::NotFound)?;
 
         if real_owner != owner {
-            panic_with_error!(&env, CoreError::Unauthorized);
+            return Err(CoreError::Unauthorized);
         }
 
-        storage::remove_delegate_permissions(&env, &username_hash, &delegate);
+        storage::remove_delegate_permissions(&e, &username_hash, &delegate);
 
-        #[allow(deprecated)]
-        env.events()
-            .publish((DELEGATE_RVN,), (username_hash, delegate));
+        emit_delegate_revoked(&e, &username_hash, &delegate);
+        Ok(())
     }
 }
