@@ -1,9 +1,26 @@
-#[cfg(test)]
-mod tests {
+﻿#[cfg(test)]
+mod test {
     use super::super::*;
-    use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::testutils::Events as _;
-    use soroban_sdk::{Env, TryFromVal};
+    use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
+    use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, TryFromVal};
+
+    #[contract]
+    pub struct DummyFactory;
+    #[contractimpl]
+    impl DummyFactory {
+        pub fn deploy_username(_env: Env, _username_hash: BytesN<32>, _claimer: Address) {}
+    }
+
+    fn setup(env: &Env) -> (AuctionContractClient<'static>, Address, Address) {
+        let contract_id = env.register(AuctionContract, ());
+        let client = AuctionContractClient::new(env, &contract_id);
+        let seller = Address::generate(env);
+        let token_admin = Address::generate(env);
+        let asset = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+        (client, seller, asset)
+    }
 
     #[test]
     fn test_bid_refunded_event_emitted_when_outbid() {
