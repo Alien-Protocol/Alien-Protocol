@@ -12,12 +12,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Vault = void 0;
 const typeorm_1 = require("typeorm");
 let Vault = class Vault {
-    commitment;
-    owner;
-    token;
-    balance;
-    isActive;
-    createdAt;
 };
 exports.Vault = Vault;
 __decorate([

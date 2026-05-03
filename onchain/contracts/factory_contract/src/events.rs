@@ -7,6 +7,7 @@ pub const OWNERSHIP_TRANSFERRED: Symbol = symbol_short!("OWN_TRF");
 /// Event emitted when a role is granted to an address.
 pub const ROLE_GRANTED: Symbol = symbol_short!("ROLE_GNT");
 
+/// Emits an event when a new username is deployed.
 #[allow(deprecated)]
 /// Emits a username deployment event.
 pub fn emit_username_deployed(
@@ -21,6 +22,7 @@ pub fn emit_username_deployed(
     );
 }
 
+/// Emits an event when username ownership is transferred to a new owner.
 #[allow(dead_code)]
 #[allow(deprecated)]
 /// Emits an ownership transfer event.

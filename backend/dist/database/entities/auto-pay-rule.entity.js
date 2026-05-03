@@ -12,14 +12,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AutoPayRule = void 0;
 const typeorm_1 = require("typeorm");
 let AutoPayRule = class AutoPayRule {
-    ruleId;
-    fromCommitment;
-    toCommitment;
-    token;
-    amount;
-    interval;
-    lastPaid;
-    isActive;
 };
 exports.AutoPayRule = AutoPayRule;
 __decorate([

@@ -654,6 +654,19 @@ fn test_deposit_invalid_amount() {
 }
 
 #[test]
+fn test_deposit_zero_amount_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (contract_id, client, token, _token_admin, from, _to) = setup_test(&env);
+
+    let owner = Address::generate(&env);
+    create_vault(&env, &contract_id, &from, &owner, &token, 100);
+
+    let result = client.try_deposit(&from, &0);
+    assert_eq!(result, Err(Ok(EscrowError::InvalidAmount)));
+}
+
+#[test]
 fn test_withdraw_success() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1577,5 +1590,357 @@ fn test_is_vault_active_returns_none_for_nonexistent_vault() {
         client.is_vault_active(&nonexistent),
         None,
         "nonexistent vault must return None"
+    );
+}
+
+// ── Admin & Pause tests ──────────────────────────────────────────────────────
+
+#[test]
+fn test_initialize_stores_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let reg_id = env.register(MockRegistrationContract, ());
+    let escrow_id = env.register(EscrowContract, ());
+    let client = EscrowContractClient::new(&env, &escrow_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin, &reg_id);
+
+    assert_eq!(
+        client.get_admin(),
+        Some(admin),
+        "admin must be stored after initialize"
+    );
+}
+
+#[test]
+fn test_is_paused_false_after_initialize() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let reg_id = env.register(MockRegistrationContract, ());
+    let escrow_id = env.register(EscrowContract, ());
+    let client = EscrowContractClient::new(&env, &escrow_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin, &reg_id);
+
+    assert!(
+        !client.is_paused(),
+        "contract must not be paused after initialize"
+    );
+}
+
+#[test]
+fn test_set_paused_by_admin_toggles_state() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _, _, _, _) = setup_with_registration(&env, 0x01);
+
+    assert!(!client.is_paused());
+
+    client.set_paused(&true);
+    assert!(
+        client.is_paused(),
+        "contract must be paused after set_paused(true)"
+    );
+
+    client.set_paused(&false);
+    assert!(
+        !client.is_paused(),
+        "contract must be unpaused after set_paused(false)"
+    );
+}
+
+#[test]
+#[should_panic]
+fn test_set_paused_by_non_admin_panics() {
+    let env = Env::default();
+
+    let reg_id = env.register(MockRegistrationContract, ());
+    let escrow_id = env.register(EscrowContract, ());
+    let client = EscrowContractClient::new(&env, &escrow_id);
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+
+    client.mock_all_auths().initialize(&admin, &reg_id);
+
+    client
+        .mock_auths(&[MockAuth {
+            address: &non_admin,
+            invoke: &MockAuthInvoke {
+                contract: &escrow_id,
+                fn_name: "set_paused",
+                args: (true,).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .set_paused(&true);
+}
+
+#[test]
+fn test_rotate_admin_by_admin_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _, _, _, _) = setup_with_registration(&env, 0x02);
+
+    let new_admin = Address::generate(&env);
+    client.rotate_admin(&new_admin);
+
+    assert_eq!(
+        client.get_admin(),
+        Some(new_admin),
+        "admin must be updated after rotate_admin"
+    );
+}
+
+#[test]
+#[should_panic]
+fn test_rotate_admin_by_non_admin_panics() {
+    let env = Env::default();
+
+    let reg_id = env.register(MockRegistrationContract, ());
+    let escrow_id = env.register(EscrowContract, ());
+    let client = EscrowContractClient::new(&env, &escrow_id);
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.mock_all_auths().initialize(&admin, &reg_id);
+
+    client
+        .mock_auths(&[MockAuth {
+            address: &non_admin,
+            invoke: &MockAuthInvoke {
+                contract: &escrow_id,
+                fn_name: "rotate_admin",
+                args: (new_admin.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .rotate_admin(&new_admin);
+}
+
+#[test]
+fn test_rotate_admin_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let reg_id = env.register(MockRegistrationContract, ());
+    let escrow_id = env.register(EscrowContract, ());
+    let client = EscrowContractClient::new(&env, &escrow_id);
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.initialize(&admin, &reg_id);
+    client.rotate_admin(&new_admin);
+
+    let events = env.events().all();
+    let has_escrow_event = events.iter().any(|(contract, _, _)| contract == escrow_id);
+    assert!(
+        has_escrow_event,
+        "expected at least one escrow event after rotate_admin"
+    );
+}
+
+#[test]
+fn test_set_paused_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, escrow_id, _, _, _) = setup_with_registration(&env, 0x03);
+
+    client.set_paused(&true);
+
+    let events = env.events().all();
+    let has_escrow_event = events.iter().any(|(contract, _, _)| contract == escrow_id);
+    assert!(
+        has_escrow_event,
+        "expected at least one escrow event after set_paused"
+    );
+}
+
+#[test]
+fn test_create_vault_blocked_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _, _, token, commitment) = setup_with_registration(&env, 0x04);
+
+    client.set_paused(&true);
+
+    let result = client.try_create_vault(&commitment, &token);
+    assert!(
+        matches!(result, Err(Ok(err)) if err == Error::from_contract_error(EscrowError::ContractPaused as u32)),
+        "create_vault must be blocked while paused"
+    );
+}
+
+#[test]
+fn test_deposit_blocked_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, escrow_id, owner, token, commitment) = setup_with_registration(&env, 0x05);
+
+    create_vault(&env, &escrow_id, &commitment, &owner, &token, 100);
+
+    client.set_paused(&true);
+
+    let result = client.try_deposit(&commitment, &50);
+    assert!(
+        matches!(result, Err(Ok(err)) if err == EscrowError::ContractPaused),
+        "deposit must be blocked while paused"
+    );
+}
+
+#[test]
+fn test_withdraw_blocked_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, escrow_id, owner, token, commitment) = setup_with_registration(&env, 0x06);
+
+    create_vault(&env, &escrow_id, &commitment, &owner, &token, 100);
+
+    client.set_paused(&true);
+
+    let result = client.try_withdraw(&commitment, &50);
+    assert!(
+        matches!(result, Err(Ok(err)) if err == Error::from_contract_error(EscrowError::ContractPaused as u32)),
+        "withdraw must be blocked while paused"
+    );
+}
+
+#[test]
+fn test_schedule_payment_blocked_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, escrow_id, owner, token, from) = setup_with_registration(&env, 0x07);
+    let to = BytesN::from_array(&env, &[0xEEu8; 32]);
+
+    create_vault(&env, &escrow_id, &from, &owner, &token, 1000);
+
+    client.set_paused(&true);
+
+    env.ledger().set_timestamp(1000);
+    let result = client.try_schedule_payment(&from, &to, &100, &2000);
+    assert!(
+        matches!(result, Err(Ok(err)) if err == EscrowError::ContractPaused),
+        "schedule_payment must be blocked while paused"
+    );
+}
+
+#[test]
+fn test_execute_scheduled_blocked_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, escrow_id, owner, token, from) = setup_with_registration(&env, 0x08);
+    let to = BytesN::from_array(&env, &[0xEFu8; 32]);
+    let to_owner = Address::generate(&env);
+
+    create_vault(&env, &escrow_id, &from, &owner, &token, 1000);
+    create_vault(&env, &escrow_id, &to, &to_owner, &token, 0);
+
+    env.ledger().set_timestamp(1000);
+    let payment_id = client.schedule_payment(&from, &to, &100, &1500);
+
+    client.set_paused(&true);
+
+    env.ledger().set_timestamp(2000);
+    let result = client.try_execute_scheduled(&payment_id);
+    assert!(
+        matches!(result, Err(Ok(err)) if err == EscrowError::ContractPaused),
+        "execute_scheduled must be blocked while paused"
+    );
+}
+
+#[test]
+fn test_trigger_auto_pay_blocked_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, escrow_id, owner, token, from) = setup_with_registration(&env, 0x09);
+    let to = BytesN::from_array(&env, &[0xF0u8; 32]);
+
+    create_vault(&env, &escrow_id, &from, &owner, &token, 1000);
+
+    let rule_id = client.setup_auto_pay(&from, &to, &100, &1);
+
+    client.set_paused(&true);
+
+    env.ledger().set_timestamp(10_000);
+    let result = client.try_trigger_auto_pay(&from, &rule_id);
+    assert!(
+        matches!(result, Err(Ok(err)) if err == Error::from_contract_error(EscrowError::ContractPaused as u32)),
+        "trigger_auto_pay must be blocked while paused"
+    );
+}
+
+#[test]
+fn test_read_only_queries_work_while_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, escrow_id, owner, token, commitment) = setup_with_registration(&env, 0x0A);
+
+    create_vault(&env, &escrow_id, &commitment, &owner, &token, 500);
+
+    client.set_paused(&true);
+
+    assert!(client.is_paused(), "is_paused must return true");
+    assert!(
+        client.get_admin().is_some(),
+        "get_admin must work while paused"
+    );
+    assert_eq!(
+        client.get_balance(&commitment),
+        Some(500),
+        "get_balance must work while paused"
+    );
+    assert_eq!(
+        client.is_vault_active(&commitment),
+        Some(true),
+        "is_vault_active must work while paused"
+    );
+    assert_eq!(
+        client.get_auto_pay_count(),
+        0,
+        "get_auto_pay_count must work while paused"
+    );
+}
+
+#[test]
+fn test_recovery_after_unpause() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, escrow_id, owner, token, commitment) = setup_with_registration(&env, 0x0B);
+
+    create_vault(&env, &escrow_id, &commitment, &owner, &token, 0);
+
+    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_admin_client.mint(&owner, &200);
+
+    client.set_paused(&true);
+
+    let result = client.try_deposit(&commitment, &100);
+    assert!(
+        matches!(result, Err(Ok(err)) if err == EscrowError::ContractPaused),
+        "deposit must be blocked while paused"
+    );
+
+    client.set_paused(&false);
+
+    client.deposit(&commitment, &100);
+    assert_eq!(
+        client.get_balance(&commitment),
+        Some(100),
+        "deposit must succeed after unpause"
     );
 }

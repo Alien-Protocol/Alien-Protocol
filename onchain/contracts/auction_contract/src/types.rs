@@ -24,6 +24,7 @@ pub enum AuctionKey {
     Seller(u32),
     Asset(u32),
     MinBid(u32),
+    MinBidIncrement(u32),
     EndTime(u32),
     HighestBidder(u32),
     HighestBid(u32),
@@ -35,16 +36,17 @@ pub enum AuctionKey {
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuctionConfig {
     pub username_hash: BytesN<32>,
     pub start_time: u64,
     pub end_time: u64,
     pub min_bid: i128,
+    pub min_bid_increment: i128,
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuctionState {
     pub config: AuctionConfig,
     pub status: AuctionStatus,
@@ -53,7 +55,7 @@ pub struct AuctionState {
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Bid {
     pub bidder: Address,
     pub amount: i128,

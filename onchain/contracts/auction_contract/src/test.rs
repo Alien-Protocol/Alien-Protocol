@@ -1,9 +1,26 @@
-#[cfg(test)]
-mod tests {
+﻿#[cfg(test)]
+mod test {
     use super::super::*;
-    use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::testutils::Events as _;
-    use soroban_sdk::{Env, TryFromVal};
+    use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
+    use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, TryFromVal};
+
+    #[contract]
+    pub struct DummyFactory;
+    #[contractimpl]
+    impl DummyFactory {
+        pub fn deploy_username(_env: Env, _username_hash: BytesN<32>, _claimer: Address) {}
+    }
+
+    fn setup(env: &Env) -> (AuctionContractClient<'static>, Address, Address) {
+        let contract_id = env.register(AuctionContract, ());
+        let client = AuctionContractClient::new(env, &contract_id);
+        let seller = Address::generate(env);
+        let token_admin = Address::generate(env);
+        let asset = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+        (client, seller, asset)
+    }
 
     #[test]
     fn test_bid_refunded_event_emitted_when_outbid() {
@@ -337,7 +354,7 @@ fn test_auction_full_lifecycle() {
     token_admin.mint(&bidder1, &1000);
     token_admin.mint(&bidder2, &1000);
 
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     client.place_bid(&1, &bidder1, &150);
     client.place_bid(&1, &bidder2, &200);
 
@@ -367,7 +384,7 @@ fn test_refund_bid_success() {
     token_admin.mint(&bidder1, &1000);
     token_admin.mint(&bidder2, &1000);
 
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     client.place_bid(&1, &bidder1, &150);
     client.place_bid(&1, &bidder2, &200);
 
@@ -393,7 +410,7 @@ fn test_refund_bid_winner_rejected() {
     token_admin.mint(&bidder1, &1000);
     token_admin.mint(&bidder2, &1000);
 
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     client.place_bid(&1, &bidder1, &150);
     client.place_bid(&1, &bidder2, &200);
 
@@ -416,7 +433,7 @@ fn test_refund_bid_double_refund_panics() {
     token_admin.mint(&bidder1, &1000);
     token_admin.mint(&bidder2, &1000);
 
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     client.place_bid(&1, &bidder1, &150);
     client.place_bid(&1, &bidder2, &200);
 
@@ -432,7 +449,7 @@ fn test_auction_no_bids_close() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     env.ledger().set_timestamp(1001);
     client.close_auction_by_id(&1);
 }
@@ -443,7 +460,7 @@ fn test_create_auction_zero_min_bid_fails() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
-    client.create_auction(&1, &seller, &asset, &0, &1000u64);
+    client.create_auction(&1, &seller, &asset, &0, &10, &1000u64);
 }
 
 #[test]
@@ -452,7 +469,7 @@ fn test_place_bid_too_low_fails() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     let bidder = Address::generate(&env);
     client.place_bid(&1, &bidder, &50);
 }
@@ -463,7 +480,7 @@ fn test_place_bid_after_close_fails() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     env.ledger().set_timestamp(1001);
     let bidder = Address::generate(&env);
     client.place_bid(&1, &bidder, &150);
@@ -475,7 +492,7 @@ fn test_close_auction_early_fails() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     env.ledger().set_timestamp(500);
     client.close_auction_by_id(&1);
 }
@@ -499,7 +516,7 @@ fn test_claim_not_winner_fails() {
     let bidder = Address::generate(&env);
     let loser = Address::generate(&env);
     token_admin.mint(&bidder, &200);
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     client.place_bid(&1, &bidder, &150);
     env.ledger().set_timestamp(1001);
     client.close_auction_by_id(&1);
@@ -513,7 +530,7 @@ fn test_create_auction_past_end_time_fails() {
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
     env.ledger().set_timestamp(2000);
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
 }
 
 #[test]
@@ -522,8 +539,8 @@ fn test_create_duplicate_auction_fails() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
-    client.create_auction(&1, &seller, &asset, &200, &2000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
+    client.create_auction(&1, &seller, &asset, &200, &10, &2000u64);
 }
 
 #[test]
@@ -535,7 +552,7 @@ fn test_outbid_self_fails() {
     let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &asset);
     let bidder = Address::generate(&env);
     token_admin.mint(&bidder, &500);
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     client.place_bid(&1, &bidder, &150);
     client.place_bid(&1, &bidder, &200);
 }
@@ -549,7 +566,7 @@ fn test_claim_twice_fails() {
     let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &asset);
     let bidder = Address::generate(&env);
     token_admin.mint(&bidder, &200);
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
     client.place_bid(&1, &bidder, &150);
     env.ledger().set_timestamp(1001);
     client.close_auction_by_id(&1);
@@ -563,7 +580,7 @@ fn test_create_auction_emits_event() {
     env.mock_all_auths();
     let (client, seller, asset) = setup(&env);
 
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
 
     let events = env.events().all();
     assert!(!events.is_empty());
@@ -591,7 +608,7 @@ fn test_get_auction_info() {
 
     assert_eq!(client.get_auction_info(&1), None);
 
-    client.create_auction(&1, &seller, &asset, &100, &1000u64);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
 
     let info1 = client
         .get_auction_info(&1)
@@ -602,6 +619,7 @@ fn test_get_auction_info() {
             seller.clone(),
             asset.clone(),
             100,
+            10,
             1000,
             0,
             None,
@@ -620,6 +638,7 @@ fn test_get_auction_info() {
             seller.clone(),
             asset.clone(),
             100,
+            10,
             1000,
             150,
             Some(bidder.clone()),
@@ -639,6 +658,7 @@ fn test_get_auction_info() {
             seller.clone(),
             asset.clone(),
             100,
+            10,
             1000,
             150,
             Some(bidder.clone()),
@@ -657,6 +677,7 @@ fn test_get_auction_info() {
             seller.clone(),
             asset.clone(),
             100,
+            10,
             1000,
             150,
             Some(bidder.clone()),
@@ -664,4 +685,42 @@ fn test_get_auction_info() {
             true
         )
     );
+}
+
+#[test]
+fn test_place_bid_increment_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, seller, asset) = setup(&env);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
+
+    let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &asset);
+    let bidder1 = Address::generate(&env);
+    let bidder2 = Address::generate(&env);
+    token_admin.mint(&bidder1, &200);
+    token_admin.mint(&bidder2, &200);
+
+    client.place_bid(&1, &bidder1, &100);
+    client.place_bid(&1, &bidder2, &110);
+
+    let info = client.get_auction_info(&1).expect("expected auction info");
+    assert_eq!(info.5, 110); // highest_bid
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1007)")]
+fn test_place_bid_increment_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, seller, asset) = setup(&env);
+    client.create_auction(&1, &seller, &asset, &100, &10, &1000u64);
+
+    let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &asset);
+    let bidder1 = Address::generate(&env);
+    let bidder2 = Address::generate(&env);
+    token_admin.mint(&bidder1, &200);
+    token_admin.mint(&bidder2, &200);
+
+    client.place_bid(&1, &bidder1, &100);
+    client.place_bid(&1, &bidder2, &105);
 }

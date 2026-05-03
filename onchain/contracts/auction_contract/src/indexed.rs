@@ -8,6 +8,7 @@ pub fn create_auction(
     seller: Address,
     asset: Address,
     min_bid: i128,
+    min_bid_increment: i128,
     end_time: u64,
 ) -> Result<(), errors::AuctionError> {
     seller.require_auth();
@@ -20,9 +21,13 @@ pub fn create_auction(
     if min_bid <= 0 {
         return Err(errors::AuctionError::BidTooLow);
     }
+    if min_bid_increment < 0 {
+        return Err(errors::AuctionError::BidTooLow);
+    }
     storage::auction_set_seller(env, id, &seller);
     storage::auction_set_asset(env, id, &asset);
     storage::auction_set_min_bid(env, id, min_bid);
+    storage::auction_set_min_bid_increment(env, id, min_bid_increment);
     storage::auction_set_end_time(env, id, end_time);
     storage::auction_set_status(env, id, types::AuctionStatus::Open);
 
@@ -52,6 +57,7 @@ pub fn place_bid(
     }
     let min_bid = storage::auction_get_min_bid(env, id);
     let highest_bid = storage::auction_get_highest_bid(env, id);
+    let min_increment = storage::auction_get_min_bid_increment(env, id);
     if storage::auction_get_highest_bidder(env, id)
         .as_ref()
         .map(|h| h == &bidder)
@@ -59,7 +65,11 @@ pub fn place_bid(
     {
         return Err(errors::AuctionError::Unauthorized);
     }
-    if amount < min_bid || amount <= highest_bid {
+    if highest_bid == 0 {
+        if amount < min_bid {
+            return Err(errors::AuctionError::BidTooLow);
+        }
+    } else if amount < highest_bid + min_increment {
         return Err(errors::AuctionError::BidTooLow);
     }
     let asset = storage::auction_get_asset(env, id)?;

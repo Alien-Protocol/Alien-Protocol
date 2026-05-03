@@ -1,0 +1,11 @@
+services:
+  server:
+    build:
+      context: ./backend
+      target: builder # Use builder stage which has all devDependencies
+    command: npm run start:dev
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      NODE_ENV: development

@@ -85,6 +85,21 @@ pub struct AutoCancelEvent {
     pub from: BytesN<32>,
 }
 
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminRotatedEvent {
+    #[topic]
+    pub old_admin: Address,
+    pub new_admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseToggledEvent {
+    #[topic]
+    pub paused: bool,
+}
+
 pub struct Events;
 
 impl Events {
@@ -189,5 +204,17 @@ impl Events {
 
     pub fn auto_cancel(env: &Env, from: BytesN<32>, rule_id: u32) {
         AutoCancelEvent { rule_id, from }.publish(env);
+    }
+
+    pub fn admin_rotated(env: &Env, old_admin: Address, new_admin: Address) {
+        AdminRotatedEvent {
+            old_admin,
+            new_admin,
+        }
+        .publish(env);
+    }
+
+    pub fn pause_toggled(env: &Env, paused: bool) {
+        PauseToggledEvent { paused }.publish(env);
     }
 }
