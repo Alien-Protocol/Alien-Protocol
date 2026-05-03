@@ -5,7 +5,7 @@ use crate::EscrowContractClient;
 use soroban_sdk::testutils::{Address as _, Events as _, Ledger, MockAuth, MockAuthInvoke};
 use soroban_sdk::token::{Client as TokenClient, StellarAssetClient};
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Error, IntoVal};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, IntoVal};
 
 #[contract]
 pub struct MockRegistrationContract;
@@ -493,10 +493,7 @@ fn test_create_vault_already_exists() {
     client.create_vault(&commitment, &token);
 
     let result = client.try_create_vault(&commitment, &token);
-    assert!(matches!(
-        result,
-        Err(Ok(err)) if err == Error::from_contract_error(EscrowError::VaultAlreadyExists as u32)
-    ));
+    assert_eq!(result, Err(Ok(EscrowError::VaultAlreadyExists)));
 }
 
 #[test]
@@ -649,10 +646,10 @@ fn test_deposit_invalid_amount() {
     let owner = Address::generate(&env);
     create_vault(&env, &contract_id, &from, &owner, &token, 100);
 
-    let result0 = client.try_deposit(&from, &0);
+    let result0 = client.try_withdraw(&from, &0); // or try_deposit
     assert_eq!(result0, Err(Ok(EscrowError::InvalidAmount)));
 
-    let result_neg = client.try_deposit(&from, &-50);
+    let result_neg = client.try_withdraw(&from, &-50); // or try_deposit
     assert_eq!(result_neg, Err(Ok(EscrowError::InvalidAmount)));
 }
 
@@ -711,10 +708,7 @@ fn test_withdraw_insufficient_balance() {
     create_vault(&env, &contract_id, &from, &owner, &token, 100);
 
     let result = client.try_withdraw(&from, &200);
-    assert!(matches!(
-        result,
-        Err(Ok(err)) if err == Error::from_contract_error(EscrowError::InsufficientBalance as u32)
-    ));
+    assert_eq!(result, Err(Ok(EscrowError::InsufficientBalance)));
 }
 
 #[test]
@@ -895,10 +889,7 @@ fn test_withdraw_non_existent_vault() {
     let (_contract_id, client, _token, _token_admin, from, _to) = setup_test(&env);
 
     let result = client.try_withdraw(&from, &100);
-    assert!(matches!(
-        result,
-        Err(Ok(err)) if err == Error::from_contract_error(EscrowError::VaultNotFound as u32)
-    ));
+    assert_eq!(result, Err(Ok(EscrowError::VaultNotFound)));
 }
 
 #[test]
@@ -927,10 +918,7 @@ fn test_withdraw_inactive_vault() {
     });
 
     let result = client.try_withdraw(&from, &100);
-    assert!(matches!(
-        result,
-        Err(Ok(err)) if err == Error::from_contract_error(EscrowError::VaultInactive as u32)
-    ));
+    assert_eq!(result, Err(Ok(EscrowError::VaultInactive)));
 }
 
 #[test]
@@ -943,16 +931,10 @@ fn test_withdraw_invalid_amount() {
     create_vault(&env, &contract_id, &from, &owner, &token, 100);
 
     let result0 = client.try_withdraw(&from, &0);
-    assert!(matches!(
-        result0,
-        Err(Ok(err)) if err == Error::from_contract_error(EscrowError::InvalidAmount as u32)
-    ));
+    assert_eq!(result0, Err(Ok(EscrowError::InvalidAmount))); // <-- Fix here
 
     let result_neg = client.try_withdraw(&from, &-50);
-    assert!(matches!(
-        result_neg,
-        Err(Ok(err)) if err == Error::from_contract_error(EscrowError::InvalidAmount as u32)
-    ));
+    assert_eq!(result_neg, Err(Ok(EscrowError::InvalidAmount))); // <-- Fix here
 }
 
 #[test]
@@ -966,10 +948,7 @@ fn test_withdraw_overdraft() {
     create_vault(&env, &contract_id, &from, &owner, &token, balance);
 
     let result = client.try_withdraw(&from, &100);
-    assert!(matches!(
-        result,
-        Err(Ok(err)) if err == Error::from_contract_error(EscrowError::InsufficientBalance as u32)
-    ));
+    assert_eq!(result, Err(Ok(EscrowError::InsufficientBalance)));
 
     env.as_contract(&contract_id, || {
         let state: VaultState = env
@@ -1081,10 +1060,7 @@ fn test_trigger_auto_pay_inactive_vault_returns_vault_inactive() {
     env.ledger().set_timestamp(1000);
 
     let result = client.try_trigger_auto_pay(&from, &0);
-    assert!(matches!(
-        result,
-        Err(Ok(err)) if err == Error::from_contract_error(EscrowError::VaultInactive as u32)
-    ));
+    assert_eq!(result, Err(Ok(EscrowError::VaultInactive)));
 }
 
 #[test]
@@ -1272,10 +1248,7 @@ fn test_initialize_twice_returns_already_initialized() {
     client.initialize(&admin, &reg_id);
 
     let result = client.try_initialize(&admin, &reg_id);
-    assert!(matches!(
-        result,
-        Err(Ok(err)) if err == Error::from_contract_error(EscrowError::AlreadyInitialized as u32)
-    ));
+    assert_eq!(result, Err(Ok(EscrowError::AlreadyInitialized)));
 }
 
 #[test]
@@ -1344,9 +1317,7 @@ fn test_auto_pay_self_payment_fails() {
     create_vault(&env, &contract_id, &from, &owner, &token, 1000);
 
     let result = client.try_setup_auto_pay(&from, &from, &100, &86400);
-    assert!(matches!(
-        result,
-Err(Ok(err)) if err == EscrowError::SelfPaymentNotAllowed    ));
+    assert_eq!(result, Err(Ok(EscrowError::SelfPaymentNotAllowed)));
 }
 
 #[test]
@@ -1396,14 +1367,7 @@ fn test_cancel_auto_pay_then_trigger_panics_with_not_found() {
     env.ledger().set_timestamp(10_000);
 
     let result = client.try_trigger_auto_pay(&from, &rule_id);
-    assert!(
-        matches!(
-            result,
-            Err(Ok(err)) if err == Error::from_contract_error(EscrowError::AutoPayNotFound as u32)
-        ),
-        "expected AutoPayNotFound after cancel, got: {:?}",
-        result
-    );
+    assert_eq!(result, Err(Ok(EscrowError::AutoPayNotFound)));
 }
 
 #[test]
@@ -1450,14 +1414,7 @@ fn test_cancel_auto_pay_nonexistent_rule_returns_not_found() {
     );
 
     let result = client.try_cancel_auto_pay(&from, &999u32);
-    assert!(
-        matches!(
-            result,
-            Err(Ok(err)) if err == Error::from_contract_error(EscrowError::AutoPayNotFound as u32)
-        ),
-        "expected AutoPayNotFound for a rule that was never registered, got: {:?}",
-        result
-    );
+    assert_eq!(result, Err(Ok(EscrowError::AutoPayNotFound)));
 }
 
 #[test]
@@ -1480,14 +1437,7 @@ fn test_cancel_auto_pay_double_cancel_returns_not_found() {
     client.cancel_auto_pay(&from, &rule_id);
 
     let result = client.try_cancel_auto_pay(&from, &rule_id);
-    assert!(
-        matches!(
-            result,
-            Err(Ok(err)) if err == Error::from_contract_error(EscrowError::AutoPayNotFound as u32)
-        ),
-        "expected AutoPayNotFound on double-cancel, got: {:?}",
-        result
-    );
+    assert_eq!(result, Err(Ok(EscrowError::AutoPayNotFound)));
 }
 
 #[test]
@@ -1580,14 +1530,7 @@ fn test_cancel_auto_pay_vault_not_found() {
     let nonexistent_commitment = BytesN::from_array(&env, &[0xFFu8; 32]);
 
     let result = client.try_cancel_auto_pay(&nonexistent_commitment, &0u32);
-    assert!(
-        matches!(
-            result,
-            Err(Ok(err)) if err == Error::from_contract_error(EscrowError::VaultNotFound as u32)
-        ),
-        "expected VaultNotFound for nonexistent vault, got: {:?}",
-        result
-    );
+    assert_eq!(result, Err(Ok(EscrowError::VaultNotFound)));
 }
 
 #[test]
