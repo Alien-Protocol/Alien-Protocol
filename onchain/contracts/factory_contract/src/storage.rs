@@ -58,17 +58,17 @@ pub fn get_operator(env: &Env) -> Option<Address> {
 }
 
 /// Sets the core contract address.
-pub fn set_core_contract(env: &Env, core_contract: &Address) {
+pub fn set_core_contract(env: &Env,username : BytesN<32>  , core_contract: &Address) {
     env.storage()
         .instance()
-        .set(&DataKey::CoreContract, core_contract);
+        .set(&DataKey::CoreContract(username), core_contract);
 }
 
 /// Returns the core contract address.
-pub fn get_core_contract(env: &Env) -> Option<Address> {
+pub fn get_core_contract(env: &Env , username : BytesN<32>) -> Option<Address> {
     env.storage()
         .instance()
-        .get::<DataKey, Address>(&DataKey::CoreContract)
+        .get::<DataKey, Address>(&DataKey::CoreContract(username))
 }
 
 /// Stores a username record.

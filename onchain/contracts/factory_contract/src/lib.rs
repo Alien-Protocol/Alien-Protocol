@@ -1,12 +1,8 @@
 #![no_std]
-//! Factory Contract.
-/// Error types returned by the factory contract.
+
 mod errors;
-/// Event definitions and emitters for the factory contract.
 mod events;
-/// Storage helper functions for the factory contract.
 mod storage;
-/// Type definitions for the factory contract.
 mod types;
 
 #[cfg(test)]
@@ -19,7 +15,7 @@ use crate::events::{emit_ownership_transferred, emit_username_deployed, ROLE_GRA
 use crate::storage::{
     get_admin, get_auction_contract as read_auction_contract,
     get_core_contract as read_core_contract, get_operator, get_owner, get_username, has_username,
-    set_admin, set_auction_contract, set_core_contract, set_operator, set_owner, set_username,
+    set_admin, set_operator, set_owner, set_username,
 };
 use crate::types::UsernameRecord;
 
@@ -29,34 +25,42 @@ pub struct FactoryContract;
 #[contractimpl]
 impl FactoryContract {
     /// Initializes the factory contract with an owner. The owner is also set as the initial admin and operator.
-    pub fn initialize(env: Env, owner: Address) {
+    /// GitHub: @ryzen-xp
+    pub fn initialize(
+        env: Env,
+        owner: Address,
+        admin: Address,
+        oprator: Address,
+    ) -> Result<(), FactoryError> {
         if get_owner(&env).is_some() {
-            panic_with_error!(&env, FactoryError::Unauthorized);
+            return Err(FactoryError::Unauthorized);
         }
         owner.require_auth();
         set_owner(&env, &owner);
-        set_admin(&env, &owner);
-        set_operator(&env, &owner);
+        set_admin(&env, &admin);
+        set_operator(&env, &oprator);
+
+        Ok(())
     }
 
     /// Configures the auction and core contract addresses. Only the operator can call this.
-    pub fn configure(env: Env, auction_contract: Address, core_contract: Address) {
-        let operator = get_operator(&env)
-            .unwrap_or_else(|| panic_with_error!(&env, FactoryError::Unauthorized));
-        operator.require_auth();
-        set_auction_contract(&env, &auction_contract);
-        set_core_contract(&env, &core_contract);
-    }
-
-    /// Sets a new admin address. Only the owner can call this.
-    pub fn set_admin(env: Env, new_admin: Address) {
+    // @ryzen-xp
+    pub fn set_admin(env: Env, new_admin: Address)-> Result<() , FactoryError> {
         let owner =
-            get_owner(&env).unwrap_or_else(|| panic_with_error!(&env, FactoryError::Unauthorized));
+            match get_owner(&env) {
+                Some(x) => x , 
+                None => return  Err(FactoryError::NotInitilizedContract)
+            };
+
         owner.require_auth();
+
         set_admin(&env, &new_admin);
+        
         #[allow(deprecated)]
         env.events()
             .publish((ROLE_GRANTED, symbol_short!("admin")), (new_admin,));
+
+        Ok(())
     }
 
     /// Sets a new operator address. Only the admin can call this.
@@ -85,11 +89,12 @@ impl FactoryContract {
         get_operator(&env)
     }
 
-    pub fn deploy_username(
+    pub fn deploy_core(
         env: Env,
         username_hash: BytesN<32>,
         owner: Address,
     ) -> Result<(), FactoryError> {
+        
         let auction_contract = read_auction_contract(&env).ok_or(FactoryError::Unauthorized)?;
         auction_contract.require_auth();
 
@@ -98,7 +103,7 @@ impl FactoryContract {
         }
 
         let core_contract =
-            read_core_contract(&env).ok_or(FactoryError::CoreContractNotConfigured)?;
+            read_core_contract(&env , username_hash.clone()).ok_or(FactoryError::CoreContractNotConfigured)?;
 
         let record = UsernameRecord {
             username_hash: username_hash.clone(),
@@ -147,7 +152,7 @@ impl FactoryContract {
         read_auction_contract(&env)
     }
 
-    pub fn core_contract(env: Env) -> Option<Address> {
-        read_core_contract(&env)
+    pub fn core_contract(env: Env , username_hash: BytesN<32>) -> Option<Address> {
+        read_core_contract(&env , username_hash)
     }
 }
