@@ -1,1 +1,1 @@
-pub use shared::errors::{ChainAddressError, CoreError};
+pub use shared::errors::CoreError;
