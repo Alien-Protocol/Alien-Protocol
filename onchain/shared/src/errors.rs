@@ -78,9 +78,8 @@ pub enum FactoryError {
     Unauthorized = 3001,
     AlreadyDeployed = 3002,
     CoreContractNotConfigured = 3003,
-    NotInitilizedContract = 3004 , 
-    InvalidUsername = 3005  , 
-    
+    NotInitilizedContract = 3004,
+    InvalidUsername = 3005,
 }
 
 #[contracterror]

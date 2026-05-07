@@ -15,8 +15,8 @@ use soroban_sdk::{
 
 use crate::errors::CoreError;
 use crate::events::{
-    emit_escrow_created, emit_escrow_refunded, emit_escrow_released,
-    emit_ownership_transferred, emit_primary_set, emit_send, emit_wallet_added, emit_wallet_removed,
+    emit_escrow_created, emit_escrow_refunded, emit_escrow_released, emit_ownership_transferred,
+    emit_primary_set, emit_send, emit_wallet_added, emit_wallet_removed,
 };
 use crate::storage::{
     get_escrow, get_escrow_counter, get_owner, get_primary_address, get_username_hash, get_wallet,
@@ -41,76 +41,10 @@ pub trait PeerCoreInterface {
 pub struct CoreContract;
 
 #[contractimpl]
-<<<<<<< HEAD
-impl Contract {
-    pub fn initialize(e: Env, o: Address) -> Result<(), errors::CoreError> { Admin::initialize(e, o) }
-
-    pub fn get_contract_owner(e: Env) -> Address { Admin::get_contract_owner(e) }
-
-    pub fn get_admin(e: Env) -> Address { Admin::get_admin(e) }
-
-    pub fn get_operator(e: Env) -> Address { Admin::get_operator(e) }
-
-    pub fn set_admin(e: Env, a: Address) -> Result<(), errors::CoreError> { Admin::set_admin(e, a) }
-
-    pub fn set_operator(e: Env, o: Address) -> Result<(), errors::CoreError> { Admin::set_operator(e, o) }
-
-    pub fn get_smt_root(e: Env) -> BytesN<32> { Admin::get_smt_root(e) }
-
-    pub fn update_smt_root(e: Env, r: BytesN<32>) -> Result<(), errors::CoreError> { Admin::update_smt_root(e, r) }
-
-    pub fn submit_proof(e: Env, c: Address, p: Proof, s: PublicSignals) -> Result<(), errors::CoreError> { Registration::submit_proof(e, c, p, s) }
-
-    pub fn register_resolver(e: Env, c: Address, h: BytesN<32>, p: Proof, s: PublicSignals) -> Result<(), errors::CoreError> { Resolver::register_resolver(e, c, h, p, s) }
-
-    pub fn set_memo(e: Env, c: Address, cm: BytesN<32>, m: u64) -> Result<(), errors::CoreError> { Resolver::set_memo(e, c, cm, m) }
-
-    pub fn set_privacy_mode(e: Env, c: Address, h: BytesN<32>, m: PrivacyMode) -> Result<(), errors::CoreError> { Resolver::set_privacy_mode(e, c, h, m) }
-
-    pub fn get_privacy_mode(e: Env, h: BytesN<32>) -> PrivacyMode { Resolver::get_privacy_mode(e, h) }
-
-    pub fn resolve(e: Env, c: BytesN<32>) -> Result<(Address, Option<u64>), errors::CoreError> { Resolver::resolve(e, c) }
-
-    pub fn register(e: Env, c: Address, h: BytesN<32>) -> Result<(), errors::CoreError> { Registration::register(e, c, h) }
-
-    pub fn get_owner(e: Env, h: BytesN<32>) -> Option<Address> { Registration::get_owner(e, h) }
-
-    pub fn get_username(e: Env) -> Option<Symbol> { e.storage().instance().get(&alien_gateway::storage::username_key(&e)) }
-
-    pub fn get_created_at(e: Env, h: BytesN<32>) -> Option<u64> { Registration::get_created_at(e, h) }
-
-    pub fn add_chain_address(e: Env, c: Address, h: BytesN<32>, t: ChainType, a: Bytes) -> Result<(), errors::ChainAddressError> { AddressManager::add_chain_address(e, c, h, t, a) }
-
-    pub fn get_chain_address(e: Env, h: BytesN<32>, t: ChainType) -> Option<Bytes> { AddressManager::get_chain_address(e, h, t) }
-
-    pub fn remove_chain_address(e: Env, c: Address, h: BytesN<32>, t: ChainType) -> Result<(), errors::ChainAddressError> { AddressManager::remove_chain_address(e, c, h, t) }
-
-    pub fn add_stellar_address(e: Env, c: Address, h: BytesN<32>, a: Address) -> Result<(), errors::CoreError> { AddressManager::add_stellar_address(e, c, h, a) }
-
-    pub fn remove_stellar_address(e: Env, c: Address, h: BytesN<32>, a: Address) -> Result<(), errors::CoreError> { AddressManager::remove_stellar_address(e, c, h, a) }
-
-    pub fn get_stellar_addresses(e: Env, h: BytesN<32>) -> Result<soroban_sdk::Vec<Address>, errors::CoreError> { AddressManager::get_stellar_addresses(e, h) }
-
-    pub fn resolve_stellar(e: Env, h: BytesN<32>) -> Result<Address, errors::CoreError> { AddressManager::resolve_stellar(e, h) }
-
-    pub fn transfer_ownership(e: Env, c: Address, h: BytesN<32>, n: Address) -> Result<(), errors::CoreError> { Transfer::transfer_ownership(e, c, h, n) }
-
-    pub fn transfer(e: Env, c: Address, h: BytesN<32>, n: Address, p: Proof, s: PublicSignals) -> Result<(), errors::CoreError> { Transfer::transfer(e, c, h, n, p, s) }
-
-    pub fn add_shielded_address(e: Env, c: Address, h: BytesN<32>, a: BytesN<32>) -> Result<(), errors::CoreError> { AddressManager::add_shielded_address(e, c, h, a) }
-
-    pub fn get_shielded_address(e: Env, h: BytesN<32>) -> Option<BytesN<32>> { AddressManager::get_shielded_address(e, h) }
-
-    pub fn is_shielded(e: Env, h: BytesN<32>) -> bool { AddressManager::is_shielded(e, h) }
-
-    pub fn grant_delegate(e: Env, o: Address, h: BytesN<32>, d: Address, p: PermissionSet) -> Result<(), errors::CoreError> {
-        Registration::grant_delegate(e, o, h, d, p)
-=======
 impl CoreContract {
     pub fn __constructor(env: Env, owner: Address, username_hash: BytesN<32>) {
         set_owner(&env, &owner);
         set_username_hash(&env, &username_hash);
->>>>>>> 5c8a9fb (refactor: full codebase)
     }
 
     pub fn set_primary_address(env: Env, address: Address) -> Result<(), CoreError> {
@@ -347,11 +281,7 @@ impl CoreContract {
         set_escrow(&env, id, &record);
 
         let token = TokenClient::new(&env, &record.asset);
-        token.transfer(
-            &env.current_contract_address(),
-            &owner,
-            &record.amount,
-        );
+        token.transfer(&env.current_contract_address(), &owner, &record.amount);
 
         emit_escrow_refunded(&env, id, &owner, record.amount);
         Ok(())

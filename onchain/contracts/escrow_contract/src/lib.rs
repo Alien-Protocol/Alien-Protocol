@@ -17,7 +17,6 @@ use crate::storage::{
     write_registration_contract, write_scheduled_payment, write_vault_config, write_vault_state,
 };
 use crate::types::{AutoPay, DataKey, ScheduledPayment, VaultConfig, VaultState};
-use shared::auth as shared_auth;
 use soroban_sdk::{contract, contractimpl, token, vec, Address, BytesN, Env, IntoVal, Symbol};
 
 #[contract]
@@ -25,7 +24,6 @@ pub struct EscrowContract;
 
 #[contractimpl]
 impl EscrowContract {
-
     // ─── 1. Initialization ─────────────────────────────────────────────────
 
     pub fn initialize(
@@ -33,44 +31,28 @@ impl EscrowContract {
         admin: Address,
         registration_contract: Address,
     ) -> Result<(), EscrowError> {
-        shared_auth::require_address_auth(&admin);
+        admin.require_auth();
         if read_registration_contract(&env).is_some() {
             return Err(EscrowError::AlreadyInitialized);
         }
         write_registration_contract(&env, &registration_contract);
         write_escrow_admin(&env, &admin);
-<<<<<<< HEAD
-        Ok(())
-    }
-
-    pub fn rotate_admin(env: Env, new_admin: Address) -> Result<(), EscrowError> {
-        let old_admin = read_escrow_admin(&env).ok_or(EscrowError::Unauthorized)?;
-        shared_auth::require_address_auth(&old_admin);
-=======
-        Ok(())  // was missing
+        Ok(()) // was missing
     }
 
     // ─── 2. Role management ────────────────────────────────────────────────
 
     pub fn rotate_admin(env: Env, new_admin: Address) -> Result<(), EscrowError> {
-        let old_admin = read_escrow_admin(&env)
-            .ok_or(EscrowError::Unauthorized)?; 
+        let old_admin = read_escrow_admin(&env).ok_or(EscrowError::Unauthorized)?;
         old_admin.require_auth();
->>>>>>> 5c8a9fb (refactor: full codebase)
         write_escrow_admin(&env, &new_admin);
         Events::admin_rotated(&env, old_admin, new_admin);
         Ok(())
     }
 
     pub fn set_paused(env: Env, paused: bool) -> Result<(), EscrowError> {
-<<<<<<< HEAD
         let admin = read_escrow_admin(&env).ok_or(EscrowError::Unauthorized)?;
-        shared_auth::require_address_auth(&admin);
-=======
-        let admin = read_escrow_admin(&env)
-            .ok_or(EscrowError::Unauthorized)?; 
         admin.require_auth();
->>>>>>> 5c8a9fb (refactor: full codebase)
         write_paused(&env, paused);
         Events::pause_toggled(&env, paused);
         Ok(())
@@ -86,8 +68,6 @@ impl EscrowContract {
         read_paused(&env)
     }
 
-<<<<<<< HEAD
-=======
     pub fn get_balance(env: Env, commitment: BytesN<32>) -> Option<i128> {
         read_vault_state(&env, &commitment).map(|state| state.balance)
     }
@@ -111,34 +91,26 @@ impl EscrowContract {
 
     // ─── 4. Vault operations ───────────────────────────────────────────────
 
->>>>>>> 5c8a9fb (refactor: full codebase)
     pub fn create_vault(
         env: Env,
         commitment: BytesN<32>,
         token: Address,
     ) -> Result<(), EscrowError> {
         if read_paused(&env) {
-<<<<<<< HEAD
             return Err(EscrowError::ContractPaused);
         }
 
         let registration =
             read_registration_contract(&env).ok_or(EscrowError::CommitmentNotRegistered)?;
-=======
-            return Err(EscrowError::ContractPaused); 
-        }
 
-        let registration = read_registration_contract(&env)
-            .ok_or(EscrowError::CommitmentNotRegistered)?; 
-
->>>>>>> 5c8a9fb (refactor: full codebase)
         let owner: Option<Address> = env.invoke_contract(
             &registration,
             &Symbol::new(&env, "get_owner"),
             vec![&env, commitment.into_val(&env)],
         );
         let owner = owner.ok_or(EscrowError::CommitmentNotRegistered)?;
-        shared_auth::require_address_auth(&owner);
+
+        owner.require_auth();
 
         if read_vault_config(&env, &commitment).is_some() {
             return Err(EscrowError::VaultAlreadyExists);
@@ -171,13 +143,15 @@ impl EscrowContract {
         if amount <= 0 {
             return Err(EscrowError::InvalidAmount);
         }
+
         if read_paused(&env) {
             return Err(EscrowError::ContractPaused);
         }
 
         let config = read_vault_config(&env, &commitment).ok_or(EscrowError::VaultNotFound)?;
         let mut state = read_vault_state(&env, &commitment).ok_or(EscrowError::VaultNotFound)?;
-        require_vault_owner(&config);
+
+        config.owner.require_auth();
 
         if !state.is_active {
             return Err(EscrowError::VaultInactive);
@@ -200,29 +174,20 @@ impl EscrowContract {
         if amount <= 0 {
             return Err(EscrowError::InvalidAmount);
         }
+
         if read_paused(&env) {
-<<<<<<< HEAD
             return Err(EscrowError::ContractPaused);
         }
 
         let config = read_vault_config(&env, &commitment).ok_or(EscrowError::VaultNotFound)?;
         let mut state = read_vault_state(&env, &commitment).ok_or(EscrowError::VaultNotFound)?;
-        require_vault_owner(&config);
-=======
-            return Err(EscrowError::ContractPaused);  
-        }
-
-        let config = read_vault_config(&env, &commitment)
-            .ok_or(EscrowError::VaultNotFound)?; 
-        let mut state = read_vault_state(&env, &commitment)
-            .ok_or(EscrowError::VaultNotFound)?;
 
         config.owner.require_auth();
->>>>>>> 5c8a9fb (refactor: full codebase)
 
         if !state.is_active {
             return Err(EscrowError::VaultInactive);
         }
+
         if state.balance < amount {
             return Err(EscrowError::InsufficientBalance);
         }
@@ -234,8 +199,8 @@ impl EscrowContract {
             .balance
             .checked_sub(amount)
             .ok_or(EscrowError::ArithmeticError)?;
-        write_vault_state(&env, &commitment, &state);
 
+        write_vault_state(&env, &commitment, &state);
         Events::withdraw(&env, commitment, amount, state.balance);
         Ok(())
     }
@@ -278,20 +243,24 @@ impl EscrowContract {
         if amount <= 0 {
             return Err(EscrowError::InvalidAmount);
         }
+
         if release_at <= env.ledger().timestamp() {
             return Err(EscrowError::PastReleaseTime);
         }
+
         if read_paused(&env) {
             return Err(EscrowError::ContractPaused);
         }
 
         let config = read_vault_config(&env, &from).ok_or(EscrowError::VaultNotFound)?;
         let mut state = read_vault_state(&env, &from).ok_or(EscrowError::VaultNotFound)?;
-        require_vault_owner(&config);
+
+        config.owner.require_auth();
 
         if !state.is_active {
             return Err(EscrowError::VaultInactive);
         }
+
         if state.balance < amount {
             return Err(EscrowError::InsufficientBalance);
         }
@@ -299,14 +268,11 @@ impl EscrowContract {
         state.balance = state
             .balance
             .checked_sub(amount)
-<<<<<<< HEAD
-            .ok_or(EscrowError::ArithmeticError)?;
-=======
-            .ok_or(EscrowError::ArithmeticError)?;  // was raw -=
->>>>>>> 5c8a9fb (refactor: full codebase)
+            .ok_or(EscrowError::ArithmeticError)?; // was raw -=
         write_vault_state(&env, &from, &state);
 
         let payment_id = increment_payment_id(&env)?;
+
         let payment = ScheduledPayment {
             from,
             to,
@@ -325,6 +291,7 @@ impl EscrowContract {
             payment.amount,
             payment.release_at,
         );
+
         Ok(payment_id)
     }
 
@@ -343,6 +310,7 @@ impl EscrowContract {
         if payment.executed {
             return Err(EscrowError::PaymentAlreadyExecuted);
         }
+
         if env.ledger().timestamp() < payment.release_at {
             return Err(EscrowError::PaymentNotYetDue);
         }
@@ -363,34 +331,7 @@ impl EscrowContract {
         Ok(())
     }
 
-<<<<<<< HEAD
-    pub fn cancel_vault(env: Env, commitment: BytesN<32>) -> Result<(), EscrowError> {
-        let config = read_vault_config(&env, &commitment).ok_or(EscrowError::VaultNotFound)?;
-        require_vault_owner(&config);
-        let mut state = read_vault_state(&env, &commitment).ok_or(EscrowError::VaultNotFound)?;
-
-        let refunded_amount = if state.balance > 0 {
-            let token_client = token::Client::new(&env, &config.token);
-            token_client.transfer(
-                &env.current_contract_address(),
-                &config.owner,
-                &state.balance,
-            );
-            state.balance
-        } else {
-            0
-        };
-
-        state.is_active = false;
-        state.balance = 0;
-        write_vault_state(&env, &commitment, &state);
-
-        Events::vault_cancel(&env, commitment, refunded_amount);
-        Ok(())
-    }
-=======
     // ─── 6. Auto-pay ───────────────────────────────────────────────────────
->>>>>>> 5c8a9fb (refactor: full codebase)
 
     pub fn setup_auto_pay(
         env: Env,
@@ -402,20 +343,18 @@ impl EscrowContract {
         if amount <= 0 {
             return Err(EscrowError::InvalidAmount);
         }
+
         if interval == 0 {
             return Err(EscrowError::InvalidInterval);
         }
+
         if from == to {
             return Err(EscrowError::SelfPaymentNotAllowed);
         }
 
         let config = read_vault_config(&env, &from).ok_or(EscrowError::VaultNotFound)?;
-<<<<<<< HEAD
-        require_vault_owner(&config);
-=======
         config.owner.require_auth();
 
->>>>>>> 5c8a9fb (refactor: full codebase)
         let rule_id = increment_auto_pay_id(&env)?;
 
         let auto_pay = AutoPay {
@@ -434,7 +373,7 @@ impl EscrowContract {
 
     pub fn cancel_auto_pay(env: Env, from: BytesN<32>, rule_id: u32) -> Result<(), EscrowError> {
         let config = read_vault_config(&env, &from).ok_or(EscrowError::VaultNotFound)?;
-        require_vault_owner(&config);
+        config.owner.require_auth();
 
         if read_auto_pay(&env, &from, rule_id).is_none() {
             return Err(EscrowError::AutoPayNotFound);
@@ -446,44 +385,36 @@ impl EscrowContract {
     }
 
     pub fn trigger_auto_pay(env: Env, from: BytesN<32>, rule_id: u32) -> Result<(), EscrowError> {
-<<<<<<< HEAD
         if read_paused(&env) {
             return Err(EscrowError::ContractPaused);
         }
 
         let mut auto_pay =
             read_auto_pay(&env, &from, rule_id).ok_or(EscrowError::AutoPayNotFound)?;
-        let current_time = env.ledger().timestamp();
-=======
-       
-        if read_paused(&env) {
-            return Err(EscrowError::ContractPaused);  
-        }
-
-        let mut auto_pay = read_auto_pay(&env, &from, rule_id)
-            .ok_or(EscrowError::AutoPayNotFound)?;  
 
         let current_time = env.ledger().timestamp();
 
->>>>>>> 5c8a9fb (refactor: full codebase)
         let next_payment_time = auto_pay
             .last_paid
             .checked_add(auto_pay.interval)
             .ok_or(EscrowError::ArithmeticError)?;
 
         if current_time < next_payment_time {
-            return Err(EscrowError::IntervalNotElapsed);  
+            return Err(EscrowError::IntervalNotElapsed);
         }
 
         let mut state = read_vault_state(&env, &from).ok_or(EscrowError::VaultNotFound)?;
+
         if !state.is_active {
             return Err(EscrowError::VaultInactive);
         }
+
         if state.balance < auto_pay.amount {
             return Err(EscrowError::InsufficientBalance);
         }
 
         let recipient = resolve(&env, &auto_pay.to)?;
+
         let token_client = token::Client::new(&env, &auto_pay.token);
         token_client.transfer(
             &env.current_contract_address(),
@@ -495,6 +426,7 @@ impl EscrowContract {
             .balance
             .checked_sub(auto_pay.amount)
             .ok_or(EscrowError::ArithmeticError)?;
+
         write_vault_state(&env, &from, &state);
 
         auto_pay.last_paid = current_time;
@@ -508,20 +440,11 @@ impl EscrowContract {
             auto_pay.amount,
             current_time,
         );
+
         Ok(())
     }
 }
 
-<<<<<<< HEAD
-fn resolve(env: &Env, commitment: &BytesN<32>) -> Result<Address, EscrowError> {
-    let config = read_vault_config(env, commitment).ok_or(EscrowError::VaultNotFound)?;
-    Ok(config.owner)
-}
-
-fn require_vault_owner(config: &VaultConfig) {
-    shared_auth::require_address_auth(&config.owner);
-}
-=======
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 /// Resolves a commitment hash to its vault owner address.
@@ -529,4 +452,3 @@ fn resolve(env: &Env, commitment: &BytesN<32>) -> Result<Address, EscrowError> {
     let config = read_vault_config(env, commitment).ok_or(EscrowError::VaultNotFound)?;
     Ok(config.owner)
 }
->>>>>>> 5c8a9fb (refactor: full codebase)
