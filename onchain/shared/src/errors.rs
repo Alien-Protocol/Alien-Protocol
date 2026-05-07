@@ -78,7 +78,9 @@ pub enum FactoryError {
     Unauthorized = 3001,
     AlreadyDeployed = 3002,
     CoreContractNotConfigured = 3003,
-    NotInitilizedContract = 3004
+    NotInitilizedContract = 3004 , 
+    InvalidUsername = 3005  , 
+    
 }
 
 #[contracterror]
@@ -107,6 +109,22 @@ pub enum CoreError {
     AlreadyRegistered = 4010,
     /// The new SMT root matches the existing on-chain root.
     RootUnchanged = 4011,
+    /// The escrow is not in Active state and cannot be operated on.
+    EscrowNotActive = 4012,
+    /// The escrow unlock time has not yet passed; release is not permitted.
+    EscrowNotUnlocked = 4013,
+    /// The escrow has already been released or refunded.
+    EscrowAlreadySettled = 4014,
+    /// Amount must be strictly greater than zero.
+    InvalidAmount = 4015,
+    /// The wallet book has reached the maximum number of entries (20).
+    WalletLimitReached = 4016,
+    /// No wallet entry found for the given label.
+    WalletNotFound = 4017,
+    /// The username could not be resolved via the factory contract.
+    UsernameNotFound = 4018,
+    /// Escrow counter overflow — maximum number of escrows reached.
+    EscrowCounterOverflow = 4019,
 }
 
 #[contracterror]

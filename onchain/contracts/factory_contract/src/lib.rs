@@ -8,14 +8,14 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env};
+use soroban_sdk::{Address, BytesN, Env, contract, contractimpl, symbol_short};
 
 use crate::errors::FactoryError;
 use crate::events::{emit_ownership_transferred, emit_username_deployed, ROLE_GRANTED};
 use crate::storage::{
-    get_admin, get_auction_contract as read_auction_contract,
-    get_core_contract as read_core_contract, get_operator, get_owner, get_username, has_username,
-    set_admin, set_operator, set_owner, set_username,
+    get_admin, get_core_contract as read_core_contract, get_core_wasm_hash, get_operator,
+    get_owner, get_username, set_admin, set_core_contract, set_core_wasm_hash, set_operator, set_owner,
+    set_username,
 };
 use crate::types::UsernameRecord;
 
@@ -24,7 +24,17 @@ pub struct FactoryContract;
 
 #[contractimpl]
 impl FactoryContract {
+<<<<<<< HEAD
     pub fn initialize(env: Env, owner: Address) {
+=======
+    pub fn initialize(
+        env: Env,
+        owner: Address,
+        admin: Address,
+        oprator: Address,
+        core_wasm_hash: BytesN<32>,
+    ) -> Result<(), FactoryError> {
+>>>>>>> 5c8a9fb (refactor: full codebase)
         if get_owner(&env).is_some() {
             return Err(FactoryError::Unauthorized);
         }
@@ -32,10 +42,11 @@ impl FactoryContract {
         set_owner(&env, &owner);
         set_admin(&env, &admin);
         set_operator(&env, &oprator);
-
+        set_core_wasm_hash(&env, &core_wasm_hash);
         Ok(())
     }
 
+<<<<<<< HEAD
     pub fn configure(env: Env, auction_contract: Address, core_contract: Address) {
         let operator = get_operator(&env)
             .unwrap_or_else(|| panic_with_error!(&env, FactoryError::Unauthorized));
@@ -51,25 +62,32 @@ impl FactoryContract {
                 None => return  Err(FactoryError::NotInitilizedContract)
             };
 
+=======
+    pub fn set_admin(env: Env, new_admin: Address) -> Result<(), FactoryError> {
+        let owner = get_owner(&env).ok_or(FactoryError::NotInitilizedContract)?;
+>>>>>>> 5c8a9fb (refactor: full codebase)
         owner.require_auth();
-
         set_admin(&env, &new_admin);
-        
         #[allow(deprecated)]
         env.events()
             .publish((ROLE_GRANTED, symbol_short!("admin")), (new_admin,));
-
         Ok(())
     }
 
+<<<<<<< HEAD
     pub fn set_operator(env: Env, new_operator: Address) {
         let admin =
             get_admin(&env).unwrap_or_else(|| panic_with_error!(&env, FactoryError::Unauthorized));
+=======
+    pub fn set_operator(env: Env, new_operator: Address) -> Result<(), FactoryError> {
+        let admin = get_admin(&env).ok_or(FactoryError::NotInitilizedContract)?;
+>>>>>>> 5c8a9fb (refactor: full codebase)
         admin.require_auth();
         set_operator(&env, &new_operator);
         #[allow(deprecated)]
         env.events()
             .publish((ROLE_GRANTED, symbol_short!("operator")), (new_operator,));
+<<<<<<< HEAD
     }
 
     pub fn deploy_username(
@@ -102,6 +120,8 @@ impl FactoryContract {
             &record.owner,
             record.registered_at,
         );
+=======
+>>>>>>> 5c8a9fb (refactor: full codebase)
         Ok(())
     }
 
@@ -110,13 +130,9 @@ impl FactoryContract {
         username_hash: BytesN<32>,
         new_owner: Address,
     ) -> Result<(), FactoryError> {
-        let auction_contract = read_auction_contract(&env).ok_or(FactoryError::Unauthorized)?;
-        auction_contract.require_auth();
-
         let mut record = get_username(&env, &username_hash).ok_or(FactoryError::Unauthorized)?;
         let old_owner = record.owner.clone();
         record.owner = new_owner.clone();
-
         set_username(&env, &username_hash, &record);
         emit_ownership_transferred(&env, &username_hash, &old_owner, &new_owner);
         Ok(())
@@ -138,15 +154,49 @@ impl FactoryContract {
         get_username(&env, &username_hash)
     }
 
+    pub fn deploy_core(
+        e: Env,
+        username_hash: BytesN<32>,
+        resolver: Address,
+        salt: BytesN<32>,
+    ) -> Result<(), FactoryError> {
+        resolver.require_auth();
+
+        if username_hash.is_empty() {
+            return Err(FactoryError::InvalidUsername);
+        }
+
+        let wasm_hash = match get_core_wasm_hash(&e) {
+            Some(x) => x,
+            None => return Err(FactoryError::NotInitilizedContract),
+        };
+
+        let constructor_args = (resolver.clone(), username_hash.clone());
+
+        let deployed_address = e
+            .deployer()
+            .with_address(e.current_contract_address(), salt)
+            .deploy_v2(wasm_hash, constructor_args);
+
+        let record = UsernameRecord {
+            username_hash: username_hash.clone(),
+            owner: resolver,
+            registered_at: e.ledger().timestamp(),
+            core_contract: deployed_address.clone(),
+        };
+
+        set_core_contract(&e, username_hash.clone(), &deployed_address);
+        set_username(&e, &username_hash, &record);
+        emit_username_deployed(&e, &username_hash, &record.owner, record.registered_at);
+
+        Ok(())
+    }
+
     pub fn get_username_owner(env: Env, username_hash: BytesN<32>) -> Option<Address> {
         get_username(&env, &username_hash).map(|r| r.owner)
     }
 
-    pub fn auction_contract(env: Env) -> Option<Address> {
-        read_auction_contract(&env)
-    }
-
-    pub fn core_contract(env: Env , username_hash: BytesN<32>) -> Option<Address> {
-        read_core_contract(&env , username_hash)
+    pub fn core_contract(env: Env, username_hash: BytesN<32>) -> Option<Address> {
+        read_core_contract(&env, username_hash)
     }
 }

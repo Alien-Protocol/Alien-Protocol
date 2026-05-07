@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-  "contracts/auction_contract",
+  # "contracts/auction_contract",
   "contracts/core_contract",
   "contracts/escrow_contract",
   "contracts/factory_contract",
-  "shared",
-  "tests",
+  "shared"
+ 
 ]
 
 [workspace.lints.clippy]

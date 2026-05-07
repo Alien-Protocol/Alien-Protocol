@@ -1,57 +1,55 @@
-use soroban_sdk::{contracttype, Address, Bytes, BytesN, Symbol};
+use soroban_sdk::{contracttype, Address, String, Symbol};
 
 #[contracttype]
 #[derive(Clone)]
-pub struct AddressMetadata {
-    pub label: Symbol,
-}
-
-#[contracttype]
-#[derive(Clone)]
-pub struct ResolveData {
-    pub wallet: Address,
-    pub memo: Option<u64>,
+pub enum DataKey {
+    Owner,
+    UsernameHash,
+    PrimaryAddress,
+    Wallet(Symbol),
+    WalletLabels,
+    EscrowCounter,
+    Escrow(u32),
 }
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ChainType {
-    Evm,
+    Stellar,
     Bitcoin,
+    Ethereum,
+    Tron,
+    Bnb,
     Solana,
-    Cosmos,
+    Other,
 }
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PrivacyMode {
-    Normal,
-    Shielded,
+pub struct WalletEntry {
+    pub label: Symbol,
+    pub address: String,
+    pub chain: ChainType,
+    pub added_at: u64,
 }
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Permission {
-    SetMemo = 1,
-    SetPrivacyMode = 2,
-    AddChainAddress = 3,
-    RemoveChainAddress = 4,
-    AddStellarAddress = 5,
-    RemoveStellarAddress = 6,
+pub enum EscrowStatus {
+    Active,
+    Released,
+    Refunded,
 }
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PermissionSet {
-    pub permissions: soroban_sdk::Vec<Permission>,
-}
-
-pub type Proof = Bytes;
-
-#[contracttype]
-#[derive(Clone)]
-pub struct PublicSignals {
-    pub commitment: BytesN<32>,
-    pub old_root: BytesN<32>,
-    pub new_root: BytesN<32>,
+pub struct EscrowRecord {
+    pub id: u32,
+    pub asset: Address,
+    pub amount: i128,
+    pub recipient: Address,
+    pub release_at: u64,
+    pub status: EscrowStatus,
+    pub created_at: u64,
+    pub note: String,
 }
