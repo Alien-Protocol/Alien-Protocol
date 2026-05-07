@@ -1,4 +1,13 @@
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env};
+use soroban_sdk::{contractevent, Address, BytesN, Env};
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VaultCrtEvent {
+    #[topic]
+    pub commitment: BytesN<32>,
+    pub token: Address,
+    pub owner: Address,
+}
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -122,10 +131,13 @@ impl Events {
         .publish(env);
     }
 
-    #[allow(deprecated)]
     pub fn vault_crt(env: &Env, commitment: BytesN<32>, token: Address, owner: Address) {
-        env.events()
-            .publish((symbol_short!("VAULT_CRT"), commitment), (token, owner));
+        VaultCrtEvent {
+            commitment,
+            token,
+            owner,
+        }
+        .publish(env);
     }
 
     pub fn auto_set(

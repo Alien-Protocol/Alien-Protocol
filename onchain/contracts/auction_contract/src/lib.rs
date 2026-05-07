@@ -86,18 +86,14 @@ impl AuctionContract {
     }
 
     pub fn refund_bid(env: Env, id: u32, bidder: Address) -> Result<(), errors::AuctionError> {
-        bidder.require_auth();
+        shared_auth::require_address_auth(&bidder);
 
         let status = storage::auction_get_status(&env, id);
         require_status(
-            &env,
             status,
             types::AuctionStatus::Closed,
             errors::AuctionError::NotClosed,
-        );
-        if status != types::AuctionStatus::Closed {
-            return Err(errors::AuctionError::NotClosed);
-        }
+        )?;
 
         let highest_bidder = storage::auction_get_highest_bidder(&env, id);
         if highest_bidder

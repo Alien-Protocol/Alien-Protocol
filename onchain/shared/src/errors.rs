@@ -67,6 +67,8 @@ pub enum EscrowError {
     Unauthorized = 2018,
     /// The contract is paused; money-moving operations are blocked.
     ContractPaused = 2019,
+    /// Arithmetic overflow or underflow occurred.
+    ArithmeticError = 2020,
 }
 
 #[contracterror]

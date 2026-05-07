@@ -1,12 +1,8 @@
 #![no_std]
-//! Factory Contract.
-/// Error types returned by the factory contract.
+
 mod errors;
-/// Event definitions and emitters for the factory contract.
 mod events;
-/// Storage helper functions for the factory contract.
 mod storage;
-/// Type definitions for the factory contract.
 mod types;
 
 #[cfg(test)]
@@ -28,7 +24,6 @@ pub struct FactoryContract;
 
 #[contractimpl]
 impl FactoryContract {
-    /// Initializes the factory contract with an owner. The owner is also set as the initial admin and operator.
     pub fn initialize(env: Env, owner: Address) {
         if get_owner(&env).is_some() {
             panic_with_error!(&env, FactoryError::Unauthorized);
@@ -39,7 +34,6 @@ impl FactoryContract {
         set_operator(&env, &owner);
     }
 
-    /// Configures the auction and core contract addresses. Only the operator can call this.
     pub fn configure(env: Env, auction_contract: Address, core_contract: Address) {
         let operator = get_operator(&env)
             .unwrap_or_else(|| panic_with_error!(&env, FactoryError::Unauthorized));
@@ -48,29 +42,6 @@ impl FactoryContract {
         set_core_contract(&env, &core_contract);
     }
 
-    /// Deploys a new username record to the factory storage.
-    ///
-    /// This function can only be called by the configured auction contract.
-    /// It validates that the username hash is not already registered.
-    ///
-    /// # Arguments
-    ///
-    /// * `env` - The Soroban environment.
-    /// * `username_hash` - The 32-byte hash identifying the unique username.
-    /// * `owner` - The address that will own the new username record.
-    ///
-    /// # Panics
-    ///
-    /// * `FactoryError::Unauthorized` if the caller is not the configured auction contract.
-    /// * `FactoryError::AlreadyDeployed` if the username is already registered.
-    /// * `FactoryError::CoreContractNotConfigured` if the core contract has not been set.
-    ///
-    /// # Complexity
-    ///
-    /// O(1) - constant time storage lookups and persistence.
-    pub fn deploy_username(env: Env, username_hash: BytesN<32>, owner: Address) {
-        require_auction_contract_auth(&env);
-    /// Sets a new admin address. Only the owner can call this.
     pub fn set_admin(env: Env, new_admin: Address) {
         let owner =
             get_owner(&env).unwrap_or_else(|| panic_with_error!(&env, FactoryError::Unauthorized));
@@ -81,7 +52,6 @@ impl FactoryContract {
             .publish((ROLE_GRANTED, symbol_short!("admin")), (new_admin,));
     }
 
-    /// Sets a new operator address. Only the admin can call this.
     pub fn set_operator(env: Env, new_operator: Address) {
         let admin =
             get_admin(&env).unwrap_or_else(|| panic_with_error!(&env, FactoryError::Unauthorized));
@@ -90,21 +60,6 @@ impl FactoryContract {
         #[allow(deprecated)]
         env.events()
             .publish((ROLE_GRANTED, symbol_short!("operator")), (new_operator,));
-    }
-
-    /// Returns the current owner address.
-    pub fn get_owner(env: Env) -> Option<Address> {
-        get_owner(&env)
-    }
-
-    /// Returns the current admin address.
-    pub fn get_admin(env: Env) -> Option<Address> {
-        get_admin(&env)
-    }
-
-    /// Returns the current operator address.
-    pub fn get_operator(env: Env) -> Option<Address> {
-        get_operator(&env)
     }
 
     pub fn deploy_username(
@@ -148,13 +103,24 @@ impl FactoryContract {
         auction_contract.require_auth();
 
         let mut record = get_username(&env, &username_hash).ok_or(FactoryError::Unauthorized)?;
-
         let old_owner = record.owner.clone();
         record.owner = new_owner.clone();
 
         set_username(&env, &username_hash, &record);
         emit_ownership_transferred(&env, &username_hash, &old_owner, &new_owner);
         Ok(())
+    }
+
+    pub fn get_owner(env: Env) -> Option<Address> {
+        get_owner(&env)
+    }
+
+    pub fn get_admin(env: Env) -> Option<Address> {
+        get_admin(&env)
+    }
+
+    pub fn get_operator(env: Env) -> Option<Address> {
+        get_operator(&env)
     }
 
     pub fn get_username_record(env: Env, username_hash: BytesN<32>) -> Option<UsernameRecord> {
@@ -172,12 +138,4 @@ impl FactoryContract {
     pub fn core_contract(env: Env) -> Option<Address> {
         read_core_contract(&env)
     }
-}
-
-/// Loads the configured auction contract and requires its authorization.
-fn require_auction_contract_auth(env: &Env) -> Address {
-    let auction_contract =
-        shared_auth::unwrap_or_panic(env, read_auction_contract(env), FactoryError::Unauthorized);
-    shared_auth::require_address_auth(&auction_contract);
-    auction_contract
 }

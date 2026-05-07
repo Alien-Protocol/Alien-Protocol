@@ -77,3 +77,96 @@ where
     env.storage().instance().set(key, &next);
     Ok(id)
 }
+
+pub mod auth {
+    use soroban_sdk::{Address, Env, Error};
+
+    pub fn require_address_auth(address: &Address) {
+        address.require_auth();
+    }
+
+    pub fn unwrap_or_panic<T, E>(env: &Env, value: Option<T>, error: E) -> T
+    where
+        E: Copy + Into<Error>,
+    {
+        value.unwrap_or_else(|| env.panic_with_error(error))
+    }
+
+    pub fn require_matching_auth<E>(env: &Env, caller: &Address, owner: &Address, error: E)
+    where
+        E: Copy + Into<Error>,
+    {
+        caller.require_auth();
+        if caller != owner {
+            env.panic_with_error(error);
+        }
+    }
+}
+
+pub mod storage {
+    use core::fmt::Debug;
+
+    use soroban_sdk::{Env, IntoVal, TryFromVal, Val};
+
+    pub const PERSISTENT_BUMP_AMOUNT: u32 = 518_400;
+    pub const PERSISTENT_LIFETIME_THRESHOLD: u32 = 120_960;
+
+    pub fn bump_persistent<K>(env: &Env, key: &K)
+    where
+        K: IntoVal<Env, Val>,
+    {
+        env.storage().persistent().extend_ttl(
+            key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+    }
+
+    pub fn set_persistent<K, V>(env: &Env, key: &K, value: &V)
+    where
+        K: IntoVal<Env, Val>,
+        V: IntoVal<Env, Val>,
+    {
+        env.storage().persistent().set(key, value);
+        bump_persistent(env, key);
+    }
+
+    pub fn get_persistent<K, V>(env: &Env, key: &K) -> Option<V>
+    where
+        V::Error: Debug,
+        K: IntoVal<Env, Val>,
+        V: TryFromVal<Env, Val>,
+    {
+        env.storage().persistent().get(key)
+    }
+
+    pub fn get_persistent_with_ttl<K, V>(env: &Env, key: &K) -> Option<V>
+    where
+        V::Error: Debug,
+        K: IntoVal<Env, Val>,
+        V: TryFromVal<Env, Val>,
+    {
+        let value = env.storage().persistent().get(key);
+        if value.is_some() {
+            bump_persistent(env, key);
+        }
+        value
+    }
+
+    pub fn get_instance<K, V>(env: &Env, key: &K) -> Option<V>
+    where
+        V::Error: Debug,
+        K: IntoVal<Env, Val>,
+        V: TryFromVal<Env, Val>,
+    {
+        env.storage().instance().get(key)
+    }
+
+    pub fn set_instance<K, V>(env: &Env, key: &K, value: &V)
+    where
+        K: IntoVal<Env, Val>,
+        V: IntoVal<Env, Val>,
+    {
+        env.storage().instance().set(key, value);
+    }
+}

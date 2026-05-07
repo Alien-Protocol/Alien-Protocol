@@ -4,8 +4,10 @@ use shared::storage as shared_storage;
 use soroban_sdk::{Address, BytesN, Env};
 
 /// The amount of ledger entries to bump persistent storage by.
+#[allow(dead_code)]
 pub(crate) const PERSISTENT_BUMP_AMOUNT: u32 = 518_400;
 /// The threshold for persistent storage TTL to trigger an auto-bump.
+#[allow(dead_code)]
 pub(crate) const PERSISTENT_LIFETIME_THRESHOLD: u32 = 120_960;
 
 pub fn read_vault_config(env: &Env, commitment: &BytesN<32>) -> Option<VaultConfig> {

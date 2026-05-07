@@ -1,3 +1,4 @@
+use shared::auth as shared_auth;
 use soroban_sdk::{panic_with_error, symbol_short, Address, BytesN, Env};
 
 use crate::errors::CoreError;

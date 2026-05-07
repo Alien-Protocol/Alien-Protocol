@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, panic_with_error, Address, Bytes, BytesN, Env, V
 use crate::errors::{ChainAddressError, CoreError};
 use crate::events::{shielded_add_event, stellar_rem_event, ADDR_ADD, CHAIN_ADD, CHAIN_REM};
 use crate::registration::{DataKey as CommitmentKey, Registration};
-use crate::storage::{self, PERSISTENT_BUMP_AMOUNT, PERSISTENT_LIFETIME_THRESHOLD};
+use crate::storage;
 use crate::types::{ChainType, Permission};
 
 #[contracttype]
@@ -145,11 +145,9 @@ impl AddressManager {
             panic_with_error!(&env, CoreError::Unauthorized);
         }
 
-        let existing: Vec<Address> = env
-            .storage()
-            .persistent()
-            .get(&storage::DataKey::StellarAddresses(username_hash.clone()))
-            .unwrap_or_else(|| Vec::new(&env));
+        let addresses_key = storage::DataKey::StellarAddresses(username_hash.clone());
+        let existing: Vec<Address> =
+            shared_storage::get_persistent(&env, &addresses_key).unwrap_or_else(|| Vec::new(&env));
 
         let mut updated: Vec<Address> = Vec::new(&env);
         for addr in existing.iter() {
@@ -159,10 +157,8 @@ impl AddressManager {
         }
         shared_storage::set_persistent(&env, &addresses_key, &updated);
 
-        let primary: Option<Address> = env
-            .storage()
-            .persistent()
-            .get(&storage::DataKey::StellarAddress(username_hash.clone()));
+        let primary_key = storage::DataKey::StellarAddress(username_hash.clone());
+        let primary: Option<Address> = shared_storage::get_persistent(&env, &primary_key);
 
         if let Some(p) = primary {
             if p == stellar_address {

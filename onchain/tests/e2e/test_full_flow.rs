@@ -128,7 +128,7 @@ fn e2e_escrow_deposit_schedule_payment() {
             "[TEST DEBUG] create_vault: contract address = {:?}",
             env.current_contract_address()
         );
-        EscrowContract::create_vault(env.clone(), hash.clone(), token.clone());
+        EscrowContract::create_vault(env.clone(), hash.clone(), token.clone()).unwrap();
     });
     // Assert vault state exists after creation
     let state: Option<VaultState> = env.as_contract(&escrow_id, || {
@@ -163,7 +163,7 @@ fn e2e_escrow_deposit_schedule_payment() {
             "[TEST DEBUG] create_vault (recipient): contract address = {:?}",
             env.current_contract_address()
         );
-        EscrowContract::create_vault(env.clone(), to_hash.clone(), token.clone());
+        EscrowContract::create_vault(env.clone(), to_hash.clone(), token.clone()).unwrap();
     });
 
     // Schedule a payment to another commitment
