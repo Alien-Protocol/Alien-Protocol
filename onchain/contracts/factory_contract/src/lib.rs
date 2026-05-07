@@ -15,7 +15,7 @@ use crate::events::{emit_ownership_transferred, emit_username_deployed, ROLE_GRA
 use crate::storage::{
     get_admin, get_auction_contract as read_auction_contract,
     get_core_contract as read_core_contract, get_operator, get_owner, get_username, has_username,
-    set_admin, set_auction_contract, set_core_contract, set_operator, set_owner, set_username,
+    set_admin, set_operator, set_owner, set_username,
 };
 use crate::types::UsernameRecord;
 
@@ -26,12 +26,14 @@ pub struct FactoryContract;
 impl FactoryContract {
     pub fn initialize(env: Env, owner: Address) {
         if get_owner(&env).is_some() {
-            panic_with_error!(&env, FactoryError::Unauthorized);
+            return Err(FactoryError::Unauthorized);
         }
         owner.require_auth();
         set_owner(&env, &owner);
-        set_admin(&env, &owner);
-        set_operator(&env, &owner);
+        set_admin(&env, &admin);
+        set_operator(&env, &oprator);
+
+        Ok(())
     }
 
     pub fn configure(env: Env, auction_contract: Address, core_contract: Address) {
@@ -44,12 +46,20 @@ impl FactoryContract {
 
     pub fn set_admin(env: Env, new_admin: Address) {
         let owner =
-            get_owner(&env).unwrap_or_else(|| panic_with_error!(&env, FactoryError::Unauthorized));
+            match get_owner(&env) {
+                Some(x) => x , 
+                None => return  Err(FactoryError::NotInitilizedContract)
+            };
+
         owner.require_auth();
+
         set_admin(&env, &new_admin);
+        
         #[allow(deprecated)]
         env.events()
             .publish((ROLE_GRANTED, symbol_short!("admin")), (new_admin,));
+
+        Ok(())
     }
 
     pub fn set_operator(env: Env, new_operator: Address) {
@@ -67,6 +77,7 @@ impl FactoryContract {
         username_hash: BytesN<32>,
         owner: Address,
     ) -> Result<(), FactoryError> {
+        
         let auction_contract = read_auction_contract(&env).ok_or(FactoryError::Unauthorized)?;
         auction_contract.require_auth();
 
@@ -75,7 +86,7 @@ impl FactoryContract {
         }
 
         let core_contract =
-            read_core_contract(&env).ok_or(FactoryError::CoreContractNotConfigured)?;
+            read_core_contract(&env , username_hash.clone()).ok_or(FactoryError::CoreContractNotConfigured)?;
 
         let record = UsernameRecord {
             username_hash: username_hash.clone(),
@@ -135,7 +146,7 @@ impl FactoryContract {
         read_auction_contract(&env)
     }
 
-    pub fn core_contract(env: Env) -> Option<Address> {
-        read_core_contract(&env)
+    pub fn core_contract(env: Env , username_hash: BytesN<32>) -> Option<Address> {
+        read_core_contract(&env , username_hash)
     }
 }
