@@ -1,8 +1,10 @@
-use shared::{auth as shared_auth, storage as shared_storage};
-use soroban_sdk::{contracttype, panic_with_error, Address, Bytes, BytesN, Env, Vec};
+use shared::storage as shared_storage;
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env, Vec};
 
 use crate::errors::{ChainAddressError, CoreError};
-use crate::events::{shielded_add_event, stellar_rem_event, ADDR_ADD, CHAIN_ADD, CHAIN_REM};
+use crate::events::{
+    emit_chain_added, emit_chain_removed, emit_shielded_add, emit_stellar_add, emit_stellar_rem,
+};
 use crate::registration::{DataKey as CommitmentKey, Registration};
 use crate::storage;
 use crate::types::{ChainType, Permission};
@@ -17,220 +19,218 @@ pub struct AddressManager;
 
 impl AddressManager {
     pub fn add_chain_address(
-        env: Env,
+        e: Env,
         caller: Address,
         username_hash: BytesN<32>,
         chain: ChainType,
         address: Bytes,
-    ) {
+    ) -> Result<(), ChainAddressError> {
+        caller.require_auth();
+
         let owner_key = CommitmentKey::Commitment(username_hash.clone());
-        let owner: Address = env
+        let owner: Address = e
             .storage()
             .persistent()
             .get(&owner_key)
-            .unwrap_or_else(|| panic_with_error!(&env, ChainAddressError::NotRegistered));
+            .ok_or(ChainAddressError::NotRegistered)?;
 
         if owner != caller
-            && !storage::has_permission(&env, &username_hash, &caller, Permission::AddChainAddress)
+            && !storage::has_permission(&e, &username_hash, &caller, Permission::AddChainAddress)
         {
-            panic_with_error!(&env, ChainAddressError::Unauthorized);
+            return Err(ChainAddressError::Unauthorized);
         }
 
         if !Self::validate_address(&chain, &address) {
-            panic_with_error!(&env, ChainAddressError::InvalidAddress);
+            return Err(ChainAddressError::InvalidAddress);
         }
 
         let key = ChainAddrKey::ChainAddress(username_hash.clone(), chain.clone());
-        shared_storage::set_persistent(&env, &key, &address);
+        shared_storage::set_persistent(&e, &key, &address);
 
-        #[allow(deprecated)]
-        env.events()
-            .publish((CHAIN_ADD,), (username_hash, chain, address));
+        emit_chain_added(&e, &username_hash, &chain, &address);
+        Ok(())
     }
 
     pub fn get_chain_address(
-        env: Env,
+        e: Env,
         username_hash: BytesN<32>,
         chain: ChainType,
     ) -> Option<Bytes> {
         let key = ChainAddrKey::ChainAddress(username_hash, chain);
-        shared_storage::get_persistent(&env, &key)
+        shared_storage::get_persistent(&e, &key)
     }
 
     pub fn remove_chain_address(
-        env: Env,
+        e: Env,
         caller: Address,
         username_hash: BytesN<32>,
         chain: ChainType,
-    ) {
+    ) -> Result<(), ChainAddressError> {
+        caller.require_auth();
+
         let owner_key = CommitmentKey::Commitment(username_hash.clone());
-        let owner: Address = env
+        let owner: Address = e
             .storage()
             .persistent()
             .get(&owner_key)
-            .unwrap_or_else(|| panic_with_error!(&env, ChainAddressError::NotRegistered));
+            .ok_or(ChainAddressError::NotRegistered)?;
 
         if owner != caller
             && !storage::has_permission(
-                &env,
+                &e,
                 &username_hash,
                 &caller,
                 Permission::RemoveChainAddress,
             )
         {
-            panic_with_error!(&env, ChainAddressError::Unauthorized);
+            return Err(ChainAddressError::Unauthorized);
         }
 
         let key = ChainAddrKey::ChainAddress(username_hash.clone(), chain.clone());
-        env.storage().persistent().remove(&key);
+        e.storage().persistent().remove(&key);
 
-        #[allow(deprecated)]
-        env.events().publish((CHAIN_REM,), (username_hash, chain));
+        emit_chain_removed(&e, &username_hash, &chain);
+        Ok(())
     }
 
     pub fn add_stellar_address(
-        env: Env,
+        e: Env,
         caller: Address,
         username_hash: BytesN<32>,
         stellar_address: Address,
-    ) {
+    ) -> Result<(), CoreError> {
         caller.require_auth();
 
-        let owner = Registration::get_owner(env.clone(), username_hash.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+        let owner =
+            Registration::get_owner(e.clone(), username_hash.clone()).ok_or(CoreError::NotFound)?;
 
         if owner != caller
             && !storage::has_permission(
-                &env,
+                &e,
                 &username_hash,
                 &caller,
                 Permission::AddStellarAddress,
             )
         {
-            panic_with_error!(&env, CoreError::Unauthorized);
+            return Err(CoreError::Unauthorized);
         }
 
         let addresses_key = storage::DataKey::StellarAddresses(username_hash.clone());
         let mut linked_addresses: Vec<Address> =
-            shared_storage::get_persistent(&env, &addresses_key).unwrap_or_else(|| Vec::new(&env));
+            shared_storage::get_persistent(&e, &addresses_key).unwrap_or_else(|| Vec::new(&e));
         linked_addresses.push_back(stellar_address.clone());
-        shared_storage::set_persistent(&env, &addresses_key, &linked_addresses);
+        shared_storage::set_persistent(&e, &addresses_key, &linked_addresses);
 
         let primary_key = storage::DataKey::StellarAddress(username_hash);
-        shared_storage::set_persistent(&env, &primary_key, &stellar_address);
+        shared_storage::set_persistent(&e, &primary_key, &stellar_address);
 
-        #[allow(deprecated)]
-        env.events().publish((ADDR_ADD,), stellar_address.clone());
+        emit_stellar_add(&e, &stellar_address);
+        Ok(())
     }
 
     pub fn remove_stellar_address(
-        env: Env,
+        e: Env,
         caller: Address,
         username_hash: BytesN<32>,
         stellar_address: Address,
-    ) {
+    ) -> Result<(), CoreError> {
         caller.require_auth();
 
-        let owner = Registration::get_owner(env.clone(), username_hash.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, CoreError::NotFound));
+        let owner =
+            Registration::get_owner(e.clone(), username_hash.clone()).ok_or(CoreError::NotFound)?;
 
         if owner != caller
             && !storage::has_permission(
-                &env,
+                &e,
                 &username_hash,
                 &caller,
                 Permission::RemoveStellarAddress,
             )
         {
-            panic_with_error!(&env, CoreError::Unauthorized);
+            return Err(CoreError::Unauthorized);
         }
 
         let addresses_key = storage::DataKey::StellarAddresses(username_hash.clone());
         let existing: Vec<Address> =
-            shared_storage::get_persistent(&env, &addresses_key).unwrap_or_else(|| Vec::new(&env));
+            shared_storage::get_persistent(&e, &addresses_key).unwrap_or_else(|| Vec::new(&e));
 
-        let mut updated: Vec<Address> = Vec::new(&env);
+        let mut updated: Vec<Address> = Vec::new(&e);
         for addr in existing.iter() {
             if addr != stellar_address {
                 updated.push_back(addr);
             }
         }
-        shared_storage::set_persistent(&env, &addresses_key, &updated);
+        shared_storage::set_persistent(&e, &addresses_key, &updated);
 
         let primary_key = storage::DataKey::StellarAddress(username_hash.clone());
-        let primary: Option<Address> = shared_storage::get_persistent(&env, &primary_key);
+        let primary: Option<Address> = shared_storage::get_persistent(&e, &primary_key);
 
         if let Some(p) = primary {
             if p == stellar_address {
                 if updated.is_empty() {
-                    env.storage().persistent().remove(&primary_key);
+                    e.storage().persistent().remove(&primary_key);
                 } else {
                     let last = updated
                         .get(updated.len() - 1)
                         .expect("updated stellar address list should be non-empty");
-                    shared_storage::set_persistent(&env, &primary_key, &last);
+                    shared_storage::set_persistent(&e, &primary_key, &last);
                 }
             }
         }
 
-        #[allow(deprecated)]
-        env.events()
-            .publish((stellar_rem_event(&env),), (username_hash, stellar_address));
+        emit_stellar_rem(&e, &username_hash, &stellar_address);
+        Ok(())
     }
 
-    pub fn get_stellar_addresses(env: Env, username_hash: BytesN<32>) -> Vec<Address> {
-        if Registration::get_owner(env.clone(), username_hash.clone()).is_none() {
-            panic_with_error!(&env, CoreError::NotFound);
+    pub fn get_stellar_addresses(
+        e: Env,
+        username_hash: BytesN<32>,
+    ) -> Result<Vec<Address>, CoreError> {
+        if Registration::get_owner(e.clone(), username_hash.clone()).is_none() {
+            return Err(CoreError::NotFound);
         }
 
-        shared_storage::get_persistent::<storage::DataKey, Vec<Address>>(
-            &env,
+        Ok(shared_storage::get_persistent::<storage::DataKey, Vec<Address>>(
+            &e,
             &storage::DataKey::StellarAddresses(username_hash),
         )
-        .unwrap_or_else(|| Vec::new(&env))
+        .unwrap_or_else(|| Vec::new(&e)))
     }
 
-    pub fn resolve_stellar(env: Env, username_hash: BytesN<32>) -> Address {
-        if Registration::get_owner(env.clone(), username_hash.clone()).is_none() {
-            panic_with_error!(&env, CoreError::NotFound);
+    pub fn resolve_stellar(e: Env, username_hash: BytesN<32>) -> Result<Address, CoreError> {
+        if Registration::get_owner(e.clone(), username_hash.clone()).is_none() {
+            return Err(CoreError::NotFound);
         }
 
-        shared_auth::unwrap_or_panic(
-            &env,
-            shared_storage::get_persistent(&env, &storage::DataKey::StellarAddress(username_hash)),
-            CoreError::NoAddressLinked,
-        )
+        shared_storage::get_persistent(&e, &storage::DataKey::StellarAddress(username_hash))
+            .ok_or(CoreError::NoAddressLinked)
     }
 
     pub fn add_shielded_address(
-        env: Env,
+        e: Env,
         caller: Address,
         username_hash: BytesN<32>,
         address_commitment: BytesN<32>,
-    ) {
-        let owner = shared_auth::unwrap_or_panic(
-            &env,
-            Registration::get_owner(env.clone(), username_hash.clone()),
-            CoreError::NotFound,
-        );
-        shared_auth::require_matching_auth(&env, &caller, &owner, CoreError::Unauthorized);
-        storage::set_shielded_address(&env, &username_hash, &address_commitment);
-        #[allow(deprecated)]
-        env.events().publish(
-            (shielded_add_event(&env),),
-            (username_hash, address_commitment),
-        );
+    ) -> Result<(), CoreError> {
+        caller.require_auth();
+        let owner =
+            Registration::get_owner(e.clone(), username_hash.clone()).ok_or(CoreError::NotFound)?;
+        if owner != caller {
+            return Err(CoreError::Unauthorized);
+        }
+        storage::set_shielded_address(&e, &username_hash, &address_commitment);
+        emit_shielded_add(&e, &username_hash, &address_commitment);
+        Ok(())
     }
 
-    pub fn get_shielded_address(env: Env, username_hash: BytesN<32>) -> Option<BytesN<32>> {
-        storage::get_shielded_address(&env, &username_hash)
+    pub fn get_shielded_address(e: Env, username_hash: BytesN<32>) -> Option<BytesN<32>> {
+        storage::get_shielded_address(&e, &username_hash)
     }
 
-    pub fn is_shielded(env: Env, username_hash: BytesN<32>) -> bool {
-        storage::has_shielded_address(&env, &username_hash)
+    pub fn is_shielded(e: Env, username_hash: BytesN<32>) -> bool {
+        storage::has_shielded_address(&e, &username_hash)
     }
 
-    /// Validates the format of an address based on the chain type.
     fn validate_address(chain: &ChainType, address: &Bytes) -> bool {
         let len = address.len();
         match chain {
