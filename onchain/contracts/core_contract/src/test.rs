@@ -10,10 +10,7 @@ use crate::{types::ChainType, CoreContract, CoreContractClient};
 
 fn setup_core<'a>(env: &'a Env, owner: &Address) -> (CoreContractClient<'a>, BytesN<32>) {
     let username_hash: BytesN<32> = BytesN::from_array(env, &[1u8; 32]);
-    let contract_id = env.register(
-        CoreContract,
-        (owner.clone(), username_hash.clone()),
-    );
+    let contract_id = env.register(CoreContract, (owner.clone(), username_hash.clone()));
     let client = CoreContractClient::new(env, &contract_id);
     (client, username_hash)
 }

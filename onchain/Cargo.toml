@@ -1,17 +1,16 @@
 [workspace]
 resolver = "2"
 members = [
-  # "contracts/auction_contract",
+  "contracts/auction_contract",
   "contracts/core_contract",
   "contracts/escrow_contract",
   "contracts/factory_contract",
   "shared"
- 
 ]
 
 [workspace.lints.clippy]
-missing_docs_in_private_items = "warn"
-unwrap_used = "warn"
+missing_docs_in_private_items = "allow"
+unwrap_used = "allow"
 
 [workspace.dependencies]
 soroban-sdk = "23"

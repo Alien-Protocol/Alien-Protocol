@@ -10,7 +10,7 @@ pub enum DataKey {
     CoreContract(BytesN<32>),
     Username(BytesN<32>),
     Config,
-    CoreWasm
+    CoreWasm,
 }
 
 #[contracttype]

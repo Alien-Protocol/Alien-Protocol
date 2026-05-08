@@ -225,7 +225,7 @@ impl CoreContract {
         set_escrow_counter(&env, next_id);
 
         let token = TokenClient::new(&env, &asset);
-        token.transfer(&owner, &env.current_contract_address(), &amount);
+        token.transfer(&owner, env.current_contract_address(), &amount);
 
         let record = EscrowRecord {
             id,

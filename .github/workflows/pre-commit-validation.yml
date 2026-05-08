@@ -32,13 +32,14 @@ jobs:
             FILES="$(git diff --name-only "$RANGE" 2>/dev/null || git diff --name-only HEAD~1)"
           fi
 
+          COMMITS_FILE="$RUNNER_TEMP/pre-commit-commits.txt"
+          FILES_FILE="$RUNNER_TEMP/pre-commit-files.txt"
+          printf '%s\n' "$COMMITS" > "$COMMITS_FILE"
+          printf '%s\n' "$FILES" > "$FILES_FILE"
+
           {
-            echo "commits<<EOF"
-            echo "$COMMITS"
-            echo "EOF"
-            echo "files<<EOF"
-            echo "$FILES"
-            echo "EOF"
+            echo "commits_file=$COMMITS_FILE"
+            echo "files_file=$FILES_FILE"
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate branch naming convention
@@ -57,8 +58,8 @@ jobs:
       - name: Check for bypassed commits
         shell: bash
         run: |
-          commits="${{ steps.context.outputs.commits }}"
-          bypass_commits=$(echo "$commits" | grep -iE "emergency.*bypass|no-verify|skip.*hook" || true)
+          commits_file="${{ steps.context.outputs.commits_file }}"
+          bypass_commits=$(grep -iE "emergency.*bypass|no-verify|skip.*hook" "$commits_file" || true)
 
           if [ -n "$bypass_commits" ]; then
             echo "Found commits that appear to bypass hooks:"
@@ -71,7 +72,7 @@ jobs:
       - name: Validate commit message format
         shell: bash
         run: |
-          commits="${{ steps.context.outputs.commits }}"
+          commits_file="${{ steps.context.outputs.commits_file }}"
           commit_regex='^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .{1,72}$'
           invalid_commits=""
 
@@ -82,7 +83,7 @@ jobs:
             if ! echo "$message" | grep -qE "$commit_regex"; then
               invalid_commits="$invalid_commits\n- $message"
             fi
-          done <<< "$commits"
+          done < "$commits_file"
 
           if [ -n "$invalid_commits" ]; then
             echo "::warning::Some commit subjects are not conventional commits."
@@ -94,7 +95,7 @@ jobs:
       - name: Check for console.log statements
         shell: bash
         run: |
-          files="${{ steps.context.outputs.files }}"
+          files_file="${{ steps.context.outputs.files_file }}"
           console_log_found=false
 
           while IFS= read -r file; do
@@ -104,7 +105,7 @@ jobs:
                 console_log_found=true
               fi
             fi
-          done <<< "$files"
+          done < "$files_file"
 
           if [ "$console_log_found" = true ]; then
             echo "console.log statements found. Please remove them before merging."
@@ -116,7 +117,7 @@ jobs:
       - name: Check for TODO and FIXME comments
         shell: bash
         run: |
-          files="${{ steps.context.outputs.files }}"
+          files_file="${{ steps.context.outputs.files_file }}"
           todo_found=false
 
           while IFS= read -r file; do
@@ -126,7 +127,7 @@ jobs:
                 todo_found=true
               fi
             fi
-          done <<< "$files"
+          done < "$files_file"
 
           if [ "$todo_found" = false ]; then
             echo "No TODO or FIXME comments found."
@@ -135,7 +136,7 @@ jobs:
       - name: Check for unsafe unwrap and expect usage in Rust
         shell: bash
         run: |
-          files="${{ steps.context.outputs.files }}"
+          files_file="${{ steps.context.outputs.files_file }}"
 
           while IFS= read -r file; do
             if [[ "$file" =~ \.rs$ ]] && [ -f "$file" ]; then
@@ -143,4 +144,4 @@ jobs:
                 echo "::warning file=$file::unwrap/expect usage found"
               fi
             fi
-          done <<< "$files"
+          done < "$files_file"
