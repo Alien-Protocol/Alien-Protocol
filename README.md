@@ -52,6 +52,7 @@ They are stored as **zero-knowledge commitments**, protecting user identity and 
 - **Hash Function:** Poseidon  
 - **SDK:** TypeScript  
 
+
 ---
 
 ## 🚀 Vision
