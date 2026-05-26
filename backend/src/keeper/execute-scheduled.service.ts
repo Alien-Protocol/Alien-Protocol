@@ -41,7 +41,7 @@ export class ExecuteScheduledService {
 
     this.isRunning = true;
     try {
-      const now = new Date();
+      const now: string = String(Date.now());
       const duePayments = await this.paymentRepository.find({
         where: {
           executed: false,
@@ -51,7 +51,7 @@ export class ExecuteScheduledService {
 
       for (const payment of duePayments) {
         try {
-          await this.escrowClient.executeScheduled(payment.paymentId, this.secretKey);
+          await this.escrowClient.executeScheduled(Number(payment.paymentId), this.secretKey);
           payment.executed = true;
           await this.paymentRepository.save(payment);
           this.logger.log(`Executed scheduled payment ${payment.paymentId}`);

@@ -1,14 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import * as StellarSdk from '@stellar/stellar-sdk';
-import { SorobanRpc } from '@stellar/stellar-sdk';
 
 @Injectable()
 export class SorobanService {
-  private server: SorobanRpc.Server;
+  private server: any;
   private contractId: string;
 
   constructor() {
-    this.server = new SorobanRpc.Server(
+    this.server = new (StellarSdk as any).SorobanRpc.Server(
       process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org',
     );
     this.contractId = process.env.ESCROW_CONTRACT_ID || '';
@@ -28,7 +27,7 @@ export class SorobanService {
         .build()
       );
 
-      if (SorobanRpc.Api.isSimulationSuccess(tx)) {
+      if ((StellarSdk as any).SorobanRpc.Api.isSimulationSuccess(tx)) {
         const result = tx.result.retval;
         if (result.switch() === StellarSdk.xdr.ScValType.scvI128()) {
           // Simplified i128 parsing

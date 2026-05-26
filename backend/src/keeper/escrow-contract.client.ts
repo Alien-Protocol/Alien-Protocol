@@ -1,30 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  Keypair,
-  SorobanRpc,
-  Transaction,
-  TransactionBuilder,
-  Contract,
-  BASE_FEE,
-  xdr,
-} from '@stellar/stellar-sdk';
+import * as StellarSdk from '@stellar/stellar-sdk';
 
 @Injectable()
 export class EscrowContractClient {
-  private readonly server: SorobanRpc.Server;
-  private readonly contract: Contract;
+  private readonly server: any;
+  private readonly contract: any;
   private readonly networkPassphrase: string;
 
   constructor(private readonly configService: ConfigService) {
     const rpcUrl = this.configService.getOrThrow<string>('STELLAR_RPC_URL');
     const contractId = this.configService.getOrThrow<string>('ESCROW_CONTRACT_ID');
     this.networkPassphrase = this.configService.getOrThrow<string>('STELLAR_NETWORK_PASSPHRASE');
-    this.server = new SorobanRpc.Server(rpcUrl);
-    this.contract = new Contract(contractId);
+    this.server = new (StellarSdk as any).SorobanRpc.Server(rpcUrl);
+    this.contract = new StellarSdk.Contract(contractId);
   }
 
-  private async submitAndAwait(tx: Transaction, signer: Keypair): Promise<void> {
+  private async submitAndAwait(tx: any, signer: any): Promise<void> {
     const prepared = await this.server.prepareTransaction(tx);
     prepared.sign(signer);
     const response = await this.server.sendTransaction(prepared);
@@ -61,14 +53,14 @@ export class EscrowContractClient {
   }
 
   async executeScheduled(paymentId: number, signerSecret: string): Promise<void> {
-    const signer = Keypair.fromSecret(signerSecret);
+    const signer = StellarSdk.Keypair.fromSecret(signerSecret);
     const source = await this.server.getAccount(signer.publicKey());
 
-    const tx = new TransactionBuilder(source, {
-      fee: BASE_FEE,
+    const tx = new StellarSdk.TransactionBuilder(source, {
+      fee: StellarSdk.BASE_FEE,
       networkPassphrase: this.networkPassphrase,
     })
-      .addOperation(this.contract.call('execute_scheduled', xdr.ScVal.scvU32(paymentId)))
+      .addOperation(this.contract.call('execute_scheduled', StellarSdk.xdr.ScVal.scvU32(paymentId)))
       .setTimeout(30)
       .build();
 
@@ -85,18 +77,18 @@ export class EscrowContractClient {
       throw new Error(`Invalid fromCommitment: expected 32 bytes (64 hex chars), got ${hex.length} chars`);
     }
 
-    const signer = Keypair.fromSecret(signerSecret);
+    const signer = StellarSdk.Keypair.fromSecret(signerSecret);
     const source = await this.server.getAccount(signer.publicKey());
 
-    const tx = new TransactionBuilder(source, {
-      fee: BASE_FEE,
+    const tx = new StellarSdk.TransactionBuilder(source, {
+      fee: StellarSdk.BASE_FEE,
       networkPassphrase: this.networkPassphrase,
     })
       .addOperation(
         this.contract.call(
           'trigger_auto_pay',
-          xdr.ScVal.scvBytes(Buffer.from(hex, 'hex')),
-          xdr.ScVal.scvU32(ruleId),
+          StellarSdk.xdr.ScVal.scvBytes(Buffer.from(hex, 'hex')),
+          StellarSdk.xdr.ScVal.scvU32(ruleId),
         ),
       )
       .setTimeout(30)

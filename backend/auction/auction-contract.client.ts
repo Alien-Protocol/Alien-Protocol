@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { rpc, xdr, scValToNative, nativeToScVal } from '@stellar/stellar-sdk';
-import { StellarService } from '../stellar/stellar.service';
+import { StellarService } from '../src/stellar/stellar.service';
 
 @Injectable()
 export class AuctionContractClient {

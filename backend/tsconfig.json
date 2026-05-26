@@ -14,5 +14,11 @@
     "skipLibCheck": true,
     "strictNullChecks": false,
     "noImplicitAny": false
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts",
+    "test"
+  ]
 }
