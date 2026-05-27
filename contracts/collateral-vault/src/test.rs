@@ -28,7 +28,7 @@ fn test_vault_deposit_flow() {
     let token_client = token::Client::new(&env, &token_contract_id);
 
     // Mint tokens to user
-    token_admin_client.mint(&user, &1000);
+    token_admin_client.client().mint(&user, &1000);
 
     // Assert token balance before deposit
     assert_eq!(token_client.balance(&user), 1000);
