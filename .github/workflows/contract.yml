@@ -14,9 +14,6 @@ jobs:
     name: Format, Lint & Cargo Check
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: onchain
 
     steps:
     - uses: actions/checkout@v4
@@ -41,9 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: checks
 
-    defaults:
-      run:
-        working-directory: onchain
+
 
     steps:
     - uses: actions/checkout@v4
