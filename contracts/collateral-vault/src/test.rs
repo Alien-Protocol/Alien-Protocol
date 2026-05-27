@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{token, Address, Env};
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::{token, Address, Env};
 
 #[test]
 fn test_vault_deposit_flow() {
