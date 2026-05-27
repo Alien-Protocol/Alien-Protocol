@@ -2,6 +2,7 @@
 
 use super::*;
 use soroban_sdk::{token, Address, Env};
+use soroban_sdk::testutils::Address as _;
 
 #[test]
 fn test_vault_deposit_flow() {
@@ -9,7 +10,7 @@ fn test_vault_deposit_flow() {
     env.mock_all_auths();
 
     // Deploy contract
-    let contract_id = env.register_contract(None, VaultContract);
+    let contract_id = env.register(VaultContract, ());
     let client = VaultContractClient::new(&env, &contract_id);
 
     // Create address for admin, user, and oracle
@@ -22,9 +23,9 @@ fn test_vault_deposit_flow() {
 
     // Deploy standard token asset
     let token_admin = Address::generate(&env);
-    let token_contract_id = env.register_stellar_asset_contract(token_admin.clone());
+    let token_admin_client = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_contract_id = token_admin_client.address();
     let token_client = token::Client::new(&env, &token_contract_id);
-    let token_admin_client = token::StellarAssetContractClient::new(&env, &token_contract_id);
 
     // Mint tokens to user
     token_admin_client.mint(&user, &1000);

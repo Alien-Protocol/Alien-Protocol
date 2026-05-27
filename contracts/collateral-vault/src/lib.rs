@@ -69,14 +69,12 @@ impl VaultContract {
 
         storage::add_to_position_index(&env, &user);
 
-        env.events().publish(
-            (),
-            events::Deposited {
-                user,
-                asset,
-                amount,
-            },
-        );
+        events::Deposited {
+            user,
+            asset,
+            amount,
+        }
+        .publish(&env);
     }
 
     pub fn withdraw(_env: Env, _reciver: Address, _asset: Address, _amount: i128) {}
