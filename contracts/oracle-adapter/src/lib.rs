@@ -6,9 +6,7 @@ pub struct OracleContract;
 
 #[contractimpl]
 impl OracleContract {
-   pub fn  initilized(env: Env , reflactor_address : Address ){
-     
-   }
+    pub fn initilized(env: Env, reflactor_address: Address) {}
 }
 
 mod test;
