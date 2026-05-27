@@ -1,5 +1,15 @@
-use soroban_sdk::contracttype;
+use soroban_sdk::{contracttype, Address};
 
-// Datakey's
+#[contracttype]
+#[derive(Clone)]
+pub struct Position {
+    pub amount: i128,
+}
 
-pub enum Datakey {}
+#[contracttype]
+pub enum Datakey {
+    Position(Address),
+    PositionIndex,
+    LendingPool,
+    Paused,
+}
