@@ -1,10 +1,13 @@
-use soroban_sdk::{Address, Env, Map};
-use crate::types::{Datakey, Position};
 use crate::errors::VaultError;
+use crate::types::{Datakey, Position};
+use soroban_sdk::{Address, Env, Map};
 
 pub fn get_position(env: &Env, user: &Address) -> Result<Position, VaultError> {
     let key = Datakey::Position(user.clone());
-    env.storage().persistent().get(&key).ok_or(VaultError::NoPosition)
+    env.storage()
+        .persistent()
+        .get(&key)
+        .ok_or(VaultError::NoPosition)
 }
 
 pub fn set_position(env: &Env, user: &Address, position: &Position) {
@@ -19,7 +22,10 @@ pub fn remove_position(env: &Env, user: &Address) {
 
 pub fn get_position_index(env: &Env) -> Map<Address, i128> {
     let key = Datakey::PositionIndex;
-    env.storage().persistent().get(&key).unwrap_or(Map::new(env))
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Map::new(env))
 }
 
 pub fn set_position_index(env: &Env, index: &Map<Address, i128>) {

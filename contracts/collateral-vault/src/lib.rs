@@ -1,9 +1,12 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contractclient, token, Address, Env};
+use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env};
 
 use errors::VaultError;
 use events::Withdrawn;
-use storage::{get_position, set_position, remove_position, update_position_index, get_lending_pool, set_lending_pool, is_paused};
+use storage::{
+    get_lending_pool, get_position, is_paused, remove_position, set_lending_pool, set_position,
+    update_position_index,
+};
 
 #[allow(dead_code)]
 #[contractclient(name = "LendingPoolClient")]
@@ -28,7 +31,7 @@ impl VaultContract {
 
         let token_client = token::Client::new(&env, &asset);
 
-        token_client.transfer(&sender, &env.current_contract_address(), &amount);
+        token_client.transfer(&sender, env.current_contract_address(), &amount);
         Ok(())
     }
 
@@ -37,7 +40,12 @@ impl VaultContract {
         set_lending_pool(&env, &lending_pool);
     }
 
-    pub fn withdraw(env: Env, user: Address, asset: Address, amount: i128) -> Result<(), VaultError> {
+    pub fn withdraw(
+        env: Env,
+        user: Address,
+        asset: Address,
+        amount: i128,
+    ) -> Result<(), VaultError> {
         user.require_auth();
 
         if amount <= 0 {
@@ -55,7 +63,7 @@ impl VaultContract {
         }
 
         let lending_pool_address = get_lending_pool(&env).ok_or(VaultError::InvalidInputs)?;
-        
+
         // Cross-call to LendingPool to verify withdrawal keeps collateral ratio safe
         let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
         let is_safe = lending_pool_client.check_withdrawal_safe(&user, &amount);
@@ -80,7 +88,8 @@ impl VaultContract {
             user: user.clone(),
             asset: asset.clone(),
             amount,
-        }.publish(&env);
+        }
+        .publish(&env);
 
         Ok(())
     }
