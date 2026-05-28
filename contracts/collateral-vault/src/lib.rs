@@ -46,10 +46,7 @@ impl VaultContract {
 
         set_paused(&env, false);
 
-        env.events().publish(
-            ("CollateralVault", "Unpaused"),
-            admin,
-        );
+        env.events().publish(("CollateralVault", "Unpaused"), admin);
     }
 
 }
