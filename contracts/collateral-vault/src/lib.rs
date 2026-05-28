@@ -48,7 +48,6 @@ impl VaultContract {
 
         env.events().publish(("CollateralVault", "Unpaused"), admin);
     }
-
 }
 
 mod errors;
