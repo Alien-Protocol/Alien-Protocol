@@ -2,13 +2,39 @@
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
 use errors::VaultError;
+use events::LendingPoolUpdated;
+use storage::{get_admin, set_lending_pool};
 
 #[contract]
 pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    pub fn initialize(_env: Env, _admin: Address, _oracle: Address) {}
+    pub fn initialize(env: Env, admin: Address, _oracle: Address) {
+        let storage_key = types::Datakey::Admin;
+        env.storage().instance().set(&storage_key, &admin);
+    }
+
+    pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultError> {
+        // Require auth from admin
+        let admin = get_admin(&env);
+        admin.require_auth();
+
+        // Assert lending_pool is a valid non-zero contract address
+        if lending_pool == Address::from_contract_id(&env, &env.crypto().sha256(&[])) {
+            return Err(VaultError::InvalidInputs);
+        }
+
+        // Write new address to LendingPool storage key
+        set_lending_pool(&env, &lending_pool);
+
+        // Emit LendingPoolUpdated event
+        env.events().publish((), LendingPoolUpdated {
+            lending_pool: lending_pool.clone(),
+        });
+
+        Ok(())
+    }
 
     pub fn deposite_collateral(
         env: Env,
@@ -36,6 +62,10 @@ impl VaultContract {
 }
 
 mod errors;
+mod events;
+mod storage;
+mod test;
+mod types;
 mod events;
 mod storage;
 mod test;

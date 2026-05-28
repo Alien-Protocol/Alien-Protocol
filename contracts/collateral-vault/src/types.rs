@@ -2,4 +2,8 @@ use soroban_sdk::contracttype;
 
 // Datakey's
 
-pub enum Datakey {}
+#[contracttype]
+pub enum Datakey {
+    Admin,
+    LendingPool,
+}

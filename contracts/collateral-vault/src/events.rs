@@ -1,3 +1,6 @@
-use soroban_sdk::contractevent;
+use soroban_sdk::{contractevent, Address};
 
-pub struct AddCollateralEvent {}
+#[contractevent]
+pub struct LendingPoolUpdated {
+    pub lending_pool: Address,
+}
