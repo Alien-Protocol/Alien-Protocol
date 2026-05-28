@@ -37,7 +37,8 @@ impl VaultContract {
         }
 
         let token_client = token::Client::new(&env, &asset);
-        token_client.transfer(&sender, env.current_contract_address(), &amount);
+        let vault = env.current_contract_address();
+        token_client.transfer(&sender, &vault, &amount);
 
         let mut position = match get_position(&env, &sender, &asset) {
             Ok(p) => p,
