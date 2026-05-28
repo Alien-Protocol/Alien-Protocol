@@ -8,8 +8,9 @@ pub struct Position {
 
 #[contracttype]
 pub enum Datakey {
-    Position(Address),
+    Position(Address, Address),
     PositionIndex,
     LendingPool,
+    Admin,
     Paused,
 }

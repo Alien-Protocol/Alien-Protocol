@@ -4,14 +4,14 @@ use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env};
 use errors::VaultError;
 use events::Withdrawn;
 use storage::{
-    get_lending_pool, get_position, is_paused, remove_position, set_lending_pool, set_position,
-    update_position_index,
+    get_admin, get_lending_pool, get_position, is_paused, remove_position, set_admin,
+    set_lending_pool, set_position, update_position_index,
 };
 
 #[allow(dead_code)]
 #[contractclient(name = "LendingPoolClient")]
 trait LendingPool {
-    fn check_withdrawal_safe(user: &Address, amount: &i128) -> bool;
+    fn check_withdrawal_safe(user: &Address, asset: &Address, amount: &i128) -> bool;
 }
 
 #[contract]
@@ -19,104 +19,17 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    pub fn initialize(env: Env, admin: Address, oracle: Address) {
-        admin.require_auth();
-        if storage::get_admin(&env).is_some() {
-            panic!("already initialized");
-        }
-        storage::set_admin(&env, &admin);
-        storage::set_paused(&env, false);
-        storage::set_oracle(&env, &oracle);
+    pub fn initialize(env: Env, admin: Address, _oracle: Address) {
+        set_admin(&env, &admin);
     }
 
-    pub fn set_admin(env: Env, new_admin: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        storage::set_admin(&env, &new_admin);
-
-        events::AdminChanged {
-            old_admin: admin,
-            new_admin,
-        }
-        .publish(&env);
-    }
-
-    pub fn pause(env: Env) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        if storage::is_paused(&env) {
-            panic!("already paused");
-        }
-
-        storage::set_paused(&env, true);
-
-        events::Paused { paused: true }.publish(&env);
-    }
-
-    pub fn unpause(env: Env) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        if !storage::is_paused(&env) {
-            panic!("vault is not paused");
-        }
-
-        storage::set_paused(&env, false);
-
-        events::Unpaused { paused: false }.publish(&env);
-    }
-
-    pub fn add_supported_asset(env: Env, asset: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-        storage::add_supported_asset(&env, &asset);
-    }
-
-    pub fn remove_supported_asset(env: Env, asset: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        if !storage::is_supported_asset(&env, &asset) {
-            soroban_sdk::panic_with_error!(&env, VaultError::AssetNotFound);
-        }
-
-        storage::remove_supported_asset(&env, &asset);
-
-        events::AssetRemoved { asset }.publish(&env);
-    }
-
-    pub fn is_supported_asset(env: Env, asset: Address) -> bool {
-        storage::is_supported_asset(&env, &asset)
-    }
-
-    pub fn get_admin(env: Env) -> Option<Address> {
-        storage::get_admin(&env)
-    }
-
-    pub fn get_position_balance(env: Env, user: Address, asset: Address) -> i128 {
-        storage::get_position_balance(&env, &user, &asset)
-    }
-
-    pub fn get_position_index(env: Env) -> soroban_sdk::Vec<Address> {
-        storage::get_position_index(&env)
-    }
-
-    pub fn deposit(env: Env, user: Address, asset: Address, amount: i128) {
-        user.require_auth();
-
-        if amount <= 0 {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
-
-        if storage::is_paused(&env) {
-            soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
-        }
-
-        if !storage::is_supported_asset(&env, &asset) {
-            soroban_sdk::panic_with_error!(&env, VaultError::UnsupportedAsset);
-        }
+    pub fn deposite_collateral(
+        env: Env,
+        sender: Address,
+        asset: Address,
+        amount: i128,
+    ) -> Result<(), VaultError> {
+        sender.require_auth();
 
         let token_client = token::Client::new(&env, &asset);
 
@@ -124,8 +37,9 @@ impl VaultContract {
         Ok(())
     }
 
-    pub fn set_lending_pool(env: Env, admin: Address, lending_pool: Address) {
-        admin.require_auth();
+    pub fn set_lending_pool(env: Env, lending_pool: Address) {
+        let stored_admin = get_admin(&env).expect("Admin not set");
+        stored_admin.require_auth();
         set_lending_pool(&env, &lending_pool);
     }
 
@@ -145,7 +59,7 @@ impl VaultContract {
             return Err(VaultError::VaultPaused);
         }
 
-        let mut position = get_position(&env, &user)?;
+        let mut position = get_position(&env, &user, &asset)?;
 
         if position.amount < amount {
             return Err(VaultError::InsufficientBalance);
@@ -155,7 +69,7 @@ impl VaultContract {
 
         // Cross-call to LendingPool to verify withdrawal keeps collateral ratio safe
         let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
-        let is_safe = lending_pool_client.check_withdrawal_safe(&user, &amount);
+        let is_safe = lending_pool_client.check_withdrawal_safe(&user, &asset, &amount);
         if !is_safe {
             return Err(VaultError::InsufficientCollateral);
         }
@@ -163,11 +77,11 @@ impl VaultContract {
         position.amount -= amount;
 
         if position.amount == 0 {
-            remove_position(&env, &user);
-            update_position_index(&env, &user, 0);
+            remove_position(&env, &user, &asset);
+            update_position_index(&env, &user, &asset, 0);
         } else {
-            set_position(&env, &user, &position);
-            update_position_index(&env, &user, position.amount);
+            set_position(&env, &user, &asset, &position);
+            update_position_index(&env, &user, &asset, position.amount);
         }
 
         let token_client = token::Client::new(&env, &asset);
