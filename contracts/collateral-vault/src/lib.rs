@@ -2,11 +2,12 @@
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env};
 
 use errors::VaultError;
-use events::Withdrawn;
+use events::{Deposited, Withdrawn};
 use storage::{
     get_admin, get_lending_pool, get_position, is_paused, remove_position, set_admin,
     set_lending_pool, set_position, update_position_index,
 };
+use types::Position;
 
 #[allow(dead_code)]
 #[contractclient(name = "LendingPoolClient")]
@@ -31,9 +32,30 @@ impl VaultContract {
     ) -> Result<(), VaultError> {
         sender.require_auth();
 
-        let token_client = token::Client::new(&env, &asset);
+        if amount <= 0 {
+            return Err(VaultError::InvalidInputs);
+        }
 
+        let token_client = token::Client::new(&env, &asset);
         token_client.transfer(&sender, env.current_contract_address(), &amount);
+
+        let mut position = match get_position(&env, &sender, &asset) {
+            Ok(p) => p,
+            Err(VaultError::NoPosition) => Position { amount: 0 },
+            Err(err) => return Err(err),
+        };
+
+        position.amount += amount;
+        set_position(&env, &sender, &asset, &position);
+        update_position_index(&env, &sender, &asset, position.amount);
+
+        Deposited {
+            user: sender.clone(),
+            asset: asset.clone(),
+            amount,
+        }
+        .publish(&env);
+
         Ok(())
     }
 
