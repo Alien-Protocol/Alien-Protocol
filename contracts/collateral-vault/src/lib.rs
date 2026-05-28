@@ -13,6 +13,7 @@ use types::Position;
 #[allow(dead_code)]
 #[contractclient(name = "LendingPoolClient")]
 trait LendingPool {
+    fn is_liquidatable(user: &Address) -> bool;
     fn check_withdrawal_safe(user: &Address, asset: &Address, amount: &i128) -> bool;
 }
 
@@ -128,16 +129,18 @@ impl VaultContract {
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
-        match get_liquidation_engine(&env) {
-            Some(engine) if engine == liquidation_engine => {}
-            _ => return false,
+        let stored_liquidation_engine = get_liquidation_engine(&env).expect("Liquidation engine not set");
+        if liquidation_engine != stored_liquidation_engine {
+            panic!("{:?}", VaultError::Unauthorized);
         }
 
         liquidation_engine.require_auth();
 
         get_user_position(&env, &user).unwrap_or_else(|_| panic!("{:?}", VaultError::NoPosition));
 
-        true
+        let lending_pool_address = get_lending_pool(&env).expect("Lending pool not set");
+        let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
+        lending_pool_client.is_liquidatable(&user)
     }
 
     pub fn seize_collateral(_env: Env, _user: Address, _asset: Address, _amount: i128) {}
