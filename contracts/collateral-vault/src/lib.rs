@@ -2,6 +2,7 @@
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
 use errors::VaultError;
+use storage::{get_admin, is_paused, set_paused};
 
 #[contract]
 pub struct VaultContract;
@@ -33,6 +34,24 @@ impl VaultContract {
     pub fn get_position(_env: &Env, _user: Address) {}
 
     pub fn get_collateral_value(_env: &Env, _user: Address) {}
+
+    pub fn unpause(env: Env) {
+        let admin = get_admin(&env);
+        admin.require_auth();
+
+        let paused = is_paused(&env);
+        if !paused {
+            panic!("Contract is not paused");
+        }
+
+        set_paused(&env, false);
+
+        env.events().publish(
+            ("CollateralVault", "Unpaused"),
+            admin,
+        );
+    }
+
 }
 
 mod errors;
