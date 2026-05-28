@@ -1,6 +1,6 @@
 use crate::errors::VaultError;
 use crate::types::{Datakey, Position};
-use soroban_sdk::{Address, Env, Map};
+use soroban_sdk::{Address, Env, Map, Vec};
 
 pub fn get_position(env: &Env, user: &Address, asset: &Address) -> Result<Position, VaultError> {
     let key = Datakey::Position(user.clone(), asset.clone());
@@ -51,6 +51,36 @@ pub fn get_lending_pool(env: &Env) -> Option<Address> {
 
 pub fn set_lending_pool(env: &Env, address: &Address) {
     let key = Datakey::LendingPool;
+    env.storage().persistent().set(&key, address);
+}
+
+pub fn get_user_position_asset(env: &Env, user: &Address) -> Option<Address> {
+    let index = get_position_index(env);
+    let keys: Vec<(Address, Address)> = index.keys();
+    let count = keys.len();
+    let mut i = 0;
+    while i < count {
+        let key = keys.get(i).expect("position key missing");
+        if key.0 == *user {
+            return Some(key.1.clone());
+        }
+        i += 1;
+    }
+    None
+}
+
+pub fn get_user_position(env: &Env, user: &Address) -> Result<Position, VaultError> {
+    let asset = get_user_position_asset(env, user).ok_or(VaultError::NoPosition)?;
+    get_position(env, user, &asset)
+}
+
+pub fn get_liquidation_engine(env: &Env) -> Option<Address> {
+    let key = Datakey::LiquidationEngine;
+    env.storage().persistent().get(&key)
+}
+
+pub fn set_liquidation_engine(env: &Env, address: &Address) {
+    let key = Datakey::LiquidationEngine;
     env.storage().persistent().set(&key, address);
 }
 

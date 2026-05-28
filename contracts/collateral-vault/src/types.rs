@@ -11,6 +11,7 @@ pub enum Datakey {
     Position(Address, Address),
     PositionIndex,
     LendingPool,
+    LiquidationEngine,
     Admin,
     Paused,
 }

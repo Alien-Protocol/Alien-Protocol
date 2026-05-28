@@ -4,8 +4,9 @@ use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env};
 use errors::VaultError;
 use events::{Deposited, Withdrawn};
 use storage::{
-    get_admin, get_lending_pool, get_position, is_paused, remove_position, set_admin,
-    set_lending_pool, set_position, update_position_index,
+    get_admin, get_lending_pool, get_liquidation_engine, get_position, get_user_position,
+    is_paused, remove_position, set_admin, set_lending_pool, set_liquidation_engine, set_position,
+    update_position_index,
 };
 use types::Position;
 
@@ -66,6 +67,12 @@ impl VaultContract {
         set_lending_pool(&env, &lending_pool);
     }
 
+    pub fn set_liquidation_engine(env: Env, liquidation_engine: Address) {
+        let stored_admin = get_admin(&env).expect("Admin not set");
+        stored_admin.require_auth();
+        set_liquidation_engine(&env, &liquidation_engine);
+    }
+
     pub fn withdraw(
         env: Env,
         user: Address,
@@ -118,6 +125,19 @@ impl VaultContract {
         .publish(&env);
 
         Ok(())
+    }
+
+    pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
+        match get_liquidation_engine(&env) {
+            Some(engine) if engine == liquidation_engine => {}
+            _ => return false,
+        }
+
+        liquidation_engine.require_auth();
+
+        get_user_position(&env, &user).unwrap_or_else(|_| panic!("{:?}", VaultError::NoPosition));
+
+        true
     }
 
     pub fn seize_collateral(_env: Env, _user: Address, _asset: Address, _amount: i128) {}
