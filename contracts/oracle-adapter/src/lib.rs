@@ -1,12 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
-
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct PriceData {
-    pub price: i128,
-    pub timestamp: u64,
-}
+use soroban_sdk::{contract, contractimpl};
 
 #[contract]
 pub struct OracleContract;
