@@ -15,7 +15,6 @@ use types::Position;
 trait LendingPool {
     fn is_liquidatable(user: &Address) -> bool;
     fn check_withdrawal_safe(user: &Address, asset: &Address, amount: &i128) -> bool;
-    fn is_liquidatable(user: &Address) -> bool;
 }
 
 #[contract]
@@ -27,7 +26,7 @@ impl VaultContract {
         set_admin(&env, &admin);
     }
 
-    pub fn deposite_collateral(
+    pub fn deposit_collateral(
         env: Env,
         sender: Address,
         asset: Address,
@@ -130,7 +129,8 @@ impl VaultContract {
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
-        let stored_liquidation_engine = get_liquidation_engine(&env).expect("Liquidation engine not set");
+        let stored_liquidation_engine =
+            get_liquidation_engine(&env).expect("Liquidation engine not set");
         if liquidation_engine != stored_liquidation_engine {
             panic!("{:?}", VaultError::Unauthorized);
         }
