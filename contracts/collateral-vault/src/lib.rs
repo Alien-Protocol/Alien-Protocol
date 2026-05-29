@@ -15,6 +15,7 @@ use types::Position;
 trait LendingPool {
     fn is_liquidatable(user: &Address) -> bool;
     fn check_withdrawal_safe(user: &Address, asset: &Address, amount: &i128) -> bool;
+    fn is_liquidatable(user: &Address) -> bool;
 }
 
 #[contract]
