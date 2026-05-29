@@ -7,4 +7,5 @@ pub enum VaultError {
     InvalidInputs = 1,
     VaultPaused = 2,
     UnsupportedAsset = 3,
+    NoPosition = 4,
 }

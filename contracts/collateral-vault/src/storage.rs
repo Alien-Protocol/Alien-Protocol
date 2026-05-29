@@ -1,4 +1,4 @@
-use crate::types::DataKey;
+use crate::types::{DataKey, Position};
 use soroban_sdk::{Address, Env, Vec};
 
 pub fn get_admin(env: &Env) -> Option<Address> {
@@ -61,4 +61,19 @@ pub fn add_to_position_index(env: &Env, user: &Address) {
             .persistent()
             .set(&DataKey::PositionIndex, &index);
     }
+}
+
+/// Retrieve the aggregated `Position` for `user`.
+/// Returns `None` if the user has no recorded position.
+pub fn get_user_position(env: &Env, user: &Address) -> Option<Position> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::UserPosition(user.clone()))
+}
+
+/// Persist an aggregated `Position` record for `user`.
+pub fn set_user_position(env: &Env, position: &Position) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::UserPosition(position.user.clone()), position);
 }

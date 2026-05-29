@@ -2,6 +2,7 @@
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
 use errors::VaultError;
+use types::Position;
 
 #[contract]
 pub struct VaultContract;
@@ -67,6 +68,13 @@ impl VaultContract {
         let new_balance = balance + amount;
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
+        // Keep the aggregated UserPosition record in sync.
+        let position = Position {
+            user: user.clone(),
+            amount: new_balance,
+        };
+        storage::set_user_position(&env, &position);
+
         storage::add_to_position_index(&env, &user);
 
         events::Deposited {
@@ -83,7 +91,15 @@ impl VaultContract {
 
     pub fn is_withdrawal_safe(_env: &Env, _user: Address, _amount: i128) {}
 
-    pub fn get_position(_env: &Env, _user: Address) {}
+    /// Returns the stored collateral `Position` for `user`.
+    /// Panics with `VaultError::NoPosition` if no entry is found.
+    /// Read-only — no authentication required, no state mutation.
+    pub fn get_position(env: Env, user: Address) -> Position {
+        match storage::get_user_position(&env, &user) {
+            Some(position) => position,
+            None => soroban_sdk::panic_with_error!(&env, VaultError::NoPosition),
+        }
+    }
 
     pub fn get_collateral_value(_env: &Env, _user: Address) {}
 }

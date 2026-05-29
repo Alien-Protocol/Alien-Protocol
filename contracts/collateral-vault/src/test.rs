@@ -75,3 +75,51 @@ fn test_vault_deposit_flow() {
     assert_eq!(token_client.balance(&contract_id), 700);
     assert_eq!(client.get_position_balance(&user, &token_contract_id), 700);
 }
+
+#[test]
+fn test_get_position_returns_correct_data() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &oracle);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_contract_id = token_contract.address();
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract_id);
+
+    token_admin_client.mint(&user, &1000);
+    client.add_supported_asset(&token_contract_id);
+    client.deposit(&user, &token_contract_id, &750);
+
+    // get_position should return the stored Position
+    let pos = client.get_position(&user);
+    assert_eq!(pos.user, user);
+    assert_eq!(pos.amount, 750);
+}
+
+#[test]
+#[should_panic]
+fn test_get_position_panics_with_no_position() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let stranger = Address::generate(&env);
+
+    client.initialize(&admin, &oracle);
+
+    // Should panic with NoPosition because stranger never deposited
+    client.get_position(&stranger);
+}
