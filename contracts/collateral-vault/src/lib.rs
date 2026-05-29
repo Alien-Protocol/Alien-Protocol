@@ -14,6 +14,7 @@ use types::Position;
 #[contractclient(name = "LendingPoolClient")]
 trait LendingPool {
     fn check_withdrawal_safe(user: &Address, asset: &Address, amount: &i128) -> bool;
+    fn is_liquidatable(user: &Address) -> bool;
 }
 
 #[contract]
@@ -137,7 +138,9 @@ impl VaultContract {
 
         get_user_position(&env, &user).unwrap_or_else(|_| panic!("{:?}", VaultError::NoPosition));
 
-        true
+        let lending_pool_address = get_lending_pool(&env).expect("Lending pool not set");
+        let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
+        lending_pool_client.is_liquidatable(&user)
     }
 
     pub fn seize_collateral(_env: Env, _user: Address, _asset: Address, _amount: i128) {}
