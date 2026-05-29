@@ -8,4 +8,13 @@ pub enum DataKey {
     SupportedAsset(Address),
     Position(Address, Address), // (user, asset)
     PositionIndex,
+    UserPosition(Address),      // whole-position record keyed by user
+}
+
+/// Aggregated collateral position for a single user.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Position {
+    pub user: Address,
+    pub amount: i128,
 }
