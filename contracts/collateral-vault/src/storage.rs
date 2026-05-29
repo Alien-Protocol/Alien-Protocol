@@ -20,6 +20,10 @@ pub fn set_paused(env: &Env, paused: bool) {
     env.storage().persistent().set(&DataKey::Paused, &paused);
 }
 
+pub fn pause(env: &Env) {
+    set_paused(env, true);
+}
+
 pub fn is_supported_asset(env: &Env, asset: &Address) -> bool {
     env.storage()
         .persistent()

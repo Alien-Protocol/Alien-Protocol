@@ -7,3 +7,9 @@ pub struct Deposited {
     pub asset: Address,
     pub amount: i128,
 }
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Paused {
+    pub by: Address,
+}

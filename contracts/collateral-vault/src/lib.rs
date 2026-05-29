@@ -18,9 +18,26 @@ impl VaultContract {
     }
 
     pub fn set_paused(env: Env, paused: bool) {
+        if paused {
+            Self::pause(env);
+            return;
+        }
+
         let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
         storage::set_paused(&env, paused);
+    }
+
+    pub fn pause(env: Env) {
+        let admin = storage::get_admin(&env).expect("not initialized");
+        admin.require_auth();
+
+        if storage::is_paused(&env) {
+            soroban_sdk::panic_with_error!(&env, VaultError::AlreadyPaused);
+        }
+
+        storage::pause(&env);
+        events::Paused { by: admin }.publish(&env);
     }
 
     pub fn add_supported_asset(env: Env, asset: Address) {
@@ -77,7 +94,11 @@ impl VaultContract {
         .publish(&env);
     }
 
-    pub fn withdraw(_env: Env, _reciver: Address, _asset: Address, _amount: i128) {}
+    pub fn withdraw(env: Env, _receiver: Address, _asset: Address, _amount: i128) {
+        if storage::is_paused(&env) {
+            soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
+        }
+    }
 
     pub fn seize_collateral(_env: Env, _user: Address, _asset: Address, _amount: i128) {}
 
