@@ -27,10 +27,54 @@ pub fn is_supported_asset(env: &Env, asset: &Address) -> bool {
         .unwrap_or(false)
 }
 
+pub fn get_supported_assets(env: &Env) -> Vec<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SupportedAssets)
+        .unwrap_or_else(|| Vec::new(env))
+}
+
 pub fn add_supported_asset(env: &Env, asset: &Address) {
     env.storage()
         .persistent()
         .set(&DataKey::SupportedAsset(asset.clone()), &true);
+
+    let mut assets = get_supported_assets(env);
+    if !assets.contains(asset) {
+        assets.push_back(asset.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::SupportedAssets, &assets);
+    }
+}
+
+pub fn remove_supported_asset(env: &Env, asset: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::SupportedAsset(asset.clone()));
+
+    let mut assets = get_supported_assets(env);
+    let mut found_idx = None;
+    for i in 0..assets.len() {
+        if assets.get(i).unwrap() == *asset {
+            found_idx = Some(i);
+            break;
+        }
+    }
+    if let Some(idx) = found_idx {
+        assets.remove(idx);
+        env.storage()
+            .persistent()
+            .set(&DataKey::SupportedAssets, &assets);
+    }
+}
+
+pub fn get_oracle(env: &Env) -> Option<Address> {
+    env.storage().persistent().get(&DataKey::Oracle)
+}
+
+pub fn set_oracle(env: &Env, oracle: &Address) {
+    env.storage().persistent().set(&DataKey::Oracle, oracle);
 }
 
 pub fn get_position_balance(env: &Env, user: &Address, asset: &Address) -> i128 {
@@ -60,5 +104,22 @@ pub fn add_to_position_index(env: &Env, user: &Address) {
         env.storage()
             .persistent()
             .set(&DataKey::PositionIndex, &index);
+    }
+}
+
+pub fn get_user_assets(env: &Env, user: &Address) -> Vec<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::UserAssets(user.clone()))
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn add_user_asset(env: &Env, user: &Address, asset: &Address) {
+    let mut assets = get_user_assets(env, user);
+    if !assets.contains(asset) {
+        assets.push_back(asset.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserAssets(user.clone()), &assets);
     }
 }
