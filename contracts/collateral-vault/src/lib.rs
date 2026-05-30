@@ -120,12 +120,6 @@ impl VaultContract {
     }
 
     pub fn seize_collateral(_env: Env, _user: Address, _asset: Address, _amount: i128) {}
-
-    pub fn is_withdrawal_safe(_env: Env, _user: Address, _amount: i128) {}
-
-    pub fn get_position(_env: Env, _user: Address) {}
-
-    pub fn get_collateral_value(_env: Env, _user: Address) {}
 }
 
 mod errors;
