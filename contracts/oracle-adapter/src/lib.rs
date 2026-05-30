@@ -1,5 +1,12 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+
+#[contracttype]
+#[derive(Clone)]
+pub struct PriceData {
+    pub price: i128,
+    pub timestamp: u64,
+}
 
 #[contract]
 pub struct OracleContract;
