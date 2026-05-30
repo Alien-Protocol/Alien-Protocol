@@ -30,6 +30,7 @@ pub enum DataKey {
     UserAssets(Address),
     Oracle,
     LiquidationEngine,
+    Pool,
 }
 
 #[contracttype]

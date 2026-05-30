@@ -13,4 +13,5 @@ pub enum VaultError {
     StalePrice = 7,
     Unauthorized = 8,
     NotInitialized = 9,
+    BelowMinCollateralRatio = 10,
 }

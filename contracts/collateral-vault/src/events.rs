@@ -53,3 +53,11 @@ pub struct CollateralSeized {
 pub struct LiquidationEngineSet {
     pub engine: Address,
 }
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Withdrawn {
+    pub receiver: Address,
+    pub asset: Address,
+    pub amount: i128,
+}
