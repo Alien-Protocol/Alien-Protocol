@@ -13,8 +13,8 @@ use types::Position;
 #[allow(dead_code)]
 #[contractclient(name = "LendingPoolClient")]
 trait LendingPool {
-    fn is_liquidatable(user: &Address) -> bool;
     fn check_withdrawal_safe(user: &Address, asset: &Address, amount: &i128) -> bool;
+    fn is_liquidatable(user: &Address) -> bool;
 }
 
 #[contract]
@@ -98,7 +98,6 @@ impl VaultContract {
 
         let lending_pool_address = get_lending_pool(&env).ok_or(VaultError::InvalidInputs)?;
 
-        // Cross-call to LendingPool to verify withdrawal keeps collateral ratio safe
         let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
         let is_safe = lending_pool_client.check_withdrawal_safe(&user, &asset, &amount);
         if !is_safe {
@@ -129,15 +128,15 @@ impl VaultContract {
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
-        let stored_liquidation_engine =
-            get_liquidation_engine(&env).expect("Liquidation engine not set");
-        if liquidation_engine != stored_liquidation_engine {
-            panic!("{:?}", VaultError::Unauthorized);
+        match get_liquidation_engine(&env) {
+            Some(engine) if engine == liquidation_engine => {}
+            _ => return false,
         }
 
         liquidation_engine.require_auth();
 
-        get_user_position(&env, &user).unwrap_or_else(|_| panic!("{:?}", VaultError::NoPosition));
+        get_user_position(&env, &user)
+            .unwrap_or_else(|_| panic!("{:?}", VaultError::NoPosition));
 
         let lending_pool_address = get_lending_pool(&env).expect("Lending pool not set");
         let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
@@ -145,12 +144,6 @@ impl VaultContract {
     }
 
     pub fn seize_collateral(_env: Env, _user: Address, _asset: Address, _amount: i128) {}
-
-    pub fn is_withdrawal_safe(_env: &Env, _user: Address, _amount: i128) {}
-
-    pub fn get_position(_env: &Env, _user: Address) {}
-
-    pub fn get_collateral_value(_env: &Env, _user: Address) {}
 }
 
 mod errors;
