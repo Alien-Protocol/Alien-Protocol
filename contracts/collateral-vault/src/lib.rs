@@ -90,7 +90,6 @@ impl VaultContract {
 
         let lending_pool_address = get_lending_pool(&env).ok_or(VaultError::InvalidInputs)?;
 
-        // Cross-call to LendingPool to verify withdrawal keeps collateral ratio safe
         let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
         let is_safe = lending_pool_client.check_withdrawal_safe(&user, &asset, &amount);
         if !is_safe {
@@ -119,101 +118,18 @@ impl VaultContract {
 
         Ok(())
     }
-    pub fn withdraw(env: Env, receiver: Address, asset: Address, amount: i128) {
-        receiver.require_auth();
-
-        if amount <= 0 {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
-
-        if storage::is_paused(&env) {
-            soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
-        }
-
-        if !storage::is_supported_asset(&env, &asset) {
-            soroban_sdk::panic_with_error!(&env, VaultError::UnsupportedAsset);
-        }
-
-        let balance = storage::get_position_balance(&env, &receiver, &asset);
-        if balance < amount {
-            panic!("insufficient balance");
-        }
-
-        let new_balance = balance - amount;
-        storage::set_position_balance(&env, &receiver, &asset, new_balance);
-
-        let token_client = token::Client::new(&env, &asset);
-        token_client.transfer(&env.current_contract_address(), &receiver, &amount);
-    }
 
     pub fn seize_collateral(_env: Env, _user: Address, _asset: Address, _amount: i128) {}
 
     pub fn is_withdrawal_safe(_env: Env, _user: Address, _amount: i128) {}
 
-    pub fn get_position(env: Env, user: Address) -> Position {
-        let index = storage::get_position_index(&env);
-        let assets = storage::get_user_assets(&env, &user);
-        let mut collateral = soroban_sdk::Vec::new(&env);
-        let mut has_balance = false;
+    pub fn get_position(_env: Env, _user: Address) {}
 
-        for asset in assets.iter() {
-            let amount = storage::get_position_balance(&env, &user, &asset);
-            if amount > 0 {
-                collateral.push_back(CollateralAsset {
-                    asset: asset.clone(),
-                    amount,
-                });
-                has_balance = true;
-            }
-        }
-
-        if !index.contains(&user) || !has_balance {
-            soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
-        }
-
-        Position { user, collateral }
-    }
-
-    pub fn get_collateral_value(env: Env, user: Address) -> i128 {
-        let position = Self::get_position(env.clone(), user);
-
-        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
-
-        let mut total_value: i128 = 0;
-        let current_time = env.ledger().timestamp();
-        const ORACLE_STALE_THRESHOLD: u64 = 300; // 5 minutes
-
-        for item in position.collateral.iter() {
-            let price_opt = oracle_client.get_price(&item.asset);
-            let price_data = match price_opt {
-                Some(pd) => pd,
-                None => panic!("price not found"),
-            };
-
-            if current_time > price_data.timestamp
-                && current_time - price_data.timestamp > ORACLE_STALE_THRESHOLD
-            {
-                soroban_sdk::panic_with_error!(&env, VaultError::StalePrice);
-            }
-
-            let item_value = item
-                .amount
-                .checked_mul(price_data.price)
-                .unwrap_or_else(|| panic!("overflow in value calculation"));
-
-            total_value = total_value
-                .checked_add(item_value)
-                .unwrap_or_else(|| panic!("overflow in total value calculation"));
-        }
-
-        total_value
-    }
+    pub fn get_collateral_value(_env: Env, _user: Address) {}
 }
 
 mod errors;
 mod events;
 mod storage;
-#[cfg(test)]
-mod tests;
+mod test;
 mod types;
