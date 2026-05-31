@@ -638,7 +638,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "AdminChanged"
+                "symbol": "admin_changed"
               }
             ],
             "data": {

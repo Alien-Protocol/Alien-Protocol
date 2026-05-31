@@ -80,7 +80,10 @@ fn test_set_admin_emits_event() {
     use soroban_sdk::TryFromVal;
     let event_symbol =
         soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
-    assert_eq!(event_symbol, soroban_sdk::Symbol::new(&env, "AdminChanged"));
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "admin_changed")
+    );
 }
 
 #[test]
@@ -174,7 +177,7 @@ fn test_unpause_emits_event() {
     use soroban_sdk::TryFromVal;
     let event_symbol =
         soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
-    assert_eq!(event_symbol, soroban_sdk::Symbol::new(&env, "Unpaused"));
+    assert_eq!(event_symbol, soroban_sdk::Symbol::new(&env, "unpaused"));
 }
 
 #[test]
@@ -232,5 +235,16 @@ fn test_remove_supported_asset_emits_event() {
     use soroban_sdk::TryFromVal;
     let event_symbol =
         soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
-    assert_eq!(event_symbol, soroban_sdk::Symbol::new(&env, "AssetRemoved"));
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "asset_removed")
+    );
+}
+
+#[test]
+fn test_set_admin_same_address() {
+    let (_env, client, admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+
+    let result = client.try_set_admin(&admin);
+    assert_eq!(result, Err(Ok(VaultError::AlreadyAdmin)));
 }

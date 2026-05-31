@@ -178,3 +178,17 @@ fn test_get_collateral_value_uses_latest_price() {
     oracle.set_price(&token_id, &12_000_000, &1000);
     assert_eq!(client.get_collateral_value(&user), 500 * 12_000_000);
 }
+
+#[test]
+fn test_get_position_after_full_withdraw_panics() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, _) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    // Full withdrawal
+    client.withdraw(&user, &token_id, &500);
+
+    let res = client.try_get_position(&user);
+    assert!(res.is_err(), "should panic after full withdrawal");
+}

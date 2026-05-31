@@ -589,7 +589,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "AssetRemoved"
+                "symbol": "asset_removed"
               }
             ],
             "data": {

@@ -634,7 +634,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "Paused"
+                "symbol": "paused"
               }
             ],
             "data": {
