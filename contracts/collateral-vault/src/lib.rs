@@ -23,6 +23,9 @@ pub struct VaultContract;
 #[contractimpl]
 impl VaultContract {
     pub fn initialize(env: Env, admin: Address, _oracle: Address) {
+        if get_admin(&env).is_some() {
+            panic!("Already initialized");
+        }
         set_admin(&env, &admin);
     }
 
