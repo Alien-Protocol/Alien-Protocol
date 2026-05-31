@@ -11,9 +11,7 @@ pub fn set_admin(env: &Env, admin: &Address) {
 }
 
 pub fn get_staleness_threshold(env: &Env) -> Option<u64> {
-    env.storage()
-        .instance()
-        .get(&DataKey::StalenessThreshold)
+    env.storage().instance().get(&DataKey::StalenessThreshold)
 }
 
 pub fn set_staleness_threshold(env: &Env, threshold: u64) {
