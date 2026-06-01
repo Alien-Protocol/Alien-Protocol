@@ -1,13 +1,10 @@
-use crate::errors::VaultError;
+﻿use crate::errors::VaultError;
 use crate::types::{Datakey, Position};
 use soroban_sdk::{Address, Env, Map, Vec};
 
 pub fn get_position(env: &Env, user: &Address, asset: &Address) -> Result<Position, VaultError> {
     let key = Datakey::Position(user.clone(), asset.clone());
-    env.storage()
-        .persistent()
-        .get(&key)
-        .ok_or(VaultError::NoPosition)
+    env.storage().persistent().get(&key).ok_or(VaultError::NoPosition)
 }
 
 pub fn set_position(env: &Env, user: &Address, asset: &Address, position: &Position) {
@@ -22,10 +19,7 @@ pub fn remove_position(env: &Env, user: &Address, asset: &Address) {
 
 pub fn get_position_index(env: &Env) -> Map<(Address, Address), i128> {
     let key = Datakey::PositionIndex;
-    env.storage()
-        .persistent()
-        .get(&key)
-        .unwrap_or(Map::new(env))
+    env.storage().persistent().get(&key).unwrap_or(Map::new(env))
 }
 
 pub fn set_position_index(env: &Env, index: &Map<(Address, Address), i128>) {
@@ -36,26 +30,18 @@ pub fn set_position_index(env: &Env, index: &Map<(Address, Address), i128>) {
 pub fn update_position_index(env: &Env, user: &Address, asset: &Address, amount: i128) {
     let mut index = get_position_index(env);
     let key = (user.clone(), asset.clone());
-    if amount == 0 {
-        index.remove(key);
-    } else {
-        index.set(key, amount);
-    }
+    if amount == 0 { index.remove(key); } else { index.set(key, amount); }
     set_position_index(env, &index);
 }
 
 pub fn get_lending_pool(env: &Env) -> Option<Address> {
-    let key = Datakey::LendingPool;
-    env.storage().instance().get(&key)
+    env.storage().instance().get(&Datakey::LendingPool)
 }
 
 pub fn set_lending_pool(env: &Env, address: &Address) {
-    let key = Datakey::LendingPool;
-    env.storage().instance().set(&key, address);
+    env.storage().instance().set(&Datakey::LendingPool, address);
 }
 
-/// Returns the first collateral asset found for `user` in the position index.
-/// Users with multiple collateral assets require per-asset lookups instead.
 pub fn get_user_position_asset(env: &Env, user: &Address) -> Option<Address> {
     let index = get_position_index(env);
     let keys: Vec<(Address, Address)> = index.keys();
@@ -63,9 +49,7 @@ pub fn get_user_position_asset(env: &Env, user: &Address) -> Option<Address> {
     let mut i = 0;
     while i < count {
         let key = keys.get(i).expect("position key missing");
-        if key.0 == *user {
-            return Some(key.1.clone());
-        }
+        if key.0 == *user { return Some(key.1.clone()); }
         i += 1;
     }
     None
@@ -77,36 +61,29 @@ pub fn get_user_position(env: &Env, user: &Address) -> Result<Position, VaultErr
 }
 
 pub fn get_liquidation_engine(env: &Env) -> Option<Address> {
-    let key = Datakey::LiquidationEngine;
-    env.storage().instance().get(&key)
+    env.storage().instance().get(&Datakey::LiquidationEngine)
 }
 
 pub fn set_liquidation_engine(env: &Env, address: &Address) {
-    let key = Datakey::LiquidationEngine;
-    env.storage().instance().set(&key, address);
+    env.storage().instance().set(&Datakey::LiquidationEngine, address);
 }
 
 pub fn is_paused(env: &Env) -> bool {
-    let key = Datakey::Paused;
-    env.storage().instance().get(&key).unwrap_or(false)
+    env.storage().instance().get(&Datakey::Paused).unwrap_or(false)
 }
 
 pub fn get_admin(env: &Env) -> Option<Address> {
-    let key = Datakey::Admin;
-    env.storage().instance().get(&key)
+    env.storage().instance().get(&Datakey::Admin)
 }
 
 pub fn set_admin(env: &Env, admin: &Address) {
-    let key = Datakey::Admin;
-    env.storage().instance().set(&key, admin);
+    env.storage().instance().set(&Datakey::Admin, admin);
 }
 
 pub fn get_oracle(env: &Env) -> Option<Address> {
-    let key = Datakey::Oracle;
-    env.storage().instance().get(&key)
+    env.storage().instance().get(&Datakey::Oracle)
 }
 
 pub fn set_oracle(env: &Env, oracle: &Address) {
-    let key = Datakey::Oracle;
-    env.storage().instance().set(&key, oracle);
+    env.storage().instance().set(&Datakey::Oracle, oracle);
 }

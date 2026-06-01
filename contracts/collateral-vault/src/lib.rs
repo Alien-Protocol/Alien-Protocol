@@ -1,4 +1,4 @@
-#![no_std]
+﻿#![no_std]
 use soroban_sdk::{contract, contractclient, contractimpl, panic_with_error, token, Address, Env};
 
 use errors::VaultError;
@@ -30,39 +30,21 @@ impl VaultContract {
         set_oracle(&env, &oracle);
     }
 
-    pub fn deposite_collateral(
-        env: Env,
-        sender: Address,
-        asset: Address,
-        amount: i128,
-    ) -> Result<(), VaultError> {
+    pub fn deposite_collateral(env: Env, sender: Address, asset: Address, amount: i128) -> Result<(), VaultError> {
         sender.require_auth();
-
-        if amount <= 0 {
-            return Err(VaultError::InvalidInputs);
-        }
-
+        if amount <= 0 { return Err(VaultError::InvalidInputs); }
         let token_client = token::Client::new(&env, &asset);
         let vault = env.current_contract_address();
         token_client.transfer(&sender, &vault, &amount);
-
         let mut position = match get_position(&env, &sender, &asset) {
             Ok(p) => p,
             Err(VaultError::NoPosition) => Position { amount: 0 },
             Err(err) => return Err(err),
         };
-
         position.amount += amount;
         set_position(&env, &sender, &asset, &position);
         update_position_index(&env, &sender, &asset, position.amount);
-
-        Deposited {
-            user: sender.clone(),
-            asset: asset.clone(),
-            amount,
-        }
-        .publish(&env);
-
+        Deposited { user: sender.clone(), asset: asset.clone(), amount }.publish(&env);
         Ok(())
     }
 
@@ -78,39 +60,17 @@ impl VaultContract {
         set_liquidation_engine(&env, &liquidation_engine);
     }
 
-    pub fn withdraw(
-        env: Env,
-        user: Address,
-        asset: Address,
-        amount: i128,
-    ) -> Result<(), VaultError> {
+    pub fn withdraw(env: Env, user: Address, asset: Address, amount: i128) -> Result<(), VaultError> {
         user.require_auth();
-
-        if amount <= 0 {
-            return Err(VaultError::InvalidInputs);
-        }
-
-        if is_paused(&env) {
-            return Err(VaultError::VaultPaused);
-        }
-
+        if amount <= 0 { return Err(VaultError::InvalidInputs); }
+        if is_paused(&env) { return Err(VaultError::VaultPaused); }
         let mut position = get_position(&env, &user, &asset)?;
-
-        if position.amount < amount {
-            return Err(VaultError::InsufficientBalance);
-        }
-
+        if position.amount < amount { return Err(VaultError::InsufficientBalance); }
         let lending_pool_address = get_lending_pool(&env).ok_or(VaultError::InvalidInputs)?;
-
-        // Cross-call to LendingPool to verify withdrawal keeps collateral ratio safe
         let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
         let is_safe = lending_pool_client.check_withdrawal_safe(&user, &asset, &amount);
-        if !is_safe {
-            return Err(VaultError::InsufficientCollateral);
-        }
-
+        if !is_safe { return Err(VaultError::InsufficientCollateral); }
         position.amount -= amount;
-
         if position.amount == 0 {
             remove_position(&env, &user, &asset);
             update_position_index(&env, &user, &asset, 0);
@@ -118,17 +78,9 @@ impl VaultContract {
             set_position(&env, &user, &asset, &position);
             update_position_index(&env, &user, &asset, position.amount);
         }
-
         let token_client = token::Client::new(&env, &asset);
         token_client.transfer(&env.current_contract_address(), &user, &amount);
-
-        Withdrawn {
-            user: user.clone(),
-            asset: asset.clone(),
-            amount,
-        }
-        .publish(&env);
-
+        Withdrawn { user: user.clone(), asset: asset.clone(), amount }.publish(&env);
         Ok(())
     }
 
@@ -137,24 +89,18 @@ impl VaultContract {
             Some(engine) if engine == liquidation_engine => {}
             _ => return false,
         }
-
         liquidation_engine.require_auth();
-
         if get_user_position(&env, &user).is_err() {
             panic_with_error!(&env, VaultError::NoPosition);
         }
-
         let lending_pool_address = get_lending_pool(&env).expect("Lending pool not set");
         let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
         lending_pool_client.is_liquidatable(&user)
     }
 
     pub fn seize_collateral(_env: Env, _user: Address, _asset: Address, _amount: i128) {}
-
     pub fn is_withdrawal_safe(_env: &Env, _user: Address, _amount: i128) {}
-
     pub fn get_position(_env: &Env, _user: Address) {}
-
     pub fn get_collateral_value(_env: &Env, _user: Address) {}
 }
 
