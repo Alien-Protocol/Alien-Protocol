@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env};
+use soroban_sdk::{contract, contractclient, contractimpl, panic_with_error, token, Address, Env};
 
 use errors::VaultError;
 use events::{Deposited, Withdrawn};
@@ -136,7 +136,9 @@ impl VaultContract {
 
         liquidation_engine.require_auth();
 
-        get_user_position(&env, &user).unwrap_or_else(|_| panic!("{:?}", VaultError::NoPosition));
+        if get_user_position(&env, &user).is_err() {
+            panic_with_error!(&env, VaultError::NoPosition);
+        }
 
         let lending_pool_address = get_lending_pool(&env).expect("Lending pool not set");
         let lending_pool_client = LendingPoolClient::new(&env, &lending_pool_address);
