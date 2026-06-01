@@ -114,11 +114,12 @@ fn test_get_collateral_value_correct_calculation() {
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    // Mock price: $10 (10000000 with 7 decimals) at timestamp 1000
+    // Price: $10.00 encoded as 10_000_000 (7-decimal oracle format).
+    // USD value = 500 * 10_000_000 / 10_000_000 = 500.
     oracle.set_price(&token_id, &10_000_000, &1000);
 
     let val = client.get_collateral_value(&user);
-    assert_eq!(val, 500 * 10_000_000);
+    assert_eq!(val, 500);
 }
 
 #[test]
@@ -150,17 +151,17 @@ fn test_get_collateral_value_stale_price_panics() {
 fn test_get_collateral_value_precision() {
     let (_env, client, _admin, user, token_id, _token_client, token_admin, _, oracle) = setup_env();
 
-    // Large deposit amount
+    // 10^12 units at a price of $100 (1_000_000_000 in 7-decimal format).
+    // USD value = 10^12 * 10^9 / 10^7 = 10^14.
     let large_amount = 1_000_000_000_000_i128;
     token_admin.mint(&user, &large_amount);
     client.deposit(&user, &token_id, &large_amount);
 
-    // Large price
     let large_price = 1_000_000_000_i128;
     oracle.set_price(&token_id, &large_price, &1000);
 
     let val = client.get_collateral_value(&user);
-    assert_eq!(val, large_amount * large_price);
+    assert_eq!(val, 100_000_000_000_000_i128); // 10^14
 }
 
 #[test]
@@ -170,13 +171,13 @@ fn test_get_collateral_value_uses_latest_price() {
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    // First price
+    // $10.00 price → 500 * 10_000_000 / 10_000_000 = $500
     oracle.set_price(&token_id, &10_000_000, &1000);
-    assert_eq!(client.get_collateral_value(&user), 500 * 10_000_000);
+    assert_eq!(client.get_collateral_value(&user), 500);
 
-    // Updated price
+    // $12.00 price → 500 * 12_000_000 / 10_000_000 = $600
     oracle.set_price(&token_id, &12_000_000, &1000);
-    assert_eq!(client.get_collateral_value(&user), 500 * 12_000_000);
+    assert_eq!(client.get_collateral_value(&user), 600);
 }
 
 #[test]
@@ -191,4 +192,26 @@ fn test_get_position_after_full_withdraw_panics() {
 
     let res = client.try_get_position(&user);
     assert!(res.is_err(), "should panic after full withdrawal");
+}
+
+/// Verifies that PRICE_PRECISION (10_000_000) is applied so that the returned
+/// value is denominated in USD rather than raw (amount × raw_price) units.
+#[test]
+fn test_get_collateral_value_price_precision_applied() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, oracle) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &1);
+
+    // $1.00 encoded as 10_000_000; 1 unit × $1.00 = $1 (i.e. 1, not 10_000_000).
+    oracle.set_price(&token_id, &10_000_000, &1000);
+    assert_eq!(client.get_collateral_value(&user), 1);
+
+    // $0.50 encoded as 5_000_000; 1 unit × $0.50 = 0 (integer floor).
+    oracle.set_price(&token_id, &5_000_000, &1000);
+    assert_eq!(client.get_collateral_value(&user), 0);
+
+    // $2.00 encoded as 20_000_000; 1 unit × $2.00 = $2.
+    oracle.set_price(&token_id, &20_000_000, &1000);
+    assert_eq!(client.get_collateral_value(&user), 2);
 }
