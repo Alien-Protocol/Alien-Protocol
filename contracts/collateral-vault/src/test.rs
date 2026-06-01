@@ -150,3 +150,21 @@ fn test_authorize_liquidation_no_lending_pool_set() {
 
     client.authorize_liquidation(&liquidation_engine, &user);
 }
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn test_initialize_rejects_reinitialization() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let contract_id = env.register(crate::VaultContract, ());
+    let client = crate::VaultContractClient::new(&env, &contract_id);
+    env.mock_all_auths();
+
+    client.initialize(&admin, &oracle);
+    env.as_contract(&contract_id, || {
+        assert_eq!(crate::storage::get_oracle(&env), Some(oracle.clone()));
+    });
+    client.initialize(&admin, &oracle);
+}

@@ -5,8 +5,8 @@ use errors::VaultError;
 use events::{Deposited, Withdrawn};
 use storage::{
     get_admin, get_lending_pool, get_liquidation_engine, get_position, get_user_position,
-    is_paused, remove_position, set_admin, set_lending_pool, set_liquidation_engine, set_position,
-    update_position_index,
+    is_paused, remove_position, set_admin, set_lending_pool, set_liquidation_engine, set_oracle,
+    set_position, update_position_index,
 };
 use types::Position;
 
@@ -22,8 +22,12 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    pub fn initialize(env: Env, admin: Address, _oracle: Address) {
+    pub fn initialize(env: Env, admin: Address, oracle: Address) {
+        if get_admin(&env).is_some() {
+            panic_with_error!(&env, VaultError::AlreadyInitialized);
+        }
         set_admin(&env, &admin);
+        set_oracle(&env, &oracle);
     }
 
     pub fn deposite_collateral(

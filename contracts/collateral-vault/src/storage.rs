@@ -46,14 +46,16 @@ pub fn update_position_index(env: &Env, user: &Address, asset: &Address, amount:
 
 pub fn get_lending_pool(env: &Env) -> Option<Address> {
     let key = Datakey::LendingPool;
-    env.storage().persistent().get(&key)
+    env.storage().instance().get(&key)
 }
 
 pub fn set_lending_pool(env: &Env, address: &Address) {
     let key = Datakey::LendingPool;
-    env.storage().persistent().set(&key, address);
+    env.storage().instance().set(&key, address);
 }
 
+/// Returns the first collateral asset found for `user` in the position index.
+/// Users with multiple collateral assets require per-asset lookups instead.
 pub fn get_user_position_asset(env: &Env, user: &Address) -> Option<Address> {
     let index = get_position_index(env);
     let keys: Vec<(Address, Address)> = index.keys();
@@ -76,25 +78,35 @@ pub fn get_user_position(env: &Env, user: &Address) -> Result<Position, VaultErr
 
 pub fn get_liquidation_engine(env: &Env) -> Option<Address> {
     let key = Datakey::LiquidationEngine;
-    env.storage().persistent().get(&key)
+    env.storage().instance().get(&key)
 }
 
 pub fn set_liquidation_engine(env: &Env, address: &Address) {
     let key = Datakey::LiquidationEngine;
-    env.storage().persistent().set(&key, address);
+    env.storage().instance().set(&key, address);
 }
 
 pub fn is_paused(env: &Env) -> bool {
     let key = Datakey::Paused;
-    env.storage().persistent().get(&key).unwrap_or(false)
+    env.storage().instance().get(&key).unwrap_or(false)
 }
 
 pub fn get_admin(env: &Env) -> Option<Address> {
     let key = Datakey::Admin;
-    env.storage().persistent().get(&key)
+    env.storage().instance().get(&key)
 }
 
 pub fn set_admin(env: &Env, admin: &Address) {
     let key = Datakey::Admin;
-    env.storage().persistent().set(&key, admin);
+    env.storage().instance().set(&key, admin);
+}
+
+pub fn get_oracle(env: &Env) -> Option<Address> {
+    let key = Datakey::Oracle;
+    env.storage().instance().get(&key)
+}
+
+pub fn set_oracle(env: &Env, oracle: &Address) {
+    let key = Datakey::Oracle;
+    env.storage().instance().set(&key, oracle);
 }
