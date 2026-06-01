@@ -13,5 +13,6 @@ pub enum Datakey {
     LendingPool,
     LiquidationEngine,
     Admin,
+    Oracle,
     Paused,
 }

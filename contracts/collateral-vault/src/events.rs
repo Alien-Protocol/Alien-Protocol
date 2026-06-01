@@ -1,6 +1,5 @@
 use soroban_sdk::{contractevent, Address};
 
-#[allow(dead_code)]
 #[contractevent]
 pub struct Deposited {
     pub user: Address,

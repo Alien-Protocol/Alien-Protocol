@@ -9,4 +9,5 @@ pub enum VaultError {
     VaultPaused = 3,
     InsufficientCollateral = 4,
     InsufficientBalance = 5,
+    AlreadyInitialized = 6,
 }
