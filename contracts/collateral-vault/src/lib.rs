@@ -48,6 +48,15 @@ impl VaultContract {
         Ok(())
     }
 
+    pub fn set_lending_pool(env: Env, lending_pool: Address) {
+        let admin = storage::get_admin(&env).expect("not initialized");
+        admin.require_auth();
+
+        storage::set_lending_pool(&env, &lending_pool);
+
+        events::LendingPoolUpdated { lending_pool }.publish(&env);
+    }
+
     pub fn pause(env: Env) {
         let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
@@ -249,8 +258,7 @@ impl VaultContract {
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
         // If the user has no remaining balance across any asset, remove from index
-        let position = storage::get_position(&env, &user);
-        if position.collateral.is_empty() {
+        if storage::get_position(&env, &user).is_none() {
             storage::remove_from_position_index(&env, &user);
         }
 
