@@ -7,6 +7,7 @@ use types::Position;
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
     fn get_price(env: Env, asset: Address) -> Option<types::PriceData>;
+    fn get_price_or_fail(env: Env, asset: Address) -> types::PriceData;
 }
 
 #[soroban_sdk::contractclient(name = "LendingPoolClient")]
@@ -294,7 +295,7 @@ impl VaultContract {
 
         let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
         let oracle_client = OracleClient::new(&env, &oracle_address);
-        let price_data = oracle_client.get_price(&asset).expect("price not found");
+        let price_data = oracle_client.get_price_or_fail(&asset);
 
         let withdrawn_value = amount
             .checked_mul(price_data.price)
@@ -324,21 +325,9 @@ impl VaultContract {
         let oracle_client = OracleClient::new(&env, &oracle_address);
 
         let mut total_value: i128 = 0;
-        let current_time = env.ledger().timestamp();
-        const ORACLE_STALE_THRESHOLD: u64 = 300; // 5 minutes
 
         for item in position.collateral.iter() {
-            let price_opt = oracle_client.get_price(&item.asset);
-            let price_data = match price_opt {
-                Some(pd) => pd,
-                None => panic!("price not found"),
-            };
-
-            if current_time > price_data.timestamp
-                && current_time - price_data.timestamp > ORACLE_STALE_THRESHOLD
-            {
-                soroban_sdk::panic_with_error!(&env, VaultError::StalePrice);
-            }
+            let price_data = oracle_client.get_price_or_fail(&item.asset);
 
             let item_value = item
                 .amount
