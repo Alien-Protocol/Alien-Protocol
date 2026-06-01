@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{Address, Env, Symbol};
 
 fn setup_env() -> (Env, OracleContractClient<'static>, Address) {
@@ -260,4 +260,70 @@ fn test_get_price_after_update() {
     let updated_data = updated_result.unwrap();
     assert_eq!(updated_data.price, updated_price);
     assert_eq!(updated_data.timestamp, updated_timestamp);
+}
+
+#[test]
+fn test_get_price_or_fail_returns_fresh_price() {
+    let (env, client, _admin) = setup_env();
+    let asset = Address::generate(&env);
+
+    client.set_price(&asset, &1_500_000, &1000);
+    env.ledger().set_timestamp(1100);
+
+    let result = client.get_price_or_fail(&asset);
+    assert_eq!(result.price, 1_500_000);
+    assert_eq!(result.timestamp, 1000);
+}
+
+#[test]
+fn test_is_price_fresh_returns_true_for_fresh_price() {
+    let (env, client, _admin) = setup_env();
+    let asset = Address::generate(&env);
+
+    client.set_price(&asset, &1_500_000, &1000);
+    env.ledger().set_timestamp(1100);
+
+    assert!(client.is_price_fresh(&asset));
+}
+
+#[test]
+fn test_is_price_fresh_returns_false_for_stale_price() {
+    let (env, client, _admin) = setup_env();
+    let asset = Address::generate(&env);
+
+    client.set_price(&asset, &1_500_000, &1000);
+    env.ledger().set_timestamp(1400);
+
+    assert!(!client.is_price_fresh(&asset));
+}
+
+#[test]
+fn test_get_price_or_fail_panics_for_unknown_asset() {
+    let (env, client, _admin) = setup_env();
+    let asset = Address::generate(&env);
+
+    let result = client.try_get_price_or_fail(&asset);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::PriceNotFound as u32)
+    );
+}
+
+#[test]
+fn test_get_price_or_fail_panics_for_stale_price() {
+    let (env, client, _admin) = setup_env();
+    let asset = Address::generate(&env);
+
+    client.set_price(&asset, &1_500_000, &1000);
+    env.ledger().set_timestamp(1400);
+
+    let result = client.try_get_price_or_fail(&asset);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::StalePrice as u32)
+    );
 }

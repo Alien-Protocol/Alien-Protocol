@@ -1,13 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractevent, contractimpl, Address, Env};
-
-#[contracterror]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u32)]
-pub enum OracleError {
-    NotInitialized = 1,
-    AlreadyAdmin = 2,
-}
+use soroban_sdk::{contract, contractevent, contractimpl, Address, Env};
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
@@ -16,10 +8,12 @@ pub struct AdminChanged {
     pub new_admin: Address,
 }
 
+mod errors;
 mod events;
 mod storage;
 mod types;
 
+pub use errors::OracleError;
 pub use types::{DataKey, PriceData};
 
 #[contract]
@@ -44,6 +38,33 @@ impl OracleContract {
 
     pub fn get_price(env: Env, asset: Address) -> Option<PriceData> {
         storage::get_price(&env, &asset)
+    }
+
+    pub fn is_price_fresh(env: Env, asset: Address) -> bool {
+        let data = match storage::get_price(&env, &asset) {
+            Some(data) => data,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::PriceNotFound),
+        };
+        let threshold = match storage::get_staleness_threshold(&env) {
+            Some(threshold) => threshold,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        };
+        let current_time = env.ledger().timestamp();
+
+        current_time <= data.timestamp || current_time - data.timestamp <= threshold
+    }
+
+    pub fn get_price_or_fail(env: Env, asset: Address) -> PriceData {
+        let data = match storage::get_price(&env, &asset) {
+            Some(data) => data,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::PriceNotFound),
+        };
+
+        if !Self::is_price_fresh(env.clone(), asset) {
+            soroban_sdk::panic_with_error!(&env, OracleError::StalePrice);
+        }
+
+        data
     }
 
     pub fn set_price(env: Env, asset: Address, price: i128, timestamp: u64) {
