@@ -15,4 +15,5 @@ pub enum VaultError {
     NotInitialized = 9,
     BelowMinCollateralRatio = 10,
     AlreadyAdmin = 11,
+    AlreadyPaused = 12,
 }
