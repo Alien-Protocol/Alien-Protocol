@@ -128,8 +128,12 @@ fn test_get_all_positions_multiple_users() {
     let mut found_user1 = false;
     let mut found_user2 = false;
     for p in positions.iter() {
-        if p.user == user1 { found_user1 = true; }
-        if p.user == user2 { found_user2 = true; }
+        if p.user == user1 {
+            found_user1 = true;
+        }
+        if p.user == user2 {
+            found_user2 = true;
+        }
     }
     assert!(found_user1);
     assert!(found_user2);

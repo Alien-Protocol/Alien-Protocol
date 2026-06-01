@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::super::*;
-use soroban_sdk::testutils::{Address as _, MockAuth};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Env};
 
 fn setup_env() -> (
@@ -56,7 +56,7 @@ fn test_authorize_liquidation_success() {
 
 #[test]
 fn test_seize_collateral_emits_event() {
-    let (env, client, _admin, user, _oracle, token_id, token_client, token_admin) = setup_env();
+    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
     let engine = Address::generate(&env);
 
     client.authorize_liquidation(&engine);

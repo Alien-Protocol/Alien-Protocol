@@ -61,3 +61,9 @@ pub struct Withdrawn {
     pub asset: Address,
     pub amount: i128,
 }
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct LendingPoolUpdated {
+    pub lending_pool: Address,
+}

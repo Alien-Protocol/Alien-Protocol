@@ -95,6 +95,10 @@ pub fn set_pool(env: &Env, pool: &Address) {
     env.storage().persistent().set(&DataKey::Pool, pool);
 }
 
+pub fn set_lending_pool(env: &Env, lending_pool: &Address) {
+    env.storage().persistent().set(&DataKey::Pool, lending_pool);
+}
+
 pub fn get_position_balance(env: &Env, user: &Address, asset: &Address) -> i128 {
     env.storage()
         .persistent()

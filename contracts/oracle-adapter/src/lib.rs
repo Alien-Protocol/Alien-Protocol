@@ -1,5 +1,20 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Address, Env};
+use soroban_sdk::{contract, contracterror, contractevent, contractimpl, Address, Env};
+
+#[contracterror]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum OracleError {
+    NotInitialized = 1,
+    AlreadyAdmin = 2,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AdminChanged {
+    pub old_admin: Address,
+    pub new_admin: Address,
+}
 
 mod events;
 mod storage;
@@ -44,6 +59,26 @@ impl OracleContract {
 
     pub fn get_staleness_threshold(env: Env) -> Option<u64> {
         storage::get_staleness_threshold(&env)
+    }
+
+    pub fn set_admin(env: Env, new_admin: Address) {
+        let current_admin = match storage::get_admin(&env) {
+            Some(addr) => addr,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        };
+        current_admin.require_auth();
+
+        if current_admin == new_admin {
+            soroban_sdk::panic_with_error!(&env, OracleError::AlreadyAdmin);
+        }
+
+        storage::set_admin(&env, &new_admin);
+
+        AdminChanged {
+            old_admin: current_admin,
+            new_admin,
+        }
+        .publish(&env);
     }
 }
 
