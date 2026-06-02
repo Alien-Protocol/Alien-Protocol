@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::testutils::{Address as _, Events, Ledger as _};
 use soroban_sdk::{Address, Env, Symbol, TryFromVal};
 
 fn setup_env() -> (Env, OracleContractClient<'static>, Address) {
@@ -316,6 +316,63 @@ fn test_get_price_after_update() {
     assert_eq!(updated_data.timestamp, updated_timestamp);
 }
 
+#[test]
+fn test_is_price_fresh_unknown_asset() {
+    let (_env, client, _admin) = setup_env();
+    let env = _env;
+    let unknown_asset = Address::generate(&env);
+
+    assert!(!client.is_price_fresh(&unknown_asset));
+}
+
+#[test]
+fn test_is_price_fresh_within_threshold() {
+    let (_env, client, _admin) = setup_env();
+    let env = _env;
+    let asset = Address::generate(&env);
+
+    env.ledger().set_timestamp(200);
+    client.set_price(&asset, &100, &100);
+
+    assert!(client.is_price_fresh(&asset));
+}
+
+#[test]
+fn test_is_price_fresh_at_exact_threshold() {
+    let (_env, client, _admin) = setup_env();
+    let env = _env;
+    let asset = Address::generate(&env);
+
+    env.ledger().set_timestamp(400);
+    client.set_price(&asset, &100, &100);
+
+    assert!(client.is_price_fresh(&asset));
+}
+
+#[test]
+fn test_is_price_fresh_stale() {
+    let (_env, client, _admin) = setup_env();
+    let env = _env;
+    let asset = Address::generate(&env);
+
+    env.ledger().set_timestamp(400);
+    client.set_price(&asset, &100, &100);
+
+    env.ledger().set_timestamp(401);
+
+    assert!(!client.is_price_fresh(&asset));
+}
+
+#[test]
+fn test_is_price_fresh_uninitialized_contract() {
+    let env = Env::default();
+    let contract_id = env.register(OracleContract, ());
+    let client = OracleContractClient::new(&env, &contract_id);
+
+    let asset = Address::generate(&env);
+    assert!(!client.is_price_fresh(&asset));
+}
+
 // ── Issue #511: get_admin ─────────────────────────────────────────────────────
 
 #[test]
@@ -364,7 +421,6 @@ fn test_get_admin_returns_updated_admin_after_set_admin() {
 fn test_get_admin_requires_no_auth() {
     let (env, client, admin) = setup_env();
 
-    // Call get_admin without any mock auth — should succeed as a public read
     env.set_auths(&[]);
     let result = client.get_admin();
     assert!(result.is_some());

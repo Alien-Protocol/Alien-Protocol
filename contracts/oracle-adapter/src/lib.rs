@@ -44,6 +44,22 @@ impl OracleContract {
         storage::get_price(&env, &asset)
     }
 
+    pub fn is_price_fresh(env: Env, asset: Address) -> bool {
+        let price_data = match storage::get_price(&env, &asset) {
+            Some(data) => data,
+            None => return false,
+        };
+        let threshold = match storage::get_staleness_threshold(&env) {
+            Some(t) => t,
+            None => return false,
+        };
+        let ledger_time = env.ledger().timestamp();
+        match ledger_time.checked_sub(price_data.timestamp) {
+            Some(delta) => delta <= threshold,
+            None => false,
+        }
+    }
+
     pub fn set_price(env: Env, asset: Address, price: i128, timestamp: u64) {
         let caller = match storage::get_admin(&env) {
             Some(addr) => addr,
