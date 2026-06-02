@@ -14,6 +14,13 @@ pub trait LendingPool {
     fn get_user_debt(env: Env, user: Address) -> i128;
 }
 
+/// Oracle prices are encoded with 7 decimal places (e.g. $1.00 = 10_000_000).
+/// Dividing `amount * price` by this constant yields the USD-denominated value.
+const PRICE_PRECISION: i128 = 10_000_000;
+
+/// Maximum age (in seconds) an oracle price may have before it is considered stale.
+const ORACLE_STALE_THRESHOLD: u64 = 300;
+
 #[contract]
 pub struct VaultContract;
 
@@ -296,9 +303,12 @@ impl VaultContract {
         let oracle_client = OracleClient::new(&env, &oracle_address);
         let price_data = oracle_client.get_price(&asset).expect("price not found");
 
+        // Apply the same PRICE_PRECISION scaling used by get_collateral_value so
+        // that withdrawn_value is denominated in USD and comparable to total_value.
         let withdrawn_value = amount
             .checked_mul(price_data.price)
-            .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"));
+            .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
+            / PRICE_PRECISION;
 
         if total_value < withdrawn_value {
             return false;
@@ -325,13 +335,11 @@ impl VaultContract {
 
         let mut total_value: i128 = 0;
         let current_time = env.ledger().timestamp();
-        const ORACLE_STALE_THRESHOLD: u64 = 300; // 5 minutes
 
         for item in position.collateral.iter() {
-            let price_opt = oracle_client.get_price(&item.asset);
-            let price_data = match price_opt {
+            let price_data = match oracle_client.get_price(&item.asset) {
                 Some(pd) => pd,
-                None => panic!("price not found"),
+                None => soroban_sdk::panic_with_error!(&env, VaultError::AssetNotFound),
             };
 
             if current_time > price_data.timestamp
@@ -340,10 +348,13 @@ impl VaultContract {
                 soroban_sdk::panic_with_error!(&env, VaultError::StalePrice);
             }
 
+            // Compute USD value: amount * price / PRICE_PRECISION.
+            // checked_mul guards against overflow before the safe integer division.
             let item_value = item
                 .amount
                 .checked_mul(price_data.price)
-                .unwrap_or_else(|| panic!("overflow in value calculation"));
+                .unwrap_or_else(|| panic!("overflow in value calculation"))
+                / PRICE_PRECISION;
 
             total_value = total_value
                 .checked_add(item_value)
