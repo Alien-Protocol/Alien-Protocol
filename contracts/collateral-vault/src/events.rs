@@ -57,7 +57,7 @@ pub struct LiquidationEngineSet {
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Withdrawn {
-    pub receiver: Address,
+    pub user: Address,
     pub asset: Address,
     pub amount: i128,
 }
