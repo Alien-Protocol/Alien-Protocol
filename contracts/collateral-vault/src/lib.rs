@@ -26,14 +26,25 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    pub fn initialize(env: Env, admin: Address, oracle: Address) {
-        admin.require_auth();
-        if storage::get_admin(&env).is_some() {
+    pub fn initialize(env: Env, admin: Address, lending_pool: Address) {
+        // Strict initialization guard: panic if already initialized
+        if storage::has_admin(&env) {
             panic!("already initialized");
         }
+
+        // Commit admin and lending_pool addresses to persistent storage
         storage::set_admin(&env, &admin);
+        storage::set_lending_pool(&env, &lending_pool);
+
+        // Explicitly set Paused to false
         storage::set_paused(&env, false);
-        storage::set_oracle(&env, &oracle);
+
+        // Emit structured contract event
+        events::Initialized {
+            admin,
+            lending_pool,
+        }
+        .publish(&env);
     }
 
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {

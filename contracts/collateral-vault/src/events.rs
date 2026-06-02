@@ -2,6 +2,13 @@ use soroban_sdk::{contractevent, Address};
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
+pub struct Initialized {
+    pub admin: Address,
+    pub lending_pool: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Deposited {
     pub user: Address,
     pub asset: Address,
