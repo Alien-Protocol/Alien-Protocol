@@ -30,7 +30,7 @@ pub struct AdminChanged {
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Paused {
-    pub paused: bool,
+    pub by: Address,
 }
 
 #[contractevent]

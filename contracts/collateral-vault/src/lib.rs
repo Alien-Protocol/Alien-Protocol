@@ -62,12 +62,12 @@ impl VaultContract {
         admin.require_auth();
 
         if storage::is_paused(&env) {
-            panic!("already paused");
+            soroban_sdk::panic_with_error!(&env, VaultError::AlreadyPaused);
         }
 
         storage::set_paused(&env, true);
 
-        events::Paused { paused: true }.publish(&env);
+        events::Paused { by: admin }.publish(&env);
     }
 
     pub fn unpause(env: Env) {
