@@ -21,8 +21,6 @@ pub struct OracleContract;
 
 #[contractimpl]
 impl OracleContract {
-    /// One-time setup: store admin and staleness threshold, emit Initialized event.
-    /// Panics with "AlreadyInitialized" if called more than once.
     pub fn initialize(env: Env, admin: Address, staleness_threshold: u64) {
         if storage::is_initialized(&env) {
             panic!("AlreadyInitialized");
@@ -41,37 +39,40 @@ impl OracleContract {
     }
 
     pub fn is_price_fresh(env: Env, asset: Address) -> bool {
-        let data = match storage::get_price(&env, &asset) {
+        let price_data = match storage::get_price(&env, &asset) {
             Some(data) => data,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::PriceNotFound),
+            None => return false,
         };
         let threshold = match storage::get_staleness_threshold(&env) {
-            Some(threshold) => threshold,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+            Some(t) => t,
+            None => return false,
         };
-        let current_time = env.ledger().timestamp();
-
-        current_time <= data.timestamp || current_time - data.timestamp <= threshold
-    }
-
-    pub fn get_price_or_fail(env: Env, asset: Address) -> PriceData {
-        let data = match storage::get_price(&env, &asset) {
-            Some(data) => data,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::PriceNotFound),
-        };
-
-        if !Self::is_price_fresh(env.clone(), asset) {
-            soroban_sdk::panic_with_error!(&env, OracleError::StalePrice);
+        let ledger_time = env.ledger().timestamp();
+        match ledger_time.checked_sub(price_data.timestamp) {
+            Some(delta) => delta <= threshold,
+            None => false,
         }
-
-        data
     }
 
     pub fn set_price(env: Env, asset: Address, price: i128, timestamp: u64) {
-        let caller = storage::get_admin(&env).expect("NotInitialized");
+        let caller = match storage::get_admin(&env) {
+            Some(addr) => addr,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        };
         caller.require_auth();
+
+        assert!(price > 0, "price must be positive");
+        assert!(timestamp > 0, "timestamp must be positive");
+
         let data = PriceData { price, timestamp };
         storage::set_price(&env, &asset, &data);
+
+        events::PriceUpdated {
+            asset,
+            price,
+            timestamp,
+        }
+        .publish(&env);
     }
 
     pub fn get_admin(env: Env) -> Option<Address> {

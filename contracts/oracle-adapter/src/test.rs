@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::testutils::{Address as _, Events, Ledger};
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::testutils::{Address as _, Events, Ledger as _};
+use soroban_sdk::{Address, Env, Symbol, TryFromVal};
 
 fn setup_env() -> (Env, OracleContractClient<'static>, Address) {
     let env = Env::default();
@@ -93,7 +93,6 @@ fn test_set_admin_emits_event() {
 
     let last_event = env.events().all().last().unwrap();
     assert_eq!(last_event.0, client.address);
-    use soroban_sdk::TryFromVal;
     let event_symbol = Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
     assert_eq!(event_symbol, Symbol::new(&env, "admin_changed"));
 }
@@ -158,7 +157,62 @@ fn test_get_price_is_public_and_unauthorized() {
     assert!(price_opt.is_some());
 }
 
-// --- Upstream queries tests integrated with authorization and setup ---
+#[test]
+fn test_set_price_zero_price_fails() {
+    let (_env, client, _admin) = setup_env();
+    let asset = Address::generate(&_env);
+
+    let result = client.try_set_price(&asset, &0_i128, &100_000_u64);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_price_negative_price_fails() {
+    let (_env, client, _admin) = setup_env();
+    let asset = Address::generate(&_env);
+
+    let result = client.try_set_price(&asset, &(-100_i128), &100_000_u64);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_price_zero_timestamp_fails() {
+    let (_env, client, _admin) = setup_env();
+    let asset = Address::generate(&_env);
+
+    let result = client.try_set_price(&asset, &1000_i128, &0_u64);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_price_emits_event() {
+    let (env, client, _admin) = setup_env();
+    let asset = Address::generate(&env);
+
+    client.set_price(&asset, &1000_i128, &100_000_u64);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+
+    let event_symbol = Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(event_symbol, Symbol::new(&env, "price_updated"));
+}
+
+#[test]
+fn test_set_price_different_assets() {
+    let (_env, client, _admin) = setup_env();
+    let asset1 = Address::generate(&_env);
+    let asset2 = Address::generate(&_env);
+
+    client.set_price(&asset1, &1000_i128, &100_000_u64);
+    client.set_price(&asset2, &2000_i128, &200_000_u64);
+
+    let price1 = client.get_price(&asset1).unwrap();
+    assert_eq!(price1.price, 1000);
+
+    let price2 = client.get_price(&asset2).unwrap();
+    assert_eq!(price2.price, 2000);
+}
 
 #[test]
 fn test_get_price_returns_correct_data() {
@@ -263,67 +317,112 @@ fn test_get_price_after_update() {
 }
 
 #[test]
-fn test_get_price_or_fail_returns_fresh_price() {
-    let (env, client, _admin) = setup_env();
-    let asset = Address::generate(&env);
+fn test_is_price_fresh_unknown_asset() {
+    let (_env, client, _admin) = setup_env();
+    let env = _env;
+    let unknown_asset = Address::generate(&env);
 
-    client.set_price(&asset, &1_500_000, &1000);
-    env.ledger().set_timestamp(1100);
-
-    let result = client.get_price_or_fail(&asset);
-    assert_eq!(result.price, 1_500_000);
-    assert_eq!(result.timestamp, 1000);
+    assert!(!client.is_price_fresh(&unknown_asset));
 }
 
 #[test]
-fn test_is_price_fresh_returns_true_for_fresh_price() {
-    let (env, client, _admin) = setup_env();
+fn test_is_price_fresh_within_threshold() {
+    let (_env, client, _admin) = setup_env();
+    let env = _env;
     let asset = Address::generate(&env);
 
-    client.set_price(&asset, &1_500_000, &1000);
-    env.ledger().set_timestamp(1100);
+    env.ledger().set_timestamp(200);
+    client.set_price(&asset, &100, &100);
 
     assert!(client.is_price_fresh(&asset));
 }
 
 #[test]
-fn test_is_price_fresh_returns_false_for_stale_price() {
-    let (env, client, _admin) = setup_env();
+fn test_is_price_fresh_at_exact_threshold() {
+    let (_env, client, _admin) = setup_env();
+    let env = _env;
     let asset = Address::generate(&env);
 
-    client.set_price(&asset, &1_500_000, &1000);
-    env.ledger().set_timestamp(1400);
+    env.ledger().set_timestamp(400);
+    client.set_price(&asset, &100, &100);
+
+    assert!(client.is_price_fresh(&asset));
+}
+
+#[test]
+fn test_is_price_fresh_stale() {
+    let (_env, client, _admin) = setup_env();
+    let env = _env;
+    let asset = Address::generate(&env);
+
+    env.ledger().set_timestamp(400);
+    client.set_price(&asset, &100, &100);
+
+    env.ledger().set_timestamp(401);
 
     assert!(!client.is_price_fresh(&asset));
 }
 
 #[test]
-fn test_get_price_or_fail_panics_for_unknown_asset() {
-    let (env, client, _admin) = setup_env();
-    let asset = Address::generate(&env);
+fn test_is_price_fresh_uninitialized_contract() {
+    let env = Env::default();
+    let contract_id = env.register(OracleContract, ());
+    let client = OracleContractClient::new(&env, &contract_id);
 
-    let result = client.try_get_price_or_fail(&asset);
-    assert!(result.is_err());
-    let err = result.err().unwrap().unwrap();
-    assert_eq!(
-        err,
-        soroban_sdk::Error::from_contract_error(OracleError::PriceNotFound as u32)
-    );
+    let asset = Address::generate(&env);
+    assert!(!client.is_price_fresh(&asset));
+}
+
+// ── Issue #511: get_admin ─────────────────────────────────────────────────────
+
+#[test]
+fn test_get_admin_returns_correct_address_after_init() {
+    let (_env, client, admin) = setup_env();
+
+    let result = client.get_admin();
+    assert!(result.is_some());
+    assert_eq!(result.unwrap(), admin);
 }
 
 #[test]
-fn test_get_price_or_fail_panics_for_stale_price() {
-    let (env, client, _admin) = setup_env();
-    let asset = Address::generate(&env);
+fn test_get_admin_returns_none_before_init() {
+    let env = Env::default();
+    let contract_id = env.register(OracleContract, ());
+    let client = OracleContractClient::new(&env, &contract_id);
 
-    client.set_price(&asset, &1_500_000, &1000);
-    env.ledger().set_timestamp(1400);
+    let result = client.get_admin();
+    assert!(result.is_none());
+}
 
-    let result = client.try_get_price_or_fail(&asset);
-    assert!(result.is_err());
-    let err = result.err().unwrap().unwrap();
-    assert_eq!(
-        err,
-        soroban_sdk::Error::from_contract_error(OracleError::StalePrice as u32)
-    );
+#[test]
+fn test_get_admin_does_not_mutate_state() {
+    let (_env, client, admin) = setup_env();
+
+    let result1 = client.get_admin();
+    let result2 = client.get_admin();
+
+    assert_eq!(result1, result2);
+    assert_eq!(result1.unwrap(), admin);
+}
+
+#[test]
+fn test_get_admin_returns_updated_admin_after_set_admin() {
+    let (env, client, _old_admin) = setup_env();
+
+    let new_admin = Address::generate(&env);
+    client.set_admin(&new_admin);
+
+    let result = client.get_admin();
+    assert!(result.is_some());
+    assert_eq!(result.unwrap(), new_admin);
+}
+
+#[test]
+fn test_get_admin_requires_no_auth() {
+    let (env, client, admin) = setup_env();
+
+    env.set_auths(&[]);
+    let result = client.get_admin();
+    assert!(result.is_some());
+    assert_eq!(result.unwrap(), admin);
 }

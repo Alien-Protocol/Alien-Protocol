@@ -209,16 +209,17 @@ fn test_withdraw_collateral_ratio_check() {
     let (_env, client, _admin, user, _token_client, token_admin, pool, oracle, token_id) =
         setup_env();
 
-    // 1 token = 1USD (10^7 decimals)
+    // Price: $1.00 encoded as 10_000_000 (7-decimal oracle format).
+    // 500 tokens → collateral_value = 500 * 10_000_000 / PRICE_PRECISION = $500 USD.
     oracle.set_price(&token_id, &10_000_000, &1000);
 
     token_admin.mint(&user, &1000);
-    client.deposit(&user, &token_id, &500); // Value: 500 * 10^7
+    client.deposit(&user, &token_id, &500);
 
-    // Set debt to 400 * 10^7.
-    // Remaining value if we withdraw 101: 399 * 10^7.
-    // 399 >= 400 * 1.1 (440)? No.
-    pool.set_user_debt(&4_000_000_000);
+    // Debt is denominated in USD (same unit as collateral_value after PRICE_PRECISION).
+    // debt = $400.  Minimum required collateral = 400 * 110 / 100 = $440.
+    // Withdrawing 101 → remaining = 500 − 101 = $399 < $440 → blocked.
+    pool.set_user_debt(&400);
 
     let res = client.try_withdraw(&user, &token_id, &101);
     assert!(
@@ -226,7 +227,7 @@ fn test_withdraw_collateral_ratio_check() {
         "should block withdrawal that reduces ratio below 110%"
     );
 
-    // Withdrawing 50 should leave 450. 450 >= 440. Success.
+    // Withdrawing 50 → remaining = 500 − 50 = $450 ≥ $440 → allowed.
     client.withdraw(&user, &token_id, &50);
     assert_eq!(client.get_position_balance(&user, &token_id), 450);
 }
