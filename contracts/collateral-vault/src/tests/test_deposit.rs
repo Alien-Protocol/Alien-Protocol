@@ -116,17 +116,14 @@ fn test_deposit_when_paused_fails() {
 
 #[test]
 fn test_deposit_without_auth_fails() {
-    let env = Env::default();
-    // We do NOT mock auths here.
-    let contract_id = env.register(VaultContract, ());
-    let client = VaultContractClient::new(&env, &contract_id);
+    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
 
-    let admin = Address::generate(&env);
-    let _user = Address::generate(&env);
-    let oracle = Address::generate(&env);
+    token_admin.mint(&user, &1000);
 
-    // This should fail because admin require_auth is not mocked.
-    let res = client.try_initialize(&admin, &oracle);
+    // Disable mock auths after setup so this call must satisfy user.require_auth().
+    env.set_auths(&[]);
+
+    let res = client.try_deposit(&user, &token_id, &500);
     assert!(res.is_err());
 }
 
