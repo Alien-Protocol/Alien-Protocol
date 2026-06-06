@@ -127,7 +127,8 @@ impl VaultContract {
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
-        let stored_engine = storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
+        let stored_engine =
+            storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
         if liquidation_engine != stored_engine {
             soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
         }
