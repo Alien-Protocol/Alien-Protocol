@@ -112,6 +112,12 @@ pub fn set_position_balance(env: &Env, user: &Address, asset: &Address, balance:
         .set(&DataKey::Position(user.clone(), asset.clone()), &balance);
 }
 
+pub fn remove_position_balance(env: &Env, user: &Address, asset: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Position(user.clone(), asset.clone()));
+}
+
 pub fn get_position_index(env: &Env) -> Vec<Address> {
     env.storage()
         .persistent()
