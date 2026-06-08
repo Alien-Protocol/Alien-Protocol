@@ -51,7 +51,7 @@ fn test_authorize_liquidation_success() {
     let (env, client, _admin, _user, _oracle, _token_id, _token_client, _token_admin) = setup_env();
     let engine = Address::generate(&env);
 
-    client.authorize_liquidation(&engine);
+    client.set_liquidation_engine(&engine);
 }
 
 #[test]
@@ -59,7 +59,7 @@ fn test_seize_collateral_emits_event() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
     let engine = Address::generate(&env);
 
-    client.authorize_liquidation(&engine);
+    client.set_liquidation_engine(&engine);
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
@@ -77,7 +77,7 @@ fn test_seize_collateral_success() {
     let (env, client, _admin, user, _oracle, token_id, token_client, token_admin) = setup_env();
     let engine = Address::generate(&env);
 
-    client.authorize_liquidation(&engine);
+    client.set_liquidation_engine(&engine);
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
@@ -95,7 +95,7 @@ fn test_seize_collateral_unauthorized_engine_fails() {
     let engine = Address::generate(&env);
     let malicious_engine = Address::generate(&env);
 
-    client.authorize_liquidation(&engine);
+    client.set_liquidation_engine(&engine);
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
@@ -109,7 +109,7 @@ fn test_seize_collateral_insufficient_balance_fails() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
     let engine = Address::generate(&env);
 
-    client.authorize_liquidation(&engine);
+    client.set_liquidation_engine(&engine);
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
@@ -123,7 +123,7 @@ fn test_seize_collateral_no_position_fails() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, _token_admin) = setup_env();
     let engine = Address::generate(&env);
 
-    client.authorize_liquidation(&engine);
+    client.set_liquidation_engine(&engine);
 
     // User has NO position
     let res = client.try_seize_collateral(&engine, &user, &token_id, &200);
@@ -135,7 +135,7 @@ fn test_seize_collateral_removes_from_index_on_zero() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
     let engine = Address::generate(&env);
 
-    client.authorize_liquidation(&engine);
+    client.set_liquidation_engine(&engine);
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
@@ -153,7 +153,7 @@ fn test_seize_collateral_paused_fails() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
     let engine = Address::generate(&env);
 
-    client.authorize_liquidation(&engine);
+    client.set_liquidation_engine(&engine);
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);

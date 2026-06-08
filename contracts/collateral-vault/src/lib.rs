@@ -13,6 +13,7 @@ pub trait Oracle {
 #[soroban_sdk::contractclient(name = "LendingPoolClient")]
 pub trait LendingPool {
     fn get_user_debt(env: Env, user: Address) -> i128;
+    fn is_liquidatable(user: &Address) -> bool;
 }
 
 /// Oracle prices are encoded with 7 decimal places (e.g. $1.00 = 10_000_000).
@@ -117,13 +118,32 @@ impl VaultContract {
         events::AssetRemoved { asset }.publish(&env);
     }
 
-    pub fn authorize_liquidation(env: Env, engine: Address) {
+    pub fn set_liquidation_engine(env: Env, engine: Address) {
         let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
 
         storage::set_liquidation_engine(&env, &engine);
 
         events::LiquidationEngineSet { engine }.publish(&env);
+    }
+
+    pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
+        let stored_engine =
+            storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
+        if liquidation_engine != stored_engine {
+            soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
+        }
+
+        liquidation_engine.require_auth();
+
+        let position = storage::get_position(&env, &user);
+        if position.is_none() {
+            soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
+        }
+
+        let pool_address = storage::get_pool(&env).expect("Lending pool not set");
+        let pool_client = LendingPoolClient::new(&env, &pool_address);
+        pool_client.is_liquidatable(&user)
     }
 
     pub fn set_pool(env: Env, pool: Address) {
