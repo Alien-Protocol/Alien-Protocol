@@ -100,3 +100,4 @@ fn test_unpause_emits_event() {
     let event_symbol = Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
     assert_eq!(event_symbol, Symbol::new(&env, "unpaused"));
 }
+

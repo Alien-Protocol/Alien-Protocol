@@ -149,3 +149,4 @@ impl OracleContract {
 
 #[cfg(test)]
 mod tests;
+

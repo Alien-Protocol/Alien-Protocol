@@ -26,3 +26,4 @@ pub struct Paused {
 pub struct Unpaused {
     pub paused: bool,
 }
+
