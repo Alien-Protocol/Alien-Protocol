@@ -76,10 +76,12 @@ fn test_unpause_success() {
 fn test_unpause_non_admin_fails() {
     let (env, client, admin) = setup_env();
     client.pause();
+    // Clear auths from pause()
+    env.set_auths(&[]);
     client.unpause();
     let auths = env.auths();
-    assert_eq!(auths.len(), 2);
-    let (auth_addr, _) = auths.last().unwrap();
+    assert_eq!(auths.len(), 1);
+    let (auth_addr, _) = auths.first().unwrap();
     assert_eq!(*auth_addr, admin);
 }
 
