@@ -27,7 +27,6 @@ pub struct FeederAdded {
     pub feeder: Address,
 }
 
-
 mod events;
 mod storage;
 mod types;
