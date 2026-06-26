@@ -14,4 +14,5 @@ pub enum DataKey {
     Price(Address),
     Admin,
     StalenessThreshold,
+    Feeder(Address),
 }

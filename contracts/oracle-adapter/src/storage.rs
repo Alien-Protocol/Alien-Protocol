@@ -35,3 +35,21 @@ pub fn set_price(env: &Env, asset: &Address, data: &PriceData) {
 pub fn is_initialized(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Admin)
 }
+
+pub fn has_feeder(env: &Env, feeder: &Address) -> bool {
+    env.storage()
+        .instance()
+        .has(&DataKey::Feeder(feeder.clone()))
+}
+
+pub fn add_feeder(env: &Env, feeder: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::Feeder(feeder.clone()), &true);
+}
+
+pub fn remove_feeder(env: &Env, feeder: &Address) {
+    env.storage()
+        .instance()
+        .remove(&DataKey::Feeder(feeder.clone()));
+}

@@ -426,3 +426,124 @@ fn test_get_admin_requires_no_auth() {
     assert!(result.is_some());
     assert_eq!(result.unwrap(), admin);
 }
+
+// ── Issue #520: Oracle Contract Events ────────────────────────────────────────
+
+#[test]
+fn test_initialize_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(OracleContract, ());
+    let client = OracleContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &300);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+
+    let event_symbol = Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(event_symbol, Symbol::new(&env, "initialized"));
+}
+
+#[test]
+fn test_set_staleness_threshold_success() {
+    let (_env, client, _admin) = setup_env();
+
+    client.set_staleness_threshold(&600);
+
+    let updated = client.get_staleness_threshold();
+    assert_eq!(updated, Some(600));
+}
+
+#[test]
+fn test_set_staleness_threshold_emits_event() {
+    let (env, client, _admin) = setup_env();
+
+    client.set_staleness_threshold(&600);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+
+    let event_symbol = Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        Symbol::new(&env, "staleness_threshold_updated")
+    );
+}
+
+#[test]
+fn test_set_staleness_threshold_unauthorized_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(OracleContract, ());
+    let client = OracleContractClient::new(&env, &contract_id);
+
+    let result = client.try_set_staleness_threshold(&600);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::NotInitialized as u32)
+    );
+}
+
+#[test]
+fn test_add_feeder_success() {
+    let (env, client, _admin) = setup_env();
+
+    let feeder = Address::generate(&env);
+    client.add_feeder(&feeder);
+
+    // Last emitted event must be FeederAdded with our feeder
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+
+    let event_symbol = Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(event_symbol, Symbol::new(&env, "feeder_added"));
+}
+
+#[test]
+fn test_add_feeder_duplicate_fails() {
+    let (env, client, _admin) = setup_env();
+    let feeder = Address::generate(&env);
+    client.add_feeder(&feeder);
+
+    let result = client.try_add_feeder(&feeder);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::AlreadyFeeder as u32)
+    );
+}
+
+#[test]
+fn test_remove_feeder_success() {
+    let (env, client, _admin) = setup_env();
+    let feeder = Address::generate(&env);
+    client.add_feeder(&feeder);
+
+    client.remove_feeder(&feeder);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+
+    let event_symbol = Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(event_symbol, Symbol::new(&env, "feeder_removed"));
+}
+
+#[test]
+fn test_remove_feeder_not_existing_fails() {
+    let (env, client, _admin) = setup_env();
+    let feeder = Address::generate(&env);
+
+    let result = client.try_remove_feeder(&feeder);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::NotFeeder as u32)
+    );
+}

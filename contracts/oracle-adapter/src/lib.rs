@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractevent, contractimpl, Address, Env};
+use soroban_sdk::{contract, contracterror, contractimpl, Address, Env};
 
 #[contracterror]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7,13 +7,8 @@ use soroban_sdk::{contract, contracterror, contractevent, contractimpl, Address,
 pub enum OracleError {
     NotInitialized = 1,
     AlreadyAdmin = 2,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, PartialEq)]
-pub struct AdminChanged {
-    pub old_admin: Address,
-    pub new_admin: Address,
+    AlreadyFeeder = 3,
+    NotFeeder = 4,
 }
 
 mod events;
@@ -89,6 +84,20 @@ impl OracleContract {
         storage::get_staleness_threshold(&env)
     }
 
+    pub fn set_staleness_threshold(env: Env, threshold: u64) {
+        let admin = match storage::get_admin(&env) {
+            Some(addr) => addr,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        };
+        admin.require_auth();
+
+        assert!(threshold > 0, "threshold must be positive");
+
+        storage::set_staleness_threshold(&env, threshold);
+
+        events::StalenessThresholdUpdated { threshold }.publish(&env);
+    }
+
     pub fn set_admin(env: Env, new_admin: Address) {
         let current_admin = match storage::get_admin(&env) {
             Some(addr) => addr,
@@ -102,11 +111,43 @@ impl OracleContract {
 
         storage::set_admin(&env, &new_admin);
 
-        AdminChanged {
+        events::AdminChanged {
             old_admin: current_admin,
             new_admin,
         }
         .publish(&env);
+    }
+
+    pub fn add_feeder(env: Env, feeder: Address) {
+        let admin = match storage::get_admin(&env) {
+            Some(addr) => addr,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        };
+        admin.require_auth();
+
+        if storage::has_feeder(&env, &feeder) {
+            soroban_sdk::panic_with_error!(&env, OracleError::AlreadyFeeder);
+        }
+
+        storage::add_feeder(&env, &feeder);
+
+        events::FeederAdded { feeder }.publish(&env);
+    }
+
+    pub fn remove_feeder(env: Env, feeder: Address) {
+        let admin = match storage::get_admin(&env) {
+            Some(addr) => addr,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        };
+        admin.require_auth();
+
+        if !storage::has_feeder(&env, &feeder) {
+            soroban_sdk::panic_with_error!(&env, OracleError::NotFeeder);
+        }
+
+        storage::remove_feeder(&env, &feeder);
+
+        events::FeederRemoved { feeder }.publish(&env);
     }
 }
 
