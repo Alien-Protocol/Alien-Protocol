@@ -36,7 +36,7 @@ fn test_set_price_success() {
     let (env, client, admin) = setup_env_mock_all_auths();
     let asset = Address::generate(&env);
 
-    client.set_price(&asset, &200_i128, &3000_u64);
+    client.set_price(&admin, &asset, &200_i128, &3000_u64);
 
     let auths = env.auths();
     assert_eq!(auths.len(), 1);
@@ -50,19 +50,19 @@ fn test_set_price_success() {
 
 #[test]
 fn test_set_price_zero_price_fails() {
-    let (env, client, _admin) = setup_env_mock_all_auths();
+    let (env, client, admin) = setup_env_mock_all_auths();
     let asset = Address::generate(&env);
 
-    let result = client.try_set_price(&asset, &0_i128, &100_000_u64);
+    let result = client.try_set_price(&admin, &asset, &0_i128, &100_000_u64);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_set_price_negative_price_fails() {
-    let (env, client, _admin) = setup_env_mock_all_auths();
+    let (env, client, admin) = setup_env_mock_all_auths();
     let asset = Address::generate(&env);
 
-    let result = client.try_set_price(&asset, &(-100_i128), &100_000_u64);
+    let result = client.try_set_price(&admin, &asset, &(-100_i128), &100_000_u64);
     assert!(result.is_err());
 }
 
@@ -88,19 +88,19 @@ fn test_set_price_non_admin_fails() {
         invoke: &invoke,
     }]);
 
-    let result = client.try_set_price(&asset, &123_i128, &999_u64);
+    let result = client.try_set_price(&non_admin, &asset, &123_i128, &999_u64);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_set_price_emits_event() {
-    let (env, client, _admin) = setup_env_mock_all_auths();
+    let (env, client, admin) = setup_env_mock_all_auths();
     let asset = Address::generate(&env);
 
     let price = 1000_i128;
     let timestamp = 100_000_u64;
 
-    client.set_price(&asset, &price, &timestamp);
+    client.set_price(&admin, &asset, &price, &timestamp);
 
     let last_event = env.events().all().last().unwrap();
     assert_eq!(last_event.0, client.address);
@@ -127,13 +127,13 @@ fn test_set_price_emits_event() {
 
 #[test]
 fn test_get_price_returns_correct_data() {
-    let (env, client, _admin) = setup_env_mock_all_auths();
+    let (env, client, admin) = setup_env_mock_all_auths();
     let asset = Address::generate(&env);
 
     let price = 1_000_000_i128;
     let timestamp = 1_234_567_890_u64;
 
-    client.set_price(&asset, &price, &timestamp);
+    client.set_price(&admin, &asset, &price, &timestamp);
 
     let result = client.get_price(&asset);
     assert!(result.is_some());
@@ -154,15 +154,15 @@ fn test_get_price_unknown_asset_returns_none() {
 
 #[test]
 fn test_set_price_overwrites_existing() {
-    let (env, client, _admin) = setup_env_mock_all_auths();
+    let (env, client, admin) = setup_env_mock_all_auths();
     let asset = Address::generate(&env);
 
-    client.set_price(&asset, &111_i128, &100_u64);
+    client.set_price(&admin, &asset, &111_i128, &100_u64);
     let first = client.get_price(&asset).unwrap();
     assert_eq!(first.price, 111);
     assert_eq!(first.timestamp, 100);
 
-    client.set_price(&asset, &222_i128, &200_u64);
+    client.set_price(&admin, &asset, &222_i128, &200_u64);
     let second = client.get_price(&asset).unwrap();
     assert_eq!(second.price, 222);
     assert_eq!(second.timestamp, 200);

@@ -16,10 +16,10 @@ fn test_pause_success() {
 
 #[test]
 fn test_pause_blocks_set_price() {
-    let (_env, client, _admin) = setup_env();
-    let asset = Address::generate(&_env);
+    let (env, client, admin) = setup_env();
+    let asset = Address::generate(&env);
     client.pause();
-    let result = client.try_set_price(&asset, &100, &1000);
+    let result = client.try_set_price(&admin, &asset, &100, &1000);
     assert!(result.is_err());
     let err = result.err().unwrap().unwrap();
     assert_eq!(
@@ -30,9 +30,9 @@ fn test_pause_blocks_set_price() {
 
 #[test]
 fn test_pause_does_not_block_get_price() {
-    let (_env, client, _admin) = setup_env();
-    let asset = Address::generate(&_env);
-    client.set_price(&asset, &100, &1000);
+    let (env, client, admin) = setup_env();
+    let asset = Address::generate(&env);
+    client.set_price(&admin, &asset, &100, &1000);
     client.pause();
     let price_data = client.get_price(&asset).unwrap();
     assert_eq!(price_data.price, 100);
@@ -63,11 +63,11 @@ fn test_double_pause_fails() {
 
 #[test]
 fn test_unpause_success() {
-    let (_env, client, _admin) = setup_env();
-    let asset = Address::generate(&_env);
+    let (env, client, admin) = setup_env();
+    let asset = Address::generate(&env);
     client.pause();
     client.unpause();
-    client.set_price(&asset, &100, &1000);
+    client.set_price(&admin, &asset, &100, &1000);
     let price_data = client.get_price(&asset).unwrap();
     assert_eq!(price_data.price, 100);
 }

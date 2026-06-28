@@ -69,7 +69,7 @@ fn test_old_admin_cannot_set_price_after_transfer() {
     let _ = env.auths();
 
     let asset = Address::generate(&env);
-    client.set_price(&asset, &300, &4000);
+    client.set_price(&new_admin, &asset, &300, &4000);
 
     let auths = env.auths();
     assert_eq!(auths.len(), 1);
@@ -86,7 +86,7 @@ fn test_new_admin_can_set_price_after_transfer() {
     client.set_admin(&new_admin);
 
     let asset = Address::generate(&env);
-    client.set_price(&asset, &150, &2000);
+    client.set_price(&new_admin, &asset, &150, &2000);
 
     let price_data = client.get_price(&asset).unwrap();
     assert_eq!(price_data.price, 150);

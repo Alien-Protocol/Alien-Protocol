@@ -32,6 +32,19 @@ pub fn set_price(env: &Env, asset: &Address, data: &PriceData) {
         .set(&DataKey::Price(asset.clone()), data);
 }
 
+pub fn is_authorized_feeder(env: &Env, feeder: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::AuthorizedFeeder(feeder.clone()))
+        .unwrap_or(false)
+}
+
+pub fn set_authorized_feeder(env: &Env, feeder: &Address) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::AuthorizedFeeder(feeder.clone()), &true);
+}
+
 pub fn is_initialized(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Admin)
 }
@@ -57,11 +70,4 @@ pub fn remove_authorized_feeder(env: &Env, feeder: &Address) {
     env.storage()
         .persistent()
         .remove(&DataKey::AuthorizedFeeder(feeder.clone()));
-}
-
-pub fn is_authorized_feeder(env: &Env, feeder: &Address) -> bool {
-    env.storage()
-        .persistent()
-        .get(&DataKey::AuthorizedFeeder(feeder.clone()))
-        .unwrap_or(false)
 }
