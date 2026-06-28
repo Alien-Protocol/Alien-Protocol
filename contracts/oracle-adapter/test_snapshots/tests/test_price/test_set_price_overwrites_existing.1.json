@@ -128,6 +128,14 @@
                       "val": {
                         "u64": "200"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "write_timestamp"
+                      },
+                      "val": {
+                        "u64": "0"
+                      }
                     }
                   ]
                 }

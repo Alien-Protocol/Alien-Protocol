@@ -42,3 +42,4 @@ fn test_initialize_twice_fails() {
 pub mod test_admin;
 mod test_pause;
 pub mod test_price;
+pub mod test_redstone;

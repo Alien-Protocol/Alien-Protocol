@@ -1,10 +1,11 @@
 {
   "generators": {
-    "address": 3,
+    "address": 2,
     "nonce": 0,
     "mux_id": 0
   },
   "auth": [
+    [],
     [],
     [],
     [
@@ -14,19 +15,32 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "set_price",
+              "function_name": "set_redstone_config",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  "vec": [
+                    {
+                      "bytes": "8bb8f32df04c8b654987daaed53d6b6091e3b774"
+                    },
+                    {
+                      "bytes": "deb22f54738d54976c4c0fe5ce6d408e40d88499"
+                    },
+                    {
+                      "bytes": "51ce04be4b3e32572c4ec9135221d0691ba7d202"
+                    },
+                    {
+                      "bytes": "dd682daec5a90dd295d14da4b0bec9281017b5be"
+                    },
+                    {
+                      "bytes": "9c5ae89c4af6aa32ce58588dbaf90d18a855b6de"
+                    }
+                  ]
                 },
                 {
-                  "i128": "1000000"
-                },
-                {
-                  "u64": "1234567890"
+                  "u32": 3
                 }
               ]
             }
@@ -47,76 +61,6 @@
     "min_temp_entry_ttl": 16,
     "max_entry_ttl": 6312000,
     "ledger_entries": [
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-            "key": {
-              "vec": [
-                {
-                  "symbol": "Price"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                }
-              ]
-            },
-            "durability": "persistent"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-                "key": {
-                  "vec": [
-                    {
-                      "symbol": "Price"
-                    },
-                    {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                    }
-                  ]
-                },
-                "durability": "persistent",
-                "val": {
-                  "map": [
-                    {
-                      "key": {
-                        "symbol": "price"
-                      },
-                      "val": {
-                        "i128": "1000000"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "timestamp"
-                      },
-                      "val": {
-                        "u64": "1234567890"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "write_timestamp"
-                      },
-                      "val": {
-                        "u64": "0"
-                      }
-                    }
-                  ]
-                }
-              }
-            },
-            "ext": "v0"
-          },
-          4095
-        ]
-      ],
       [
         {
           "contract_data": {
@@ -162,6 +106,46 @@
                         },
                         "val": {
                           "bool": false
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "RedStoneSignerThreshold"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u32": 3
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "RedStoneSigners"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "bytes": "8bb8f32df04c8b654987daaed53d6b6091e3b774"
+                            },
+                            {
+                              "bytes": "deb22f54738d54976c4c0fe5ce6d408e40d88499"
+                            },
+                            {
+                              "bytes": "51ce04be4b3e32572c4ec9135221d0691ba7d202"
+                            },
+                            {
+                              "bytes": "dd682daec5a90dd295d14da4b0bec9281017b5be"
+                            },
+                            {
+                              "bytes": "9c5ae89c4af6aa32ce58588dbaf90d18a855b6de"
+                            }
+                          ]
                         }
                       },
                       {

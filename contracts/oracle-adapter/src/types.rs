@@ -6,6 +6,7 @@ use soroban_sdk::{contracttype, Address};
 pub struct PriceData {
     pub price: i128,
     pub timestamp: u64,
+    pub write_timestamp: u64,
 }
 
 #[contracttype]

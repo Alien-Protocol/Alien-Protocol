@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractevent, contractimpl, Address, Env};
+use soroban_sdk::{contract, contracterror, contractevent, contractimpl, Address, Bytes, Env, Symbol, Vec};
 
 #[contracterror]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +13,9 @@ pub enum OracleError {
     NotPaused = 6,
     AlreadyAuthorized = 7,
     Unauthorized = 8,
+    UnknownFeed = 9,
+    InvalidPayload = 10,
+    FeedNotWritten = 11,
 }
 
 #[contractevent]
@@ -30,6 +33,8 @@ pub struct FeederAdded {
 mod events;
 mod storage;
 mod types;
+pub mod oracle;
+
 
 pub use types::{DataKey, PriceData};
 
@@ -93,7 +98,11 @@ impl OracleContract {
         assert!(price > 0, "price must be positive");
         assert!(timestamp > 0, "timestamp must be positive");
 
-        let data = PriceData { price, timestamp };
+        let data = PriceData {
+            price,
+            timestamp,
+            write_timestamp: env.ledger().timestamp(),
+        };
         storage::set_price(&env, &asset, &data);
 
         events::PriceUpdated {
@@ -196,6 +205,61 @@ impl OracleContract {
 
     pub fn is_authorized_feeder(env: Env, feeder: Address) -> bool {
         storage::is_authorized_feeder(&env, &feeder)
+    }
+
+    pub fn get_prices(
+        env: Env,
+        feed_ids: Vec<Symbol>,
+        payload: Bytes,
+    ) -> Result<(u64, Vec<i128>), OracleError> {
+        oracle::pull::get_prices(env, feed_ids, payload)
+    }
+
+    pub fn write_prices(
+        env: Env,
+        caller: Address,
+        feed_ids: Vec<Symbol>,
+        payload: Bytes,
+    ) -> Result<(), OracleError> {
+        oracle::push::write_prices(env, caller, feed_ids, payload)
+    }
+
+    pub fn read_prices(
+        env: Env,
+        feed_ids: Vec<Symbol>,
+    ) -> Result<Vec<PriceData>, OracleError> {
+        oracle::push::read_prices(env, feed_ids)
+    }
+
+    pub fn set_redstone_config(
+        env: Env,
+        caller: Address,
+        signers: Vec<Bytes>,
+        threshold: u32,
+    ) -> Result<(), OracleError> {
+        let admin = match storage::get_admin(&env) {
+            Some(addr) => addr,
+            None => return Err(OracleError::NotInitialized),
+        };
+        if caller != admin {
+            return Err(OracleError::Unauthorized);
+        }
+        caller.require_auth();
+
+        oracle::storage::set_redstone_signers(&env, &signers);
+        oracle::storage::set_redstone_threshold(&env, threshold);
+        Ok(())
+    }
+
+    pub fn get_redstone_config(
+        env: Env,
+    ) -> Result<(Vec<Bytes>, u32), OracleError> {
+        if !oracle::storage::is_redstone_initialized(&env) {
+            return Err(OracleError::NotInitialized);
+        }
+        let signers = oracle::storage::get_redstone_signers(&env).unwrap_or(Vec::new(&env));
+        let threshold = oracle::storage::get_redstone_threshold(&env).unwrap_or(0);
+        Ok((signers, threshold))
     }
 }
 

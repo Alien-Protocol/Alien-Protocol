@@ -99,6 +99,14 @@
                       "val": {
                         "u64": "1000"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "write_timestamp"
+                      },
+                      "val": {
+                        "u64": "0"
+                      }
                     }
                   ]
                 }
