@@ -429,3 +429,4 @@ fn test_get_admin_requires_no_auth() {
 
 mod test_pause;
 pub mod test_price;
+mod test_staleness;

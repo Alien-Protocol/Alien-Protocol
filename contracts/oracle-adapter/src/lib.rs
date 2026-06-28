@@ -9,6 +9,8 @@ pub enum OracleError {
     AlreadyAdmin = 2,
     OraclePaused = 3,
     AlreadyPaused = 4,
+    PriceNotFound = 5,
+    StalePrice = 6,
 }
 
 #[contractevent]
@@ -61,6 +63,29 @@ impl OracleContract {
             Some(delta) => delta <= threshold,
             None => false,
         }
+    }
+
+    pub fn get_price_or_fail(env: Env, asset: Address) -> PriceData {
+        let data = match storage::get_price(&env, &asset) {
+            Some(data) => data,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::PriceNotFound),
+        };
+
+        let threshold = match storage::get_staleness_threshold(&env) {
+            Some(threshold) => threshold,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        };
+
+        let ledger_time = env.ledger().timestamp();
+        let is_stale = match ledger_time.checked_sub(data.timestamp) {
+            Some(delta) => delta > threshold,
+            None => false,
+        };
+        if is_stale {
+            soroban_sdk::panic_with_error!(&env, OracleError::StalePrice);
+        }
+
+        data
     }
 
     pub fn set_price(env: Env, asset: Address, price: i128, timestamp: u64) {
