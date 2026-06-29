@@ -1,3 +1,17 @@
 plan.md
 
 target
+
+# Node / TypeScript integration layer
+node_modules
+dist
+*.tsbuildinfo
+
+# Secrets — never commit real credentials
+.env
+.env.local
+
+# Deployed contract id files & compiled WASM artifacts under stellar/
+# (keep the directory itself via stellar/.gitkeep)
+stellar/*
+!stellar/.gitkeep
