@@ -18,6 +18,8 @@ pub enum OracleError {
     UnknownFeed = 9,
     InvalidPayload = 10,
     FeedNotWritten = 11,
+    PriceNotFound = 12,
+    StalePrice = 13,
 }
 
 #[contractevent]
