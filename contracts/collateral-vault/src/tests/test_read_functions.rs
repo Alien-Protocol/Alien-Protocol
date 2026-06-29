@@ -4,9 +4,11 @@ use super::super::*;
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
+const ORACLE_STALE_THRESHOLD: u64 = 300;
+
 // Mock Oracle Contract to inject prices for testing get_collateral_value
 #[contract]
-pub struct MockOracleContract;
+pub struct MockOracleContract;  
 
 #[contractimpl]
 impl MockOracleContract {

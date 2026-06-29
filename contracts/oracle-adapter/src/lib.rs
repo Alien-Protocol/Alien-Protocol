@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, Address, Bytes, Env, Symbol, Vec,
+    contract, contractevent, contractimpl, Address, Bytes, Env, Symbol, Vec,
 };
 
 mod errors;
