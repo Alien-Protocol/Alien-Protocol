@@ -39,6 +39,57 @@ contracts/
   liquidation-engine/
 ```
 
+## RedStone × Stellar Integration Layer (off-chain)
+
+A TypeScript integration layer lets Alien Protocol's off-chain services deploy
+and interact with the RedStone Soroban (`redstone_adapter`) contract on Stellar
+Testnet. It follows the official
+[RedStone Stellar TypeScript tutorial](https://docs.redstone.finance/docs/dapps/non-evm/stellar/typescript-tutorial/).
+
+```text
+.env.example            # network / secret key / contract id placeholders
+package.json            # yarn sample-deploy / yarn sample-run
+tsconfig.json
+scripts/
+  utils.ts              # shared env + contract-id persistence helpers
+  sample-deploy.ts      # deploys redstone_adapter WASM, saves contract id
+  sample-run.ts         # Pull-Model price read (XLM, USDC, BTC) via get_prices
+stellar/                # deployed contract-id files (gitignored) + WASM build output
+```
+
+### Setup
+
+```bash
+yarn install                 # or: npm install
+cp .env.example .env         # then fill in NETWORK, RPC_URL, PRIVATE_KEY
+```
+
+Fund a Testnet account at <https://friendbot.stellar.org> and put its secret
+key (`S...`) in `.env`. Build the RedStone `redstone_adapter` WASM and point
+`ADAPTER_WASM_PATH` at it (defaults to
+`stellar/target/wasm32v1-none/release/redstone_adapter.wasm`).
+
+### Deploy the adapter
+
+```bash
+yarn sample-deploy
+```
+
+Deploys + initialises the contract and writes its id to
+`stellar/redstone_adapter-id.<network>` (gitignored).
+
+### Read live prices
+
+```bash
+yarn sample-run
+```
+
+Fetches live signed prices for **XLM, USDC, BTC** from the RedStone data network
+(Pull Model) and calls the on-chain `get_prices` function, logging each feed id,
+human-readable price and data timestamp. Exits non-zero if any feed fails.
+
+> Secrets live only in `.env` (gitignored). Never commit a real secret key.
+
 ## Build Direction
 
 The long-term goal is to evolve this repository into the on-chain foundation of Alien Protocol, with smart contracts that can later connect to off-chain services such as indexers, risk monitors, and application interfaces built around the protocol.
