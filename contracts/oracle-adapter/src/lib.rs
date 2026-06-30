@@ -1,6 +1,14 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, Address, Bytes, Env, Symbol, Vec,
+    contract,
+    contracterror,
+    contractevent,
+    contractimpl,
+    Address,
+    Bytes,
+    Env,
+    Symbol,
+    Vec,
 };
 
 #[contracterror]
@@ -18,6 +26,11 @@ pub enum OracleError {
     UnknownFeed = 9,
     InvalidPayload = 10,
     FeedNotWritten = 11,
+    PriceNotFound = 12,
+    StalePrice = 13,
+    InsufficientSignatures = 14,
+    ExpiredPayload = 15,
+    MalformedPayload = 16,
 }
 
 #[contractevent]
@@ -32,12 +45,13 @@ pub struct FeederAdded {
     pub feeder: Address,
 }
 
+mod config;
 mod events;
 pub mod oracle;
 mod storage;
 mod types;
 
-pub use types::{DataKey, PriceData};
+pub use types::{ DataKey, PriceData };
 
 #[contract]
 pub struct OracleContract;
@@ -51,11 +65,10 @@ impl OracleContract {
         storage::set_admin(&env, &admin);
         storage::set_staleness_threshold(&env, staleness_threshold);
         storage::set_paused(&env, false);
-        events::Initialized {
+        (events::Initialized {
             admin,
             staleness_threshold,
-        }
-        .publish(&env);
+        }).publish(&env);
     }
 
     pub fn get_price(env: Env, asset: Address) -> Option<PriceData> {
@@ -65,11 +78,15 @@ impl OracleContract {
     pub fn is_price_fresh(env: Env, asset: Address) -> bool {
         let price_data = match storage::get_price(&env, &asset) {
             Some(data) => data,
-            None => return false,
+            None => {
+                return false;
+            }
         };
         let threshold = match storage::get_staleness_threshold(&env) {
             Some(t) => t,
-            None => return false,
+            None => {
+                return false;
+            }
         };
         let ledger_time = env.ledger().timestamp();
         match ledger_time.checked_sub(price_data.timestamp) {
@@ -126,12 +143,11 @@ impl OracleContract {
         };
         storage::set_price(&env, &asset, &data);
 
-        events::PriceUpdated {
+        (events::PriceUpdated {
             asset,
             price,
             timestamp,
-        }
-        .publish(&env);
+        }).publish(&env);
     }
 
     pub fn get_admin(env: Env) -> Option<Address> {
@@ -155,11 +171,10 @@ impl OracleContract {
 
         storage::set_admin(&env, &new_admin);
 
-        AdminChanged {
+        (AdminChanged {
             old_admin: current_admin,
             new_admin,
-        }
-        .publish(&env);
+        }).publish(&env);
     }
 
     pub fn pause(env: Env) {
@@ -174,7 +189,7 @@ impl OracleContract {
         }
 
         storage::set_paused(&env, true);
-        events::Paused { by: admin }.publish(&env);
+        (events::Paused { by: admin }).publish(&env);
     }
 
     pub fn unpause(env: Env) {
@@ -189,7 +204,7 @@ impl OracleContract {
         }
 
         storage::set_paused(&env, false);
-        events::Unpaused { by: admin }.publish(&env);
+        (events::Unpaused { by: admin }).publish(&env);
     }
 
     pub fn add_authorized_feeder(env: Env, feeder: Address) {
@@ -205,7 +220,7 @@ impl OracleContract {
 
         storage::set_authorized_feeder(&env, &feeder);
 
-        FeederAdded { feeder }.publish(&env);
+        (FeederAdded { feeder }).publish(&env);
     }
 
     pub fn remove_authorized_feeder(env: Env, feeder: Address) {
@@ -221,7 +236,7 @@ impl OracleContract {
 
         storage::remove_authorized_feeder(&env, &feeder);
 
-        events::FeederRemoved { feeder }.publish(&env);
+        (events::FeederRemoved { feeder }).publish(&env);
     }
 
     pub fn is_authorized_feeder(env: Env, feeder: Address) -> bool {
@@ -231,7 +246,7 @@ impl OracleContract {
     pub fn get_prices(
         env: Env,
         feed_ids: Vec<Symbol>,
-        payload: Bytes,
+        payload: Bytes
     ) -> Result<(u64, Vec<i128>), OracleError> {
         oracle::pull::get_prices(env, feed_ids, payload)
     }
@@ -240,42 +255,13 @@ impl OracleContract {
         env: Env,
         caller: Address,
         feed_ids: Vec<Symbol>,
-        payload: Bytes,
+        payload: Bytes
     ) -> Result<(), OracleError> {
         oracle::push::write_prices(env, caller, feed_ids, payload)
     }
 
     pub fn read_prices(env: Env, feed_ids: Vec<Symbol>) -> Result<Vec<PriceData>, OracleError> {
         oracle::push::read_prices(env, feed_ids)
-    }
-
-    pub fn set_redstone_config(
-        env: Env,
-        caller: Address,
-        signers: Vec<Bytes>,
-        threshold: u32,
-    ) -> Result<(), OracleError> {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => return Err(OracleError::NotInitialized),
-        };
-        if caller != admin {
-            return Err(OracleError::Unauthorized);
-        }
-        caller.require_auth();
-
-        oracle::storage::set_redstone_signers(&env, &signers);
-        oracle::storage::set_redstone_threshold(&env, threshold);
-        Ok(())
-    }
-
-    pub fn get_redstone_config(env: Env) -> Result<(Vec<Bytes>, u32), OracleError> {
-        if !oracle::storage::is_redstone_initialized(&env) {
-            return Err(OracleError::NotInitialized);
-        }
-        let signers = oracle::storage::get_redstone_signers(&env).unwrap_or(Vec::new(&env));
-        let threshold = oracle::storage::get_redstone_threshold(&env).unwrap_or(0);
-        Ok((signers, threshold))
     }
 }
 

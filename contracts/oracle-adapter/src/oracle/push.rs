@@ -44,60 +44,38 @@ pub fn write_prices(
         return Err(OracleError::OraclePaused);
     }
 
-    if !storage::is_redstone_initialized(&env) {
-        return Err(OracleError::NotInitialized);
-    }
-
-    let threshold = match storage::get_redstone_threshold(&env) {
-        Some(t) => t as u8,
-        None => return Err(OracleError::NotInitialized),
-    };
-
-    let stored_signers = match storage::get_redstone_signers(&env) {
-        Some(s) => s,
-        None => return Err(OracleError::NotInitialized),
-    };
-
-    if stored_signers.is_empty() {
-        return Err(OracleError::NotInitialized);
-    }
-
+    // Convert compile-time signer bytes to SignerAddress
     let mut redstone_signers: RustVec<SignerAddress> = RustVec::new();
-    for s in stored_signers.iter() {
-        let mut buf = vec![0u8; s.len() as usize];
-        s.copy_into_slice(&mut buf);
-        redstone_signers.push(SignerAddress::from(buf));
+    for signer_bytes in crate::config::TRUSTED_SIGNER_BYTES.iter() {
+        redstone_signers.push(SignerAddress::from(signer_bytes.to_vec()));
     }
 
     let mut redstone_feed_ids: RustVec<FeedId> = RustVec::new();
     for sym in feed_ids.iter() {
-        if sym != Symbol::new(&env, "XLM")
-            && sym != Symbol::new(&env, "USDC")
-            && sym != Symbol::new(&env, "BTC")
-            && sym != Symbol::new(&env, "ETH")
-        {
-            return Err(OracleError::UnknownFeed);
-        }
-
-        let symbol_str = soroban_sdk::SymbolStr::try_from_val(&env, &sym.to_symbol_val()).unwrap();
+        let symbol_str = soroban_sdk::SymbolStr::try_from_val(&env, &sym.to_symbol_val())
+            .map_err(|_| OracleError::MalformedPayload)?;
         let rust_str: &str = symbol_str.as_ref();
-        let feed_id = FeedId::from(rust_str.as_bytes().to_vec());
+
+        let mut feed_id_bytes = [0u8; 32];
+        let bytes = rust_str.as_bytes();
+        let len = bytes.len().min(32);
+        feed_id_bytes[..len].copy_from_slice(&bytes[..len]);
+
+        let feed_id = FeedId::from(feed_id_bytes.to_vec());
         redstone_feed_ids.push(feed_id);
     }
 
-    let block_timestamp_ms = env.ledger().timestamp() * 1000;
+    let block_timestamp_ms = crate::config::ledger_timestamp_to_ms(env.ledger().timestamp());
 
-    let config = match Config::try_new(
-        threshold,
+    let config = Config::try_new(
+        crate::config::SIGNER_THRESHOLD,
         redstone_signers,
         redstone_feed_ids,
         block_timestamp_ms.into(),
         None,
         None,
-    ) {
-        Ok(c) => c,
-        Err(_) => return Err(OracleError::InvalidPayload),
-    };
+    )
+    .map_err(|_| OracleError::MalformedPayload)?;
 
     let mut payload_buf = vec![0u8; payload.len() as usize];
     payload.copy_into_slice(&mut payload_buf);
@@ -106,10 +84,8 @@ pub fn write_prices(
     let crypto = SorobanCrypto::new(&env);
     let mut redstone_config = SorobanRedStoneConfig::from((config, crypto));
 
-    let validated = match process_payload(&mut redstone_config, redstone_payload) {
-        Ok(v) => v,
-        Err(_) => return Err(OracleError::InvalidPayload),
-    };
+    let validated = process_payload(&mut redstone_config, redstone_payload)
+        .map_err(|_| OracleError::InvalidPayload)?;
 
     let new_timestamp = validated.timestamp.as_millis();
     let write_timestamp = env.ledger().timestamp();
@@ -117,7 +93,13 @@ pub fn write_prices(
     for sym in feed_ids.iter() {
         let symbol_str = soroban_sdk::SymbolStr::try_from_val(&env, &sym.to_symbol_val()).unwrap();
         let rust_str: &str = symbol_str.as_ref();
-        let target_feed_id = FeedId::from(rust_str.as_bytes().to_vec());
+
+        let mut feed_id_bytes = [0u8; 32];
+        let bytes = rust_str.as_bytes();
+        let len = bytes.len().min(32);
+        feed_id_bytes[..len].copy_from_slice(&bytes[..len]);
+
+        let target_feed_id = FeedId::from(feed_id_bytes.to_vec());
 
         let mut found_fv = None;
         for fv in validated.values.iter() {
@@ -177,14 +159,6 @@ pub fn read_prices(
 ) -> Result<Vec<crate::types::PriceData>, OracleError> {
     let mut result = Vec::new(&env);
     for sym in feed_ids.iter() {
-        if sym != Symbol::new(&env, "XLM")
-            && sym != Symbol::new(&env, "USDC")
-            && sym != Symbol::new(&env, "BTC")
-            && sym != Symbol::new(&env, "ETH")
-        {
-            return Err(OracleError::UnknownFeed);
-        }
-
         match storage::get_feed_price(&env, &sym) {
             Some(price_data) => {
                 result.push_back(price_data);
