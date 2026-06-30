@@ -29,11 +29,16 @@ pub fn get_prices_from_payload(
     // Convert feed IDs to RedStone FeedId format
     let mut redstone_feed_ids: RustVec<FeedId> = RustVec::new();
     for sym in feed_ids.iter() {
-        let symbol_str = soroban_sdk::SymbolStr
-            ::try_from_val(env, &sym.to_symbol_val())
+        let symbol_str = soroban_sdk::SymbolStr::try_from_val(env, &sym.to_symbol_val())
             .map_err(|_| OracleError::MalformedPayload)?;
         let rust_str: &str = symbol_str.as_ref();
-        let feed_id = FeedId::from(rust_str.as_bytes().to_vec());
+
+        let mut feed_id_bytes = [0u8; 32];
+        let bytes = rust_str.as_bytes();
+        let len = bytes.len().min(32);
+        feed_id_bytes[..len].copy_from_slice(&bytes[..len]);
+
+        let feed_id = FeedId::from(feed_id_bytes.to_vec());
         redstone_feed_ids.push(feed_id);
     }
 
@@ -66,11 +71,16 @@ pub fn get_prices_from_payload(
     // Extract prices for requested feeds
     let mut prices = Vec::new(env);
     for sym in feed_ids.iter() {
-        let symbol_str = soroban_sdk::SymbolStr
-            ::try_from_val(env, &sym.to_symbol_val())
+        let symbol_str = soroban_sdk::SymbolStr::try_from_val(env, &sym.to_symbol_val())
             .map_err(|_| OracleError::MalformedPayload)?;
         let rust_str: &str = symbol_str.as_ref();
-        let target_feed_id = FeedId::from(rust_str.as_bytes().to_vec());
+
+        let mut feed_id_bytes = [0u8; 32];
+        let bytes = rust_str.as_bytes();
+        let len = bytes.len().min(32);
+        feed_id_bytes[..len].copy_from_slice(&bytes[..len]);
+
+        let target_feed_id = FeedId::from(feed_id_bytes.to_vec());
 
         let mut found = false;
         for fv in validated.values.iter() {
