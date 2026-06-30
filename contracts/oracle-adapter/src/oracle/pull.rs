@@ -2,103 +2,90 @@ extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec as RustVec;
 
-use crate::oracle::storage;
+use crate::config::{ ledger_timestamp_to_ms, SIGNER_THRESHOLD, TRUSTED_SIGNER_BYTES };
 use crate::OracleError;
-use soroban_sdk::{Bytes, Env, Symbol, TryFromVal as _, Vec};
+use soroban_sdk::{ Bytes, Env, Symbol, TryFromVal as _, Vec };
 
 use redstone::{
-    core::{config::Config, processor::process_payload},
-    soroban::{SorobanCrypto, SorobanRedStoneConfig},
-    FeedId, SignerAddress,
+    core::{ config::Config, processor::process_payload },
+    soroban::{ SorobanCrypto, SorobanRedStoneConfig },
+    FeedId,
+    SignerAddress,
 };
 
-pub fn get_prices(
-    env: Env,
+/// Internal payload processor - verifies RedStone payload signatures and returns verified prices
+/// This is the security-sensitive core function that all oracle features call
+pub fn get_prices_from_payload(
+    env: &Env,
     feed_ids: Vec<Symbol>,
-    payload: Bytes,
+    payload: Bytes
 ) -> Result<(u64, Vec<i128>), OracleError> {
-    if !storage::is_redstone_initialized(&env) {
-        return Err(OracleError::NotInitialized);
-    }
-
-    let threshold = match storage::get_redstone_threshold(&env) {
-        Some(t) => t as u8,
-        None => return Err(OracleError::NotInitialized),
-    };
-
-    let stored_signers = match storage::get_redstone_signers(&env) {
-        Some(s) => s,
-        None => return Err(OracleError::NotInitialized),
-    };
-
-    if stored_signers.is_empty() {
-        return Err(OracleError::NotInitialized);
-    }
-
+    // Convert compile-time signer bytes to SignerAddress
     let mut redstone_signers: RustVec<SignerAddress> = RustVec::new();
-    for s in stored_signers.iter() {
-        let mut buf = vec![0u8; s.len() as usize];
-        s.copy_into_slice(&mut buf);
-        redstone_signers.push(SignerAddress::from(buf));
+    for signer_bytes in TRUSTED_SIGNER_BYTES.iter() {
+        redstone_signers.push(SignerAddress::from(signer_bytes.to_vec()));
     }
 
+    // Convert feed IDs to RedStone FeedId format
     let mut redstone_feed_ids: RustVec<FeedId> = RustVec::new();
     for sym in feed_ids.iter() {
-        if sym != Symbol::new(&env, "XLM")
-            && sym != Symbol::new(&env, "USDC")
-            && sym != Symbol::new(&env, "BTC")
-            && sym != Symbol::new(&env, "ETH")
-        {
-            return Err(OracleError::UnknownFeed);
-        }
-
-        let symbol_str = soroban_sdk::SymbolStr::try_from_val(&env, &sym.to_symbol_val()).unwrap();
+        let symbol_str = soroban_sdk::SymbolStr
+            ::try_from_val(env, &sym.to_symbol_val())
+            .map_err(|_| OracleError::MalformedPayload)?;
         let rust_str: &str = symbol_str.as_ref();
         let feed_id = FeedId::from(rust_str.as_bytes().to_vec());
         redstone_feed_ids.push(feed_id);
     }
 
-    let block_timestamp_ms = env.ledger().timestamp() * 1000;
+    // Convert ledger timestamp to milliseconds
+    let block_timestamp_ms = ledger_timestamp_to_ms(env.ledger().timestamp());
 
-    let config = match Config::try_new(
-        threshold,
+    // Create RedStone config with compile-time values
+    let config = Config::try_new(
+        SIGNER_THRESHOLD,
         redstone_signers,
         redstone_feed_ids,
         block_timestamp_ms.into(),
         None,
-        None,
-    ) {
-        Ok(c) => c,
-        Err(_) => return Err(OracleError::InvalidPayload),
-    };
+        None
+    ).map_err(|_| OracleError::MalformedPayload)?;
 
+    // Convert payload bytes
     let mut payload_buf = vec![0u8; payload.len() as usize];
     payload.copy_into_slice(&mut payload_buf);
     let redstone_payload = redstone::Bytes::from(payload_buf);
 
-    let crypto = SorobanCrypto::new(&env);
+    // Process payload with signature verification
+    let crypto = SorobanCrypto::new(env);
     let mut redstone_config = SorobanRedStoneConfig::from((config, crypto));
 
-    let validated = match process_payload(&mut redstone_config, redstone_payload) {
-        Ok(v) => v,
-        Err(_) => return Err(OracleError::InvalidPayload),
-    };
+    let validated = process_payload(&mut redstone_config, redstone_payload).map_err(
+        |_| OracleError::InvalidPayload
+    )?;
 
-    let mut prices = Vec::new(&env);
+    // Extract prices for requested feeds
+    let mut prices = Vec::new(env);
     for sym in feed_ids.iter() {
-        let symbol_str = soroban_sdk::SymbolStr::try_from_val(&env, &sym.to_symbol_val()).unwrap();
+        let symbol_str = soroban_sdk::SymbolStr
+            ::try_from_val(env, &sym.to_symbol_val())
+            .map_err(|_| OracleError::MalformedPayload)?;
         let rust_str: &str = symbol_str.as_ref();
         let target_feed_id = FeedId::from(rust_str.as_bytes().to_vec());
 
         let mut found = false;
         for fv in validated.values.iter() {
             if fv.feed == target_feed_id {
+                // RedStone returns prices as big-endian unsigned 256-bit integers
+                // We need to convert to i128, ensuring the value fits
                 let val_bytes = fv.value.as_be_bytes();
+
+                // Check that the value fits in i128 (upper 16 bytes must be zero and sign bit not set)
                 let fits = val_bytes[0..16].iter().all(|&b| b == 0) && val_bytes[16] < 128;
                 if !fits {
                     return Err(OracleError::InvalidPayload);
                 }
 
+                // Extract lower 16 bytes as i128
                 let mut buf = [0u8; 16];
                 buf.copy_from_slice(&val_bytes[16..32]);
                 let price = i128::from_be_bytes(buf);
@@ -118,5 +105,14 @@ pub fn get_prices(
         }
     }
 
+    // Return timestamp in milliseconds and prices
     Ok((validated.timestamp.as_millis(), prices))
+}
+
+pub fn get_prices(
+    env: Env,
+    feed_ids: Vec<Symbol>,
+    payload: Bytes
+) -> Result<(u64, Vec<i128>), OracleError> {
+    get_prices_from_payload(&env, feed_ids, payload)
 }

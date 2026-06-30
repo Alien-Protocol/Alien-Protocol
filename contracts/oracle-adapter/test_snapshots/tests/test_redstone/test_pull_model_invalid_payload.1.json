@@ -7,47 +7,6 @@
   "auth": [
     [],
     [],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "set_redstone_config",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                },
-                {
-                  "vec": [
-                    {
-                      "bytes": "8bb8f32df04c8b654987daaed53d6b6091e3b774"
-                    },
-                    {
-                      "bytes": "deb22f54738d54976c4c0fe5ce6d408e40d88499"
-                    },
-                    {
-                      "bytes": "51ce04be4b3e32572c4ec9135221d0691ba7d202"
-                    },
-                    {
-                      "bytes": "dd682daec5a90dd295d14da4b0bec9281017b5be"
-                    },
-                    {
-                      "bytes": "9c5ae89c4af6aa32ce58588dbaf90d18a855b6de"
-                    }
-                  ]
-                },
-                {
-                  "u32": 3
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
     []
   ],
   "ledger": {
@@ -111,46 +70,6 @@
                         "key": {
                           "vec": [
                             {
-                              "symbol": "RedStoneSignerThreshold"
-                            }
-                          ]
-                        },
-                        "val": {
-                          "u32": 3
-                        }
-                      },
-                      {
-                        "key": {
-                          "vec": [
-                            {
-                              "symbol": "RedStoneSigners"
-                            }
-                          ]
-                        },
-                        "val": {
-                          "vec": [
-                            {
-                              "bytes": "8bb8f32df04c8b654987daaed53d6b6091e3b774"
-                            },
-                            {
-                              "bytes": "deb22f54738d54976c4c0fe5ce6d408e40d88499"
-                            },
-                            {
-                              "bytes": "51ce04be4b3e32572c4ec9135221d0691ba7d202"
-                            },
-                            {
-                              "bytes": "dd682daec5a90dd295d14da4b0bec9281017b5be"
-                            },
-                            {
-                              "bytes": "9c5ae89c4af6aa32ce58588dbaf90d18a855b6de"
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "key": {
-                          "vec": [
-                            {
                               "symbol": "StalenessThreshold"
                             }
                           ]
@@ -167,39 +86,6 @@
             "ext": "v0"
           },
           4095
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": "801925984706572462"
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": "801925984706572462"
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          6311999
         ]
       ],
       [
