@@ -7,6 +7,7 @@ use types::Position;
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
     fn get_price(env: Env, asset: Address) -> Option<types::PriceData>;
+    fn get_price_or_fail(env: Env, asset: Address) -> types::PriceData;
 }
 
 #[soroban_sdk::contractclient(name = "LendingPoolClient")]
@@ -20,7 +21,6 @@ pub trait LendingPool {
 const PRICE_PRECISION: i128 = 10_000_000;
 
 /// Maximum age (in seconds) an oracle price may have before it is considered stale.
-const ORACLE_STALE_THRESHOLD: u64 = 300;
 
 #[contract]
 pub struct VaultContract;
@@ -389,19 +389,9 @@ impl VaultContract {
         let oracle_client = OracleClient::new(&env, &oracle_address);
 
         let mut total_value: i128 = 0;
-        let current_time = env.ledger().timestamp();
 
         for item in position.collateral.iter() {
-            let price_data = match oracle_client.get_price(&item.asset) {
-                Some(pd) => pd,
-                None => soroban_sdk::panic_with_error!(&env, VaultError::AssetNotFound),
-            };
-
-            if current_time > price_data.timestamp
-                && current_time - price_data.timestamp > ORACLE_STALE_THRESHOLD
-            {
-                soroban_sdk::panic_with_error!(&env, VaultError::StalePrice);
-            }
+            let price_data = oracle_client.get_price_or_fail(&item.asset);
 
             // Compute USD value: amount * price / PRICE_PRECISION.
             // checked_mul guards against overflow before the safe integer division.

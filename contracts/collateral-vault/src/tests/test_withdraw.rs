@@ -4,6 +4,8 @@ use super::super::*;
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
+const ORACLE_STALE_THRESHOLD: u64 = 300;
+
 #[contract]
 pub struct MockLendingPool;
 
@@ -25,6 +27,22 @@ pub struct MockOracle;
 impl MockOracle {
     pub fn get_price(env: Env, asset: Address) -> Option<types::PriceData> {
         env.storage().persistent().get(&asset)
+    }
+
+    pub fn get_price_or_fail(env: Env, asset: Address) -> types::PriceData {
+        let price_data: types::PriceData = match env.storage().persistent().get(&asset) {
+            Some(pd) => pd,
+            None => panic!("price not found"),
+        };
+        let current_time = env.ledger().timestamp();
+        let age = match current_time.checked_sub(price_data.timestamp) {
+            Some(delta) => delta,
+            None => panic!("stale price"),
+        };
+        if age > ORACLE_STALE_THRESHOLD {
+            panic!("stale price");
+        }
+        price_data
     }
 
     pub fn set_price(env: Env, asset: Address, price: i128, timestamp: u64) {
