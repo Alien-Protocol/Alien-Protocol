@@ -13,7 +13,7 @@ fn test_set_staleness_threshold_success() {
     client.set_staleness_threshold(&500_u64);
 
     let result = client.get_staleness_threshold();
-    assert_eq!(result, Some(500));
+    assert_eq!(result, 500);
 }
 
 #[test]
