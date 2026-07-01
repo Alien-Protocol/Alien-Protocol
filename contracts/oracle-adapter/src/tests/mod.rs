@@ -40,8 +40,8 @@ fn test_initialize_twice_fails() {
     client.initialize(&admin, &300);
 }
 pub mod test_admin;
-mod test_get_price_or_fail;
 mod test_feeders;
+mod test_get_price_or_fail;
 mod test_pause;
 pub mod test_price;
 pub mod test_redstone;
