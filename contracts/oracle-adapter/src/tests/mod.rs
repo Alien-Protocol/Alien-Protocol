@@ -45,3 +45,4 @@ mod test_feeders;
 mod test_pause;
 pub mod test_price;
 pub mod test_redstone;
+pub mod test_staleness;
