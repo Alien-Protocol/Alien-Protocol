@@ -141,8 +141,11 @@ impl OracleContract {
         storage::get_admin(&env)
     }
 
-    pub fn get_staleness_threshold(env: Env) -> Option<u64> {
-        storage::get_staleness_threshold(&env)
+    pub fn get_staleness_threshold(env: Env) -> u64 {
+        match storage::get_staleness_threshold(&env) {
+            Some(t) => t,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        }
     }
 
     pub fn set_staleness_threshold(env: Env, threshold: u64) {
