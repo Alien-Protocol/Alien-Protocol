@@ -32,3 +32,9 @@ pub struct Unpaused {
 pub struct FeederRemoved {
     pub feeder: Address,
 }
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct StalenessThresholdUpdated {
+    pub threshold: u64,
+}
