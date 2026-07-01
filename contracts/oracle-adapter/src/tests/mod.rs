@@ -44,3 +44,4 @@ mod test_get_price_or_fail;
 mod test_pause;
 pub mod test_price;
 pub mod test_redstone;
+pub mod test_staleness;
