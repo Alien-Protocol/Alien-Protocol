@@ -16,4 +16,5 @@ pub enum VaultError {
     BelowMinCollateralRatio = 10,
     AlreadyAdmin = 11,
     AlreadyPaused = 12,
+    NotPaused = 13,
 }

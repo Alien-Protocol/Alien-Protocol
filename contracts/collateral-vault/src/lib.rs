@@ -104,12 +104,12 @@ impl VaultContract {
         admin.require_auth();
 
         if !storage::is_paused(&env) {
-            panic!("vault is not paused");
+            soroban_sdk::panic_with_error!(&env, VaultError::NotPaused);
         }
 
         storage::set_paused(&env, false);
 
-        events::Unpaused { paused: false }.publish(&env);
+        events::Unpaused { by: admin }.publish(&env);
     }
 
     pub fn add_supported_asset(env: Env, asset: Address) {

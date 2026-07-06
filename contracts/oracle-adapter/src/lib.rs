@@ -31,6 +31,7 @@ pub enum OracleError {
     InsufficientSignatures = 14,
     ExpiredPayload = 15,
     MalformedPayload = 16,
+    ThresholdZero = 14,
 }
 
 #[contractevent]
@@ -154,8 +155,27 @@ impl OracleContract {
         storage::get_admin(&env)
     }
 
-    pub fn get_staleness_threshold(env: Env) -> Option<u64> {
-        storage::get_staleness_threshold(&env)
+    pub fn get_staleness_threshold(env: Env) -> u64 {
+        match storage::get_staleness_threshold(&env) {
+            Some(t) => t,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        }
+    }
+
+    pub fn set_staleness_threshold(env: Env, threshold: u64) {
+        let admin = match storage::get_admin(&env) {
+            Some(addr) => addr,
+            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
+        };
+        admin.require_auth();
+
+        if threshold == 0 {
+            soroban_sdk::panic_with_error!(&env, OracleError::ThresholdZero);
+        }
+
+        storage::set_staleness_threshold(&env, threshold);
+
+        events::StalenessThresholdUpdated { threshold }.publish(&env);
     }
 
     pub fn set_admin(env: Env, new_admin: Address) {
