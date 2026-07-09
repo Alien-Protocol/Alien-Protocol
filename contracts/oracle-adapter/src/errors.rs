@@ -17,4 +17,5 @@ pub enum OracleError {
     FeedNotWritten = 11,
     PriceNotFound = 12,
     StalePrice = 13,
+    ThresholdZero = 14,
 }
