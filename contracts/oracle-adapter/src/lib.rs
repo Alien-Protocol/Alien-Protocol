@@ -1,27 +1,8 @@
 #![no_std]
-use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, Address, Bytes, Env, Symbol, Vec,
-};
+use soroban_sdk::{contract, contractevent, contractimpl, Address, Bytes, Env, Symbol, Vec};
 
-#[contracterror]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u32)]
-pub enum OracleError {
-    NotInitialized = 1,
-    AlreadyAdmin = 2,
-    OraclePaused = 3,
-    AlreadyPaused = 4,
-    FeederNotFound = 5,
-    NotPaused = 6,
-    AlreadyAuthorized = 7,
-    Unauthorized = 8,
-    UnknownFeed = 9,
-    InvalidPayload = 10,
-    FeedNotWritten = 11,
-    PriceNotFound = 12,
-    StalePrice = 13,
-    ThresholdZero = 14,
-}
+mod errors;
+pub use errors::OracleError;
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
@@ -82,23 +63,14 @@ impl OracleContract {
     }
 
     pub fn get_price_or_fail(env: Env, asset: Address) -> PriceData {
-        let price_data = match storage::get_price(&env, &asset) {
-            Some(data) => data,
+        let price = match Self::get_price(env.clone(), asset.clone()) {
+            Some(price) => price,
             None => soroban_sdk::panic_with_error!(&env, OracleError::PriceNotFound),
         };
-        let threshold = match storage::get_staleness_threshold(&env) {
-            Some(t) => t,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
-        let ledger_time = env.ledger().timestamp();
-        let is_fresh = match ledger_time.checked_sub(price_data.timestamp) {
-            Some(delta) => delta <= threshold,
-            None => false,
-        };
-        if !is_fresh {
+        if !Self::is_price_fresh(env.clone(), asset) {
             soroban_sdk::panic_with_error!(&env, OracleError::StalePrice);
         }
-        price_data
+        price
     }
 
     pub fn set_price(env: Env, caller: Address, asset: Address, price: i128, timestamp: u64) {
