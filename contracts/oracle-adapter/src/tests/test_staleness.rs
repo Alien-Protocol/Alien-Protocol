@@ -24,7 +24,7 @@ fn test_set_staleness_threshold_zero_fails() {
     let err = result.err().unwrap().unwrap();
     assert_eq!(
         err,
-        soroban_sdk::Error::from_contract_error(OracleError::ThresholdZero as u32)
+        soroban_sdk::Error::from_contract_error(OracleError::InvalidThreshold as u32)
     );
 }
 

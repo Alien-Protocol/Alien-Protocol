@@ -36,10 +36,15 @@ fn test_initialize_success() {
 }
 
 #[test]
-#[should_panic(expected = "AlreadyInitialized")]
 fn test_initialize_twice_fails() {
     let (_env, client, admin) = setup_env();
-    client.initialize(&admin, &300);
+    let result = client.try_initialize(&admin, &300);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::AlreadyInitialized as u32)
+    );
 }
 
 #[test]
