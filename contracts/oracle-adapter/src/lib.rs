@@ -30,7 +30,7 @@ pub struct OracleContract;
 impl OracleContract {
     pub fn initialize(env: Env, admin: Address, staleness_threshold: u64) {
         if storage::is_initialized(&env) {
-            panic!("AlreadyInitialized");
+            soroban_sdk::panic_with_error!(&env, OracleError::AlreadyInitialized);
         }
         storage::set_admin(&env, &admin);
         storage::set_staleness_threshold(&env, staleness_threshold);
@@ -91,8 +91,12 @@ impl OracleContract {
             soroban_sdk::panic_with_error!(&env, OracleError::OraclePaused);
         }
 
-        assert!(price > 0, "price must be positive");
-        assert!(timestamp > 0, "timestamp must be positive");
+        if price <= 0 {
+            soroban_sdk::panic_with_error!(&env, OracleError::InvalidPrice);
+        }
+        if timestamp == 0 {
+            soroban_sdk::panic_with_error!(&env, OracleError::InvalidTimestamp);
+        }
 
         let data = PriceData {
             price,
@@ -128,7 +132,7 @@ impl OracleContract {
         admin.require_auth();
 
         if threshold == 0 {
-            soroban_sdk::panic_with_error!(&env, OracleError::ThresholdZero);
+            soroban_sdk::panic_with_error!(&env, OracleError::InvalidThreshold);
         }
 
         storage::set_staleness_threshold(&env, threshold);
