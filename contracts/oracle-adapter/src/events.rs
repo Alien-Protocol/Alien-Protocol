@@ -17,6 +17,12 @@ pub struct PriceUpdated {
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
+pub struct AdminChanged {
+    pub old_admin: Address,
+    pub new_admin: Address,
+}
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Paused {
     pub by: Address,
 }
@@ -27,6 +33,11 @@ pub struct Unpaused {
     pub by: Address,
 }
 
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct FeederAdded {
+    pub feeder: Address,
+}
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct FeederRemoved {
