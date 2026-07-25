@@ -1,20 +1,8 @@
 #![no_std]
-use soroban_sdk::{contract, contractevent, contractimpl, Address, Bytes, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, Symbol, Vec};
 
 mod errors;
 pub use errors::OracleError;
-
-#[contractevent]
-#[derive(Clone, Debug, PartialEq)]
-pub struct AdminChanged {
-    pub old_admin: Address,
-    pub new_admin: Address,
-}
-#[contractevent]
-#[derive(Clone, Debug, PartialEq)]
-pub struct FeederAdded {
-    pub feeder: Address,
-}
 
 mod events;
 pub mod oracle;
@@ -153,7 +141,7 @@ impl OracleContract {
 
         storage::set_admin(&env, &new_admin);
 
-        AdminChanged {
+        events::AdminChanged {
             old_admin: current_admin,
             new_admin,
         }
@@ -203,7 +191,7 @@ impl OracleContract {
 
         storage::set_authorized_feeder(&env, &feeder);
 
-        FeederAdded { feeder }.publish(&env);
+        events::FeederAdded { feeder }.publish(&env);
     }
 
     pub fn remove_authorized_feeder(env: Env, feeder: Address) {
