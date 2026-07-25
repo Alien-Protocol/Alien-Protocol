@@ -1,6 +1,6 @@
 use super::*;
-use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env};
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{Address, Env, Symbol, TryFromVal};
 
 pub(crate) fn setup_env() -> (Env, OracleContractClient<'static>, Address) {
     let env = Env::default();
@@ -31,6 +31,21 @@ fn test_initialize_success() {
     let price_data = client.get_price(&asset).unwrap();
     assert_eq!(price_data.price, 100);
     assert_eq!(price_data.timestamp, 1000);
+}
+
+#[test]
+fn test_initialize_emits_event() {
+    let env = Env::default();
+    let contract_id = env.register(OracleContract, ());
+    let client = OracleContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &300);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    let event_symbol = Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(event_symbol, Symbol::new(&env, "initialized"));
 }
 
 #[test]
