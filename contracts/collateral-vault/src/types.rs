@@ -18,6 +18,16 @@ pub struct Position {
     pub collateral: Vec<CollateralAsset>,
 }
 
+/// Unified configuration model for vault setup.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct VaultConfig {
+    pub admin: Address,
+    pub lending_pool: Address,
+    pub oracle: Address,
+    pub liquidation_engine: Address,
+}
+
 /// Storage keys for persistent contract state.
 /// Core keys required for Issue #471 initialization:
 /// - Admin: Contract administrator address
