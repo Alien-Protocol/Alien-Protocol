@@ -28,14 +28,23 @@ pub fn set_paused(env: &Env, paused: bool) {
     env.storage().persistent().set(&DataKey::Paused, &paused);
 }
 
-pub fn _get_lending_pool(env: &Env) -> Option<Address> {
-    env.storage().persistent().get(&DataKey::LendingPool)
+pub fn get_lending_pool(env: &Env) -> Option<Address> {
+    if let Some(pool) = env.storage().persistent().get::<_, Address>(&DataKey::LendingPool) {
+        Some(pool)
+    } else if let Some(legacy_pool) = env.storage().persistent().get::<_, Address>(&DataKey::Pool) {
+        env.storage().persistent().set(&DataKey::LendingPool, &legacy_pool);
+        env.storage().persistent().remove(&DataKey::Pool);
+        Some(legacy_pool)
+    } else {
+        None
+    }
 }
 
 pub fn set_lending_pool(env: &Env, lending_pool: &Address) {
     env.storage()
         .persistent()
         .set(&DataKey::LendingPool, lending_pool);
+    env.storage().persistent().remove(&DataKey::Pool);
 }
 
 pub fn is_supported_asset(env: &Env, asset: &Address) -> bool {
@@ -105,12 +114,14 @@ pub fn set_liquidation_engine(env: &Env, engine: &Address) {
         .set(&DataKey::LiquidationEngine, engine);
 }
 
+/// Alias for get_lending_pool. Reads the canonical lending pool key (DataKey::LendingPool).
 pub fn get_pool(env: &Env) -> Option<Address> {
-    env.storage().persistent().get(&DataKey::Pool)
+    get_lending_pool(env)
 }
 
+/// Alias for set_lending_pool. Updates the canonical lending pool key (DataKey::LendingPool).
 pub fn set_pool(env: &Env, pool: &Address) {
-    env.storage().persistent().set(&DataKey::Pool, pool);
+    set_lending_pool(env, pool);
 }
 
 pub fn get_position_balance(env: &Env, user: &Address, asset: &Address) -> i128 {
