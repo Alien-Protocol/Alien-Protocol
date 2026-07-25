@@ -4,7 +4,6 @@ use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, Symbol, Vec};
 mod errors;
 pub use errors::OracleError;
 
-
 mod events;
 pub mod oracle;
 mod storage;
