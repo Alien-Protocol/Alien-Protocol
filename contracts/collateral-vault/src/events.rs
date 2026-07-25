@@ -5,6 +5,8 @@ use soroban_sdk::{contractevent, Address};
 pub struct Initialized {
     pub admin: Address,
     pub lending_pool: Address,
+    pub oracle: Address,
+    pub liquidation_engine: Address,
 }
 
 #[contractevent]
