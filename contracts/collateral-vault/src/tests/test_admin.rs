@@ -21,9 +21,18 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle);
+    let config = types::VaultConfig {
+        admin: admin.clone(),
+        lending_pool,
+        oracle,
+        liquidation_engine,
+    };
+
+    client.initialize(&config).unwrap();
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
@@ -247,4 +256,116 @@ fn test_set_admin_same_address() {
 
     let result = client.try_set_admin(&admin);
     assert_eq!(result, Err(Ok(VaultError::AlreadyAdmin)));
+}
+
+#[test]
+fn test_initialize_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
+
+    let config = types::VaultConfig {
+        admin: admin.clone(),
+        lending_pool: lending_pool.clone(),
+        oracle: oracle.clone(),
+        liquidation_engine: liquidation_engine.clone(),
+    };
+
+    let result = client.try_initialize(&config);
+    assert!(result.is_ok());
+
+    let fetched_config = client.get_config().unwrap();
+    assert_eq!(fetched_config, config);
+    assert_eq!(client.get_admin(), Some(admin));
+    assert_eq!(client.get_lending_pool(), Some(lending_pool.clone()));
+    assert_eq!(client.get_pool(), Some(lending_pool));
+    assert_eq!(client.get_oracle(), Some(oracle));
+    assert_eq!(client.get_liquidation_engine(), Some(liquidation_engine));
+}
+
+#[test]
+fn test_initialize_duplicate_fails() {
+    let (env, client, admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+
+    let config = types::VaultConfig {
+        admin,
+        lending_pool: Address::generate(&env),
+        oracle: Address::generate(&env),
+        liquidation_engine: Address::generate(&env),
+    };
+
+    let result = client.try_initialize(&config);
+    assert_eq!(result, Err(Ok(VaultError::AlreadyInitialized)));
+}
+
+#[test]
+fn test_initialize_identical_pool_and_oracle_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let same_address = Address::generate(&env);
+
+    let config = types::VaultConfig {
+        admin,
+        lending_pool: same_address.clone(),
+        oracle: same_address,
+        liquidation_engine: Address::generate(&env),
+    };
+
+    let result = client.try_initialize(&config);
+    assert_eq!(result, Err(Ok(VaultError::InvalidConfig)));
+}
+
+#[test]
+fn test_pool_migration_from_legacy_key() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let legacy_pool = Address::generate(&env);
+
+    // Manually write to legacy DataKey::Pool storage
+    env.as_contract(&contract_id, || {
+        env.storage()
+            .persistent()
+            .set(&types::DataKey::Pool, &legacy_pool);
+    });
+
+    // get_lending_pool should retrieve and migrate legacy_pool to DataKey::LendingPool
+    assert_eq!(client.get_lending_pool(), Some(legacy_pool.clone()));
+
+    // Verify DataKey::LendingPool now holds the value
+    env.as_contract(&contract_id, || {
+        let canonical_pool: Option<Address> = env
+            .storage()
+            .persistent()
+            .get(&types::DataKey::LendingPool);
+        assert_eq!(canonical_pool, Some(legacy_pool));
+        let legacy_check: Option<Address> =
+            env.storage().persistent().get(&types::DataKey::Pool);
+        assert_eq!(legacy_check, None);
+    });
+}
+
+#[test]
+fn test_get_config_uninitialized_fails() {
+    let env = Env::default();
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let res = client.try_get_config();
+    assert_eq!(res, Err(Ok(VaultError::NotInitialized)));
 }
