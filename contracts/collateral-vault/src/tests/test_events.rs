@@ -1,9 +1,8 @@
 #![cfg(test)]
 
 use super::super::*;
-use events::*;
 use soroban_sdk::testutils::{Address as _, Events};
-use soroban_sdk::{token, Address, Env, IntoVal, Symbol, TryFromVal};
+use soroban_sdk::{token, Address, Env, Symbol, TryFromVal};
 
 fn setup_env() -> (
     Env,
@@ -48,7 +47,6 @@ fn test_deposit_event_topics() {
     assert_eq!(last_event.0, client.address);
 
     let topics = last_event.1;
-    let data = last_event.2;
 
     // Topics: ["deposited", user, asset]
     assert_eq!(topics.len(), 3);
