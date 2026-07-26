@@ -74,9 +74,17 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle_id);
-    client.set_oracle(&oracle_id);
+    let config = types::VaultConfig {
+        admin: admin.clone(),
+        lending_pool,
+        oracle: oracle_id.clone(),
+        liquidation_engine,
+    };
+
+    client.initialize(&config);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);

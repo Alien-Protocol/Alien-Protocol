@@ -2,7 +2,7 @@
 use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
 
 use errors::VaultError;
-use types::Position;
+use types::{Position, VaultConfig};
 
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
@@ -27,28 +27,40 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    pub fn initialize(env: Env, admin: Address, lending_pool: Address) {
-        // Strict initialization guard: panic if already initialized
+    /// Initializes the collateral vault with admin, lending pool, oracle adapter, and liquidation engine configuration.
+    /// Returns typed VaultError on failure (e.g., AlreadyInitialized or InvalidConfig).
+    pub fn initialize(env: Env, config: VaultConfig) -> Result<(), VaultError> {
+        // Guard against duplicate initialization
         if storage::has_admin(&env) {
-            panic!("already initialized");
+            return Err(VaultError::AlreadyInitialized);
         }
 
-        admin.require_auth();
+        config.admin.require_auth();
 
-        // Commit admin and configured contract addresses to persistent storage
-        storage::set_admin(&env, &admin);
-        storage::set_lending_pool(&env, &lending_pool);
-        storage::set_oracle(&env, &lending_pool);
+        // Ensure distinct addresses for lending pool and oracle adapter
+        if config.lending_pool == config.oracle {
+            return Err(VaultError::InvalidConfig);
+        }
 
-        // Explicitly set Paused to false
+        // Commit configuration addresses to storage
+        storage::set_admin(&env, &config.admin);
+        storage::set_lending_pool(&env, &config.lending_pool);
+        storage::set_oracle(&env, &config.oracle);
+        storage::set_liquidation_engine(&env, &config.liquidation_engine);
+
+        // Set initial pause state to false
         storage::set_paused(&env, false);
 
-        // Emit structured contract event
+        // Emit Initialized event
         events::Initialized {
-            admin,
-            lending_pool,
+            admin: config.admin,
+            lending_pool: config.lending_pool,
+            oracle: config.oracle,
+            liquidation_engine: config.liquidation_engine,
         }
         .publish(&env);
+
+        Ok(())
     }
 
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
@@ -70,20 +82,36 @@ impl VaultContract {
         Ok(())
     }
 
-    pub fn set_lending_pool(env: Env, lending_pool: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
+    pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultError> {
+        let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
         admin.require_auth();
+
+        if let Some(current_oracle) = storage::get_oracle(&env) {
+            if lending_pool == current_oracle {
+                return Err(VaultError::InvalidConfig);
+            }
+        }
 
         storage::set_lending_pool(&env, &lending_pool);
 
         events::LendingPoolUpdated { lending_pool }.publish(&env);
+
+        Ok(())
     }
 
-    pub fn set_oracle(env: Env, oracle: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
+    pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
+        let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
         admin.require_auth();
 
+        if let Some(current_lending_pool) = storage::get_lending_pool(&env) {
+            if oracle == current_lending_pool {
+                return Err(VaultError::InvalidConfig);
+            }
+        }
+
         storage::set_oracle(&env, &oracle);
+
+        Ok(())
     }
 
     pub fn pause(env: Env) {
@@ -161,16 +189,13 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
-        let pool_address = storage::get_pool(&env).expect("Lending pool not set");
+        let pool_address = storage::get_lending_pool(&env).expect("Lending pool not set");
         let pool_client = LendingPoolClient::new(&env, &pool_address);
         pool_client.is_liquidatable(&user)
     }
 
-    pub fn set_pool(env: Env, pool: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        storage::set_pool(&env, &pool);
+    pub fn set_pool(env: Env, pool: Address) -> Result<(), VaultError> {
+        Self::set_lending_pool(env, pool)
     }
 
     pub fn is_supported_asset(env: Env, asset: Address) -> bool {
@@ -179,6 +204,38 @@ impl VaultContract {
 
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
+    }
+
+    /// Returns the complete vault configuration model.
+    pub fn get_config(env: Env) -> Result<VaultConfig, VaultError> {
+        let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
+        let lending_pool = storage::get_lending_pool(&env).ok_or(VaultError::NotInitialized)?;
+        let oracle = storage::get_oracle(&env).ok_or(VaultError::NotInitialized)?;
+        let liquidation_engine =
+            storage::get_liquidation_engine(&env).ok_or(VaultError::NotInitialized)?;
+
+        Ok(VaultConfig {
+            admin,
+            lending_pool,
+            oracle,
+            liquidation_engine,
+        })
+    }
+
+    pub fn get_lending_pool(env: Env) -> Option<Address> {
+        storage::get_lending_pool(&env)
+    }
+
+    pub fn get_pool(env: Env) -> Option<Address> {
+        storage::get_lending_pool(&env)
+    }
+
+    pub fn get_oracle(env: Env) -> Option<Address> {
+        storage::get_oracle(&env)
+    }
+
+    pub fn get_liquidation_engine(env: Env) -> Option<Address> {
+        storage::get_liquidation_engine(&env)
     }
 
     pub fn get_position_balance(env: Env, user: Address, asset: Address) -> i128 {
@@ -341,7 +398,7 @@ impl VaultContract {
     }
 
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
-        let debt = if let Some(pool_addr) = storage::get_pool(&env) {
+        let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
             pool_client.get_user_debt(&user)
         } else {

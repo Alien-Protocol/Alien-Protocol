@@ -4,6 +4,20 @@ use super::super::*;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Env};
 
+#[contract]
+pub struct MockLendingPool;
+
+#[contractimpl]
+impl MockLendingPool {
+    pub fn get_user_debt(_env: Env, _user: Address) -> i128 {
+        0
+    }
+
+    pub fn is_liquidatable(_user: Address) -> bool {
+        false
+    }
+}
+
 fn setup_env() -> (
     Env,
     VaultContractClient<'static>,
@@ -21,9 +35,18 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
+    let lending_pool = env.register(MockLendingPool, ());
     let oracle = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle);
+    let config = types::VaultConfig {
+        admin: admin.clone(),
+        lending_pool,
+        oracle,
+        liquidation_engine,
+    };
+
+    client.initialize(&config);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);

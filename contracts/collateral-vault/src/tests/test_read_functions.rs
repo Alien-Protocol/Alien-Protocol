@@ -38,6 +38,20 @@ impl MockOracleContract {
     }
 }
 
+#[contract]
+pub struct MockLendingPool;
+
+#[contractimpl]
+impl MockLendingPool {
+    pub fn get_user_debt(_env: Env, _user: Address) -> i128 {
+        0
+    }
+
+    pub fn is_liquidatable(_user: Address) -> bool {
+        false
+    }
+}
+
 fn setup_env() -> (
     Env,
     VaultContractClient<'static>,
@@ -63,9 +77,17 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
+    let lending_pool = env.register(MockLendingPool, ());
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle_id);
-    client.set_oracle(&oracle_id);
+    let config = types::VaultConfig {
+        admin: admin.clone(),
+        lending_pool,
+        oracle: oracle_id.clone(),
+        liquidation_engine,
+    };
+
+    client.initialize(&config);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
