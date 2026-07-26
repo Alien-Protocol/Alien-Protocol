@@ -32,7 +32,7 @@ fn setup_env() -> (
         liquidation_engine,
     };
 
-    client.initialize(&config).unwrap();
+    client.initialize(&config);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
@@ -281,7 +281,7 @@ fn test_initialize_success() {
     let result = client.try_initialize(&config);
     assert!(result.is_ok());
 
-    let fetched_config = client.get_config().unwrap();
+    let fetched_config = client.get_config();
     assert_eq!(fetched_config, config);
     assert_eq!(client.get_admin(), Some(admin));
     assert_eq!(client.get_lending_pool(), Some(lending_pool.clone()));

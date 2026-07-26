@@ -121,11 +121,13 @@ pub fn set_liquidation_engine(env: &Env, engine: &Address) {
 }
 
 /// Alias for get_lending_pool. Reads the canonical lending pool key (DataKey::LendingPool).
+#[allow(dead_code)]
 pub fn get_pool(env: &Env) -> Option<Address> {
     get_lending_pool(env)
 }
 
 /// Alias for set_lending_pool. Updates the canonical lending pool key (DataKey::LendingPool).
+#[allow(dead_code)]
 pub fn set_pool(env: &Env, pool: &Address) {
     set_lending_pool(env, pool);
 }
