@@ -3,6 +3,7 @@ use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
 
 use errors::VaultError;
 use types::Position;
+pub mod liquidation;
 
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
@@ -19,8 +20,6 @@ pub trait LendingPool {
 /// Oracle prices are encoded with 7 decimal places (e.g. $1.00 = 10_000_000).
 /// Dividing `amount * price` by this constant yields the USD-denominated value.
 const PRICE_PRECISION: i128 = 10_000_000;
-
-/// Maximum age (in seconds) an oracle price may have before it is considered stale.
 
 #[contract]
 pub struct VaultContract;
@@ -147,30 +146,11 @@ impl VaultContract {
         events::LiquidationEngineSet { engine }.publish(&env);
     }
 
-    pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
-        let stored_engine =
-            storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
-        if liquidation_engine != stored_engine {
-            soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
-        }
-
-        liquidation_engine.require_auth();
-
-        let position = storage::get_position(&env, &user);
-        if position.is_none() {
-            soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
-        }
-
-        let pool_address = storage::get_pool(&env).expect("Lending pool not set");
-        let pool_client = LendingPoolClient::new(&env, &pool_address);
-        pool_client.is_liquidatable(&user)
-    }
-
     pub fn set_pool(env: Env, pool: Address) {
         let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
 
-        storage::set_pool(&env, &pool);
+        storage::set_lending_pool(&env, &pool);
     }
 
     pub fn is_supported_asset(env: Env, asset: Address) -> bool {
@@ -211,9 +191,7 @@ impl VaultContract {
         let new_balance = balance + amount;
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
-        // Track this asset for the user (used to build Position)
         storage::add_user_asset(&env, &user, &asset);
-        // Add user to the global position index if not already present
         storage::add_to_position_index(&env, &user);
 
         events::Deposited {
@@ -248,7 +226,6 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
-        // Safety check: collateral ratio
         if !Self::is_withdrawal_safe(env.clone(), user.clone(), asset.clone(), amount) {
             soroban_sdk::panic_with_error!(&env, VaultError::BelowMinCollateralRatio);
         }
@@ -256,12 +233,10 @@ impl VaultContract {
         let new_balance = balance - amount;
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
-        // If this asset balance reached zero, remove asset from user's assets list
         if new_balance == 0 {
             storage::remove_user_asset(&env, &user, &asset);
         }
 
-        // If the user has no remaining balance across any asset, remove from index
         if storage::get_position(&env, &user).is_none() {
             storage::remove_from_position_index(&env, &user);
         }
@@ -306,20 +281,26 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
+        // ATOMIC ELIGIBILITY CHECK: Query lending pool directly in real-time
+        let pool_address = storage::get_lending_pool(&env).expect("Lending pool not set");
+        let pool_client = LendingPoolClient::new(&env, &pool_address);
+        
+        if !pool_client.is_liquidatable(&user) {
+            soroban_sdk::panic_with_error!(&env, VaultError::BelowMinCollateralRatio);
+        }
+
         let balance = storage::get_position_balance(&env, &user, &asset);
-        if balance < amount {
+        if balance < amount || amount <= 0 {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
         let new_balance = balance - amount;
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
-        // If this asset balance reached zero, remove asset from user's assets list
         if new_balance == 0 {
             storage::remove_user_asset(&env, &user, &asset);
         }
 
-        // If the user has no remaining balance across any asset, remove from index
         if storage::get_position(&env, &user).is_none() {
             storage::remove_from_position_index(&env, &user);
         }
@@ -341,7 +322,7 @@ impl VaultContract {
     }
 
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
-        let debt = if let Some(pool_addr) = storage::get_pool(&env) {
+        let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
             pool_client.get_user_debt(&user)
         } else {
@@ -358,8 +339,6 @@ impl VaultContract {
         let oracle_client = OracleClient::new(&env, &oracle_address);
         let price_data = oracle_client.get_price(&asset).expect("price not found");
 
-        // Apply the same PRICE_PRECISION scaling used by get_collateral_value so
-        // that withdrawn_value is denominated in USD and comparable to total_value.
         let withdrawn_value = amount
             .checked_mul(price_data.price)
             .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
@@ -371,7 +350,6 @@ impl VaultContract {
 
         let remaining_value = total_value - withdrawn_value;
 
-        // Minimum collateral ratio: 110% (1.1)
         remaining_value >= (debt * 110) / 100
     }
 
@@ -393,8 +371,6 @@ impl VaultContract {
         for item in position.collateral.iter() {
             let price_data = oracle_client.get_price_or_fail(&item.asset);
 
-            // Compute USD value: amount * price / PRICE_PRECISION.
-            // checked_mul guards against overflow before the safe integer division.
             let item_value = item
                 .amount
                 .checked_mul(price_data.price)

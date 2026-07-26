@@ -163,3 +163,131 @@ fn test_seize_collateral_paused_fails() {
     let res = client.try_seize_collateral(&engine, &user, &token_id, &200);
     assert!(res.is_err());
 }
+
+#![cfg(test)]
+
+use super::*;
+use soroban_sdk::{
+    testutils::{Address as _, Events},
+    Address, Env, IntoVal,
+};
+
+// --- Mock Contracts Setup ---
+
+pub struct MockLendingPool;
+
+#[soroban_sdk::contractimpl]
+impl MockLendingPool {
+    pub fn get_user_debt(_env: Env, _user: Address) -> i128 {
+        1000
+    }
+
+    pub fn is_liquidatable(env: Env, user: Address) -> bool {
+        // Toggle health status via env storage for testing
+        env.storage()
+            .instance()
+            .get(&user)
+            .unwrap_or(false)
+    }
+
+    pub fn set_liquidatable(env: Env, user: Address, liquidatable: bool) {
+        env.storage().instance().set(&user, &liquidatable);
+    }
+}
+
+// --- Test Cases ---
+
+#[test]
+fn test_seize_collateral_atomic_success_when_unhealthy() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let asset = Address::generate(&env);
+    let engine = Address::generate(&env);
+
+    // Register Mock Lending Pool
+    let pool_id = env.register_contract(None, MockLendingPool);
+    let pool_client = MockLendingPoolClient::new(&env, &pool_id);
+
+    // Register Vault Contract
+    let vault_id = env.register_contract(None, VaultContract);
+    let vault_client = VaultContractClient::new(&env, &vault_id);
+
+    // Initialize & Setup
+    vault_client.initialize(&admin, &pool_id);
+    vault_client.set_liquidation_engine(&engine);
+    vault_client.add_supported_asset(&asset);
+
+    // Deposit collateral for user
+    vault_client.deposit(&user, &asset, &1000);
+
+    // Set position as UNHEALTHY (liquidatable = true) in mock pool
+    pool_client.set_liquidatable(&user, &true);
+
+    // ATOMIC SEIZURE: Should succeed because user is liquidatable
+    vault_client.seize_collateral(&engine, &user, &asset, &500);
+
+    // Verify balance reduced
+    assert_eq!(vault_client.get_position_balance(&user, &asset), 500);
+}
+
+#[test]
+#[should_panic]
+fn test_seize_collateral_fails_when_position_is_healthy() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let asset = Address::generate(&env);
+    let engine = Address::generate(&env);
+
+    let pool_id = env.register_contract(None, MockLendingPool);
+    let pool_client = MockLendingPoolClient::new(&env, &pool_id);
+
+    let vault_id = env.register_contract(None, VaultContract);
+    let vault_client = VaultContractClient::new(&env, &vault_id);
+
+    vault_client.initialize(&admin, &pool_id);
+    vault_client.set_liquidation_engine(&engine);
+    vault_client.add_supported_asset(&asset);
+
+    vault_client.deposit(&user, &asset, &1000);
+
+    // Mark position as HEALTHY (liquidatable = false)
+    pool_client.set_liquidatable(&user, &false);
+
+    // ATOMIC SEIZURE: Must panic/fail because position is not liquidatable
+    vault_client.seize_collateral(&engine, &user, &asset, &500);
+}
+
+#[test]
+#[should_panic]
+fn test_seize_collateral_fails_for_unauthorized_engine() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let asset = Address::generate(&env);
+    let registered_engine = Address::generate(&env);
+    let rogue_engine = Address::generate(&env);
+
+    let pool_id = env.register_contract(None, MockLendingPool);
+    let pool_client = MockLendingPoolClient::new(&env, &pool_id);
+
+    let vault_id = env.register_contract(None, VaultContract);
+    let vault_client = VaultContractClient::new(&env, &vault_id);
+
+    vault_client.initialize(&admin, &pool_id);
+    vault_client.set_liquidation_engine(&registered_engine);
+    vault_client.add_supported_asset(&asset);
+
+    vault_client.deposit(&user, &asset, &1000);
+    pool_client.set_liquidatable(&user, &true);
+
+    // Attempt seizure from an unregistered engine -> MUST FAIL
+    vault_client.seize_collateral(&rogue_engine, &user, &asset, &500);
+}
