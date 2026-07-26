@@ -28,7 +28,7 @@ pub fn set_paused(env: &Env, paused: bool) {
     env.storage().persistent().set(&DataKey::Paused, &paused);
 }
 
-pub fn _get_lending_pool(env: &Env) -> Option<Address> {
+pub fn get_lending_pool(env: &Env) -> Option<Address> {
     env.storage().persistent().get(&DataKey::LendingPool)
 }
 

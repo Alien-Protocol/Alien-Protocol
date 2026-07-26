@@ -1,20 +1,24 @@
 use soroban_sdk::contracterror;
 
 #[contracterror]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[repr(u32)]
 pub enum VaultError {
-    InvalidInputs = 1,
-    VaultPaused = 2,
-    UnsupportedAsset = 3,
-    AlreadySupported = 4,
-    AssetNotFound = 5,
-    NoPosition = 6,
-    StalePrice = 7,
-    Unauthorized = 8,
-    NotInitialized = 9,
-    BelowMinCollateralRatio = 10,
-    AlreadyAdmin = 11,
-    AlreadyPaused = 12,
-    NotPaused = 13,
+    NotInitialized = 1,
+    AlreadyInitialized = 2,
+    Unauthorized = 3,
+    VaultPaused = 4,
+    AlreadyPaused = 5,
+    NotPaused = 6,
+    InvalidInputs = 7,
+    UnsupportedAsset = 8,
+    AlreadySupported = 9,
+    AssetNotFound = 10,
+    NoPosition = 11,
+    BelowMinCollateralRatio = 12,
+    AlreadyAdmin = 13,
+    LendingPoolNotSet = 14,
+    OracleNotConfigured = 15,
+    PriceNotFound = 16,
+    MathOverflow = 17,
 }
