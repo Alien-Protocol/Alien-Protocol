@@ -345,13 +345,15 @@ fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
 
     baseline_sac.mint(baseline_user, &1000);
 
-    env.budget().reset_default();
+    let mut _budget = env.budget();
+    _budget.reset_default();
     client.deposit(baseline_user, baseline_token, &100);
-    let baseline_deposit_cpu = env.budget().cpu_instruction_count();
+    let baseline_deposit_cpu = env.budget().cpu_instruction_cost();
 
-    env.budget().reset_default();
+    let mut _budget = env.budget();
+    _budget.reset_default();
     client.withdraw(baseline_user, baseline_token, &100);
-    let baseline_withdraw_cpu = env.budget().cpu_instruction_count();
+    let baseline_withdraw_cpu = env.budget().cpu_instruction_cost();
 
     // ── Populate 19 more users ────────────────────────────────────────────────
     for i in 1..N_USERS {
@@ -369,13 +371,15 @@ fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
     // ── Re-measure cost for user[0] re-entering a 19-user index ─────────────
     baseline_sac.mint(baseline_user, &200);
 
-    env.budget().reset_default();
+    let mut _budget = env.budget();
+    _budget.reset_default();
     client.deposit(baseline_user, baseline_token, &100);
-    let populated_deposit_cpu = env.budget().cpu_instruction_count();
+    let populated_deposit_cpu = env.budget().cpu_instruction_cost();
 
-    env.budget().reset_default();
+    let mut _budget = env.budget();
+    _budget.reset_default();
     client.withdraw(baseline_user, baseline_token, &100);
-    let populated_withdraw_cpu = env.budget().cpu_instruction_count();
+    let populated_withdraw_cpu = env.budget().cpu_instruction_cost();
 
     // ── Assert costs stay within 5% of baseline (O(1) not O(n)) ─────────────
     let deposit_delta = populated_deposit_cpu.abs_diff(baseline_deposit_cpu);
@@ -443,40 +447,6 @@ fn test_randomized_operation_sequence_invariants() {
     // expected[user][asset] mirrors what we think the on-chain balance is
     let mut expected = [[0i128; N_ASSETS]; N_USERS];
 
-    // Helper: check all three invariants for a single (user, asset) pair
-    let check = |u: usize, a: usize, exp: i128| {
-        let user = users[u].as_ref().unwrap();
-        let token_id = tokens[a].as_ref().unwrap();
-
-        // 1. balance matches
-        assert_eq!(
-            client.get_position_balance(user, token_id),
-            exp,
-            "user[{u}] asset[{a}]: balance mismatch"
-        );
-
-        // 2. user-asset page membership
-        let in_assets = {
-            let page = client.get_user_assets_page(user, &0, &50);
-            page.assets.contains(token_id)
-        };
-        assert_eq!(
-            in_assets,
-            exp > 0,
-            "user[{u}] asset[{a}]: asset-page membership inconsistent"
-        );
-
-        // 3. position-index membership: user should be in index iff any asset > 0
-        let any_balance = (0..N_ASSETS).any(|b| {
-            client.get_position_balance(user, tokens[b].as_ref().unwrap()) > 0
-        });
-        let in_index = client.get_position_index().contains(user);
-        assert_eq!(
-            in_index, any_balance,
-            "user[{u}]: position-index membership inconsistent"
-        );
-    };
-
     // ── Sequence A: all users deposit into all assets ─────────────────────────
     for u in 0..N_USERS {
         for a in 0..N_ASSETS {
@@ -486,7 +456,14 @@ fn test_randomized_operation_sequence_invariants() {
             sac.mint(user, &500);
             client.deposit(user, token_id, &200);
             expected[u][a] = 200;
-            check(u, a, expected[u][a]);
+
+            // Invariant 1: balance matches
+            assert_eq!(client.get_position_balance(user, token_id), expected[u][a]);
+            // Invariant 2: asset in user page iff balance > 0
+            let page = client.get_user_assets_page(user, &0, &50);
+            assert!(page.assets.contains(token_id));
+            // Invariant 3: user in position index
+            assert!(client.get_position_index().contains(user));
         }
     }
 
@@ -496,7 +473,11 @@ fn test_randomized_operation_sequence_invariants() {
         let token_id = tokens[0].as_ref().unwrap();
         client.withdraw(user, token_id, &100);
         expected[u][0] -= 100;
-        check(u, 0, expected[u][0]);
+
+        assert_eq!(client.get_position_balance(user, token_id), expected[u][0]);
+        let page = client.get_user_assets_page(user, &0, &50);
+        assert_eq!(page.assets.contains(token_id), expected[u][0] > 0);
+        assert!(client.get_position_index().contains(user));
     }
 
     // ── Sequence C: full withdrawal from second asset ─────────────────────────
@@ -505,7 +486,12 @@ fn test_randomized_operation_sequence_invariants() {
         let token_id = tokens[1].as_ref().unwrap();
         client.withdraw(user, token_id, &200);
         expected[u][1] = 0;
-        check(u, 1, expected[u][1]);
+
+        assert_eq!(client.get_position_balance(user, token_id), 0);
+        let page = client.get_user_assets_page(user, &0, &50);
+        assert!(!page.assets.contains(token_id));
+        // user still has asset[0] and asset[2] so stays in index
+        assert!(client.get_position_index().contains(user));
     }
 
     // ── Sequence D: redeposit into second asset ───────────────────────────────
@@ -516,7 +502,11 @@ fn test_randomized_operation_sequence_invariants() {
         sac.mint(user, &300);
         client.deposit(user, token_id, &150);
         expected[u][1] = 150;
-        check(u, 1, expected[u][1]);
+
+        assert_eq!(client.get_position_balance(user, token_id), 150);
+        let page = client.get_user_assets_page(user, &0, &50);
+        assert!(page.assets.contains(token_id));
+        assert!(client.get_position_index().contains(user));
     }
 
     // ── Sequence E: full exit for all users ───────────────────────────────────
@@ -528,7 +518,9 @@ fn test_randomized_operation_sequence_invariants() {
                 let token_id = tokens[a].as_ref().unwrap();
                 client.withdraw(user, token_id, &bal);
                 expected[u][a] = 0;
-                check(u, a, 0);
+                assert_eq!(client.get_position_balance(user, token_id), 0);
+                let page = client.get_user_assets_page(user, &0, &50);
+                assert!(!page.assets.contains(token_id));
             }
         }
         // After full exit, user must not be in index

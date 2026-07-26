@@ -416,19 +416,28 @@ impl VaultContract {
     pub fn get_user_assets_page(env: Env, user: Address, cursor: u32, limit: u32) -> AssetsPage {
         views::get_user_assets_page(&env, &user, cursor, limit)
     }
+}
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Legacy compatibility shim — test/testutils builds only.
-    //
-    // Gated behind cfg so it is never compiled into a production wasm binary.
-    // Production callers should use `get_positions_page` instead.
-    // ─────────────────────────────────────────────────────────────────────────
+mod errors;
+mod events;
+mod storage;
+#[cfg(test)]
+mod tests;
+mod types;
+mod views;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Legacy compatibility shim — test/testutils builds only.
+//
+// Separate impl block so the #[cfg] does not interact with #[contractimpl].
+// Production wasm builds never see this method.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(any(test, feature = "testutils"))]
+impl VaultContract {
     /// Returns all users currently in the position index as a `Vec<Address>`.
     ///
-    /// **Warning:** this is O(n) and is compiled only for test/testutils builds.
+    /// O(n) — compiled only for test/testutils builds.
     /// Production code should use `get_positions_page` instead.
-    #[cfg(any(test, feature = "testutils"))]
     pub fn get_position_index(env: Env) -> soroban_sdk::Vec<Address> {
         let count = storage::position_count(&env);
         let mut result: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(&env);
@@ -440,11 +449,3 @@ impl VaultContract {
         result
     }
 }
-
-mod errors;
-mod events;
-mod storage;
-#[cfg(test)]
-mod tests;
-mod types;
-mod views;
