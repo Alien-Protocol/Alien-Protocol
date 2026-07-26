@@ -95,7 +95,6 @@ impl VaultContract {
         assets::is_supported_asset(env, asset)
     }
 
-
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
         let stored_engine =
             storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
@@ -114,7 +113,6 @@ impl VaultContract {
         let pool_client = LendingPoolClient::new(&env, &pool_address);
         pool_client.is_liquidatable(&user)
     }
-
 
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)

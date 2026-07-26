@@ -1,9 +1,9 @@
 #![cfg(test)]
 
 use super::super::*;
+use events::*;
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{token, Address, Env, IntoVal, Symbol, TryFromVal};
-use events::*;
 
 fn setup_env() -> (
     Env,
@@ -22,7 +22,7 @@ fn setup_env() -> (
     let admin = Address::generate(&env);
     let lending_pool = Address::generate(&env);
     let user = Address::generate(&env);
-    
+
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
     let token_id = token_contract.address();
@@ -52,13 +52,13 @@ fn test_deposit_event_topics() {
 
     // Topics: ["deposited", user, asset]
     assert_eq!(topics.len(), 3);
-    
+
     let event_name = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
     assert_eq!(event_name, Symbol::new(&env, "deposited"));
-    
+
     let topic_user = Address::try_from_val(&env, &topics.get(1).unwrap()).unwrap();
     assert_eq!(topic_user, user);
-    
+
     let topic_asset = Address::try_from_val(&env, &topics.get(2).unwrap()).unwrap();
     assert_eq!(topic_asset, token_id);
 
@@ -71,14 +71,14 @@ fn test_configuration_events() {
     let (env, client, admin, lending_pool, _, _) = setup_env();
 
     client.initialize(&admin, &lending_pool);
-    
+
     let new_oracle = Address::generate(&env);
-    
+
     client.set_oracle(&new_oracle);
-    
+
     let last_event = env.events().all().last().unwrap();
     let topics = last_event.1;
-    
+
     let event_name = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
     assert_eq!(event_name, Symbol::new(&env, "oracle_updated"));
     

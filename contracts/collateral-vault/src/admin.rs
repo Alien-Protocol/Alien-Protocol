@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, BytesN, Env};
 use crate::{errors::VaultError, events, storage};
+use soroban_sdk::{Address, BytesN, Env};
 
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
     let current_admin = storage::get_admin(&env).ok_or(VaultError::InvalidInputs)?;
@@ -106,8 +106,9 @@ pub fn unpause(env: Env) {
 pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
     let admin = storage::get_admin(&env).expect("not initialized");
     admin.require_auth();
-    
-    env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+
+    env.deployer()
+        .update_current_contract_wasm(new_wasm_hash.clone());
 
     events::ContractUpgraded {
         old_hash: None,

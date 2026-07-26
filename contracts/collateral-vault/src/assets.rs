@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, Env};
 use crate::{errors::VaultError, events, storage};
+use soroban_sdk::{Address, Env};
 
 pub fn add_supported_asset(env: Env, asset: Address) {
     let admin = storage::get_admin(&env).expect("not initialized");
