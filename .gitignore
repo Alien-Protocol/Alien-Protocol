@@ -1,2 +1,12 @@
 plan.md
 target
+
+# Test snapshots
+**/test_snapshots/
+**/__snapshots__/
+*.snap
+*.snapshot
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
