@@ -1,5 +1,4 @@
-use soroban_sdk::{contractevent, Address};
-
+use soroban_sdk::{contractevent, Address, BytesN};
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Initialized {
@@ -73,4 +72,21 @@ pub struct Withdrawn {
 #[derive(Clone, Debug, PartialEq)]
 pub struct LendingPoolUpdated {
     pub lending_pool: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContractUpgraded {
+    pub actor: Address,
+    pub old_contract_version: u32,
+    pub new_contract_version: u32,
+    pub wasm_hash: BytesN<32>,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct StorageMigrated {
+    pub actor: Address,
+    pub old_storage_schema_version: u32,
+    pub new_storage_schema_version: u32,
 }
