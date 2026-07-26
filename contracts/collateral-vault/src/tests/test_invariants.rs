@@ -15,7 +15,6 @@
 use super::super::*;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Env};
-use types::NO_NEXT_CURSOR;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -61,7 +60,7 @@ fn collect_all_users(env: &Env, client: &VaultContractClient) -> soroban_sdk::Ve
         for p in page.positions.iter() {
             result.push_back(p.user.clone());
         }
-        if page.next_cursor == NO_NEXT_CURSOR {
+        if page.next_cursor == types::NO_NEXT_CURSOR {
             break;
         }
         cursor = page.next_cursor;

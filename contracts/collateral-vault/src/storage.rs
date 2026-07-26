@@ -31,10 +31,6 @@ pub fn set_paused(env: &Env, paused: bool) {
     env.storage().persistent().set(&DataKey::Paused, &paused);
 }
 
-pub fn _get_lending_pool(env: &Env) -> Option<Address> {
-    env.storage().persistent().get(&DataKey::LendingPool)
-}
-
 pub fn set_lending_pool(env: &Env, lending_pool: &Address) {
     env.storage()
         .persistent()
@@ -251,12 +247,10 @@ pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
         env.storage()
             .persistent()
             .set(&DataKey::UserAssetAt(user.clone(), slot), &last_asset);
-        env.storage()
-            .persistent()
-            .set(
-                &DataKey::UserAssetSlot(user.clone(), last_asset),
-                &slot,
-            );
+        env.storage().persistent().set(
+            &DataKey::UserAssetSlot(user.clone(), last_asset),
+            &slot,
+        );
     }
 
     env.storage()

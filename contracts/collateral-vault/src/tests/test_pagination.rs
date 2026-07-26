@@ -12,7 +12,6 @@
 use super::super::*;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Env};
-use types::NO_NEXT_CURSOR;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared test helpers
@@ -70,7 +69,7 @@ fn test_positions_page_empty_collection() {
     let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
     let page = client.get_positions_page(&0, &10);
     assert!(page.positions.is_empty());
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -82,7 +81,7 @@ fn test_positions_page_single_item() {
     let page = client.get_positions_page(&0, &10);
     assert_eq!(page.positions.len(), 1);
     assert_eq!(page.positions.get(0).unwrap().user, user);
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -106,7 +105,7 @@ fn test_positions_page_cursor_advances() {
     // Page 2: limit=2, cursor=2 → returns 1 item, exhausted
     let page2 = client.get_positions_page(&2, &2);
     assert_eq!(page2.positions.len(), 1);
-    assert_eq!(page2.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page2.next_cursor, types::NO_NEXT_CURSOR);
 
     // Combined, all three distinct users are covered
     let mut users: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(&env);
@@ -133,7 +132,7 @@ fn test_positions_page_limit_equals_count() {
 
     let page = client.get_positions_page(&0, &2);
     assert_eq!(page.positions.len(), 2);
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -145,7 +144,7 @@ fn test_positions_page_cursor_at_end_returns_empty() {
     // cursor=1 is past the only entry
     let page = client.get_positions_page(&1, &10);
     assert!(page.positions.is_empty());
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -157,7 +156,7 @@ fn test_positions_page_withdrawn_user_excluded() {
 
     let page = client.get_positions_page(&0, &10);
     assert!(page.positions.is_empty());
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -184,7 +183,7 @@ fn test_positions_page_max_limit_accepted() {
     let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
     let page = client.get_positions_page(&0, &50);
     assert!(page.positions.is_empty());
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -202,7 +201,7 @@ fn test_supported_assets_page_basic() {
     assert!(page.assets.contains(&token_id));
     assert!(page.assets.contains(&tok2));
     assert!(page.assets.contains(&tok3));
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -218,7 +217,7 @@ fn test_supported_assets_page_pagination() {
 
     let page2 = client.get_supported_assets_page(&3, &3);
     assert_eq!(page2.assets.len(), 2);
-    assert_eq!(page2.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page2.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -228,7 +227,7 @@ fn test_supported_assets_page_after_remove() {
 
     let page = client.get_supported_assets_page(&0, &10);
     assert!(page.assets.is_empty());
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -250,7 +249,7 @@ fn test_user_assets_page_single_asset() {
     let page = client.get_user_assets_page(&user, &0, &10);
     assert_eq!(page.assets.len(), 1);
     assert!(page.assets.contains(&token_id));
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -272,7 +271,7 @@ fn test_user_assets_page_multiple_assets_paginated() {
 
     let page2 = client.get_user_assets_page(&user, &2, &2);
     assert_eq!(page2.assets.len(), 1);
-    assert_eq!(page2.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page2.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -284,7 +283,7 @@ fn test_user_assets_page_removed_on_full_withdraw() {
 
     let page = client.get_user_assets_page(&user, &0, &10);
     assert!(page.assets.is_empty());
-    assert_eq!(page.next_cursor, NO_NEXT_CURSOR);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
