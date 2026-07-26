@@ -383,11 +383,13 @@ fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
 
     assert!(
         deposit_delta <= baseline_deposit_cpu / 20,
-        "deposit CPU grew by {deposit_delta} instructions vs baseline {baseline_deposit_cpu} — possible O(n) regression"
+        "deposit CPU grew by {deposit_delta} instructions vs baseline \
+         {baseline_deposit_cpu} — possible O(n) regression"
     );
     assert!(
         withdraw_delta <= baseline_withdraw_cpu / 20,
-        "withdraw CPU grew by {withdraw_delta} instructions vs baseline {baseline_withdraw_cpu} — possible O(n) regression"
+        "withdraw CPU grew by {withdraw_delta} instructions vs baseline \
+         {baseline_withdraw_cpu} — possible O(n) regression"
     );
 
     // ── Final lifecycle correctness ───────────────────────────────────────────
@@ -531,7 +533,9 @@ fn test_randomized_operation_sequence_invariants() {
         }
         // After full exit, user must not be in index
         assert!(
-            !client.get_position_index().contains(users[u].as_ref().unwrap()),
+            !client
+                .get_position_index()
+                .contains(users[u].as_ref().unwrap()),
             "user[{u}] still in index after full exit"
         );
     }
