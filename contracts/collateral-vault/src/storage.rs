@@ -35,11 +35,7 @@ pub fn get_lending_pool(env: &Env) -> Option<Address> {
         .get::<_, Address>(&DataKey::LendingPool)
     {
         Some(pool)
-    } else if let Some(legacy_pool) = env
-        .storage()
-        .persistent()
-        .get::<_, Address>(&DataKey::Pool)
-    {
+    } else if let Some(legacy_pool) = env.storage().persistent().get::<_, Address>(&DataKey::Pool) {
         env.storage()
             .persistent()
             .set(&DataKey::LendingPool, &legacy_pool);
