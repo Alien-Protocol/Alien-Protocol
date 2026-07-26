@@ -349,13 +349,10 @@ fn test_pool_migration_from_legacy_key() {
 
     // Verify DataKey::LendingPool now holds the value
     env.as_contract(&contract_id, || {
-        let canonical_pool: Option<Address> = env
-            .storage()
-            .persistent()
-            .get(&types::DataKey::LendingPool);
+        let canonical_pool: Option<Address> =
+            env.storage().persistent().get(&types::DataKey::LendingPool);
         assert_eq!(canonical_pool, Some(legacy_pool));
-        let legacy_check: Option<Address> =
-            env.storage().persistent().get(&types::DataKey::Pool);
+        let legacy_check: Option<Address> = env.storage().persistent().get(&types::DataKey::Pool);
         assert_eq!(legacy_check, None);
     });
 }

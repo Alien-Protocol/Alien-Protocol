@@ -29,10 +29,20 @@ pub fn set_paused(env: &Env, paused: bool) {
 }
 
 pub fn get_lending_pool(env: &Env) -> Option<Address> {
-    if let Some(pool) = env.storage().persistent().get::<_, Address>(&DataKey::LendingPool) {
+    if let Some(pool) = env
+        .storage()
+        .persistent()
+        .get::<_, Address>(&DataKey::LendingPool)
+    {
         Some(pool)
-    } else if let Some(legacy_pool) = env.storage().persistent().get::<_, Address>(&DataKey::Pool) {
-        env.storage().persistent().set(&DataKey::LendingPool, &legacy_pool);
+    } else if let Some(legacy_pool) = env
+        .storage()
+        .persistent()
+        .get::<_, Address>(&DataKey::Pool)
+    {
+        env.storage()
+            .persistent()
+            .set(&DataKey::LendingPool, &legacy_pool);
         env.storage().persistent().remove(&DataKey::Pool);
         Some(legacy_pool)
     } else {
