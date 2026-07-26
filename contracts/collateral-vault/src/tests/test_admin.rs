@@ -387,3 +387,24 @@ fn test_set_oracle_same_as_lending_pool_fails() {
     let res = client.try_set_oracle(&pool);
     assert_eq!(res, Err(Ok(VaultError::InvalidConfig)));
 }
+
+#[test]
+fn test_set_pool_emits_lending_pool_updated_event() {
+    let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+
+    let new_pool = Address::generate(&env);
+    client.set_pool(&new_pool);
+
+    assert_eq!(client.get_lending_pool(), Some(new_pool.clone()));
+    assert_eq!(client.get_pool(), Some(new_pool));
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let event_symbol =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "lending_pool_updated")
+    );
+}
