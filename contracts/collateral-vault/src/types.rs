@@ -60,3 +60,31 @@ pub struct PriceData {
     pub price: i128,
     pub timestamp: u64,
 }
+
+/// Read-only snapshot of vault configuration.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct VaultStatus {
+    pub version: u32,
+    pub initialized: bool,
+    pub paused: bool,
+    pub admin: Option<Address>,
+    pub supported_assets_count: u32,
+    pub lending_pool: Option<Address>,
+    pub oracle: Option<Address>,
+    pub liquidation_engine: Option<Address>,
+}
+
+/// Read-only snapshot of a user's position.
+/// All nullable fields use Option explicitly – callers receive `None` instead
+/// of a panic when data is unavailable.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct UserPositionView {
+    pub user: Address,
+    pub collateral_assets: Vec<CollateralAsset>,
+    /// Total collateral value in USD. `None` when the oracle is unavailable
+    /// or any individual price lookup fails.
+    pub total_collateral_value: Option<i128>,
+    pub position_count: u32,
+}
