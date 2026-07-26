@@ -82,20 +82,36 @@ impl VaultContract {
         Ok(())
     }
 
-    pub fn set_lending_pool(env: Env, lending_pool: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
+    pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultError> {
+        let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
         admin.require_auth();
+
+        if let Some(current_oracle) = storage::get_oracle(&env) {
+            if lending_pool == current_oracle {
+                return Err(VaultError::InvalidConfig);
+            }
+        }
 
         storage::set_lending_pool(&env, &lending_pool);
 
         events::LendingPoolUpdated { lending_pool }.publish(&env);
+
+        Ok(())
     }
 
-    pub fn set_oracle(env: Env, oracle: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
+    pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
+        let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
         admin.require_auth();
 
+        if let Some(current_lending_pool) = storage::get_lending_pool(&env) {
+            if oracle == current_lending_pool {
+                return Err(VaultError::InvalidConfig);
+            }
+        }
+
         storage::set_oracle(&env, &oracle);
+
+        Ok(())
     }
 
     pub fn pause(env: Env) {
@@ -178,11 +194,8 @@ impl VaultContract {
         pool_client.is_liquidatable(&user)
     }
 
-    pub fn set_pool(env: Env, pool: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        storage::set_pool(&env, &pool);
+    pub fn set_pool(env: Env, pool: Address) -> Result<(), VaultError> {
+        Self::set_lending_pool(env, pool)
     }
 
     pub fn is_supported_asset(env: Env, asset: Address) -> bool {

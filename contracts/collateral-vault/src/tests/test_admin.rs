@@ -366,3 +366,24 @@ fn test_get_config_uninitialized_fails() {
     let res = client.try_get_config();
     assert_eq!(res, Err(Ok(VaultError::NotInitialized)));
 }
+
+#[test]
+fn test_set_lending_pool_same_as_oracle_fails() {
+    let (_env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+
+    let oracle = client.get_oracle().unwrap();
+    let res = client.try_set_lending_pool(&oracle);
+    assert_eq!(res, Err(Ok(VaultError::InvalidConfig)));
+
+    let res_pool = client.try_set_pool(&oracle);
+    assert_eq!(res_pool, Err(Ok(VaultError::InvalidConfig)));
+}
+
+#[test]
+fn test_set_oracle_same_as_lending_pool_fails() {
+    let (_env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+
+    let pool = client.get_lending_pool().unwrap();
+    let res = client.try_set_oracle(&pool);
+    assert_eq!(res, Err(Ok(VaultError::InvalidConfig)));
+}
