@@ -409,9 +409,9 @@ fn test_set_pool_emits_lending_pool_updated_event() {
     let new_pool = Address::generate(&env);
     client.set_pool(&new_pool);
 
-    assert_eq!(client.get_lending_pool(), Some(new_pool.clone()));
-    assert_eq!(client.get_pool(), Some(new_pool));
-
     let last_event = env.events().all().last().unwrap();
     assert_eq!(last_event.0, client.address);
+
+    assert_eq!(client.get_lending_pool(), Some(new_pool.clone()));
+    assert_eq!(client.get_pool(), Some(new_pool));
 }
