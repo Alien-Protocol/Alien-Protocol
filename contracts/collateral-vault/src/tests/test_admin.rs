@@ -4,6 +4,20 @@ use super::super::*;
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{token, Address, Env};
 
+#[contract]
+pub struct MockLendingPool;
+
+#[contractimpl]
+impl MockLendingPool {
+    pub fn get_user_debt(_env: Env, _user: Address) -> i128 {
+        0
+    }
+
+    pub fn is_liquidatable(_user: Address) -> bool {
+        false
+    }
+}
+
 fn setup_env() -> (
     Env,
     VaultContractClient<'static>,
@@ -21,7 +35,7 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
-    let lending_pool = Address::generate(&env);
+    let lending_pool = env.register(MockLendingPool, ());
     let oracle = Address::generate(&env);
     let liquidation_engine = Address::generate(&env);
 
@@ -392,7 +406,7 @@ fn test_set_oracle_same_as_lending_pool_fails() {
 fn test_set_pool_emits_lending_pool_updated_event() {
     let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
 
-    let new_pool = Address::generate(&env);
+    let new_pool = env.register(MockLendingPool, ());
     client.set_pool(&new_pool);
 
     assert_eq!(client.get_lending_pool(), Some(new_pool.clone()));
