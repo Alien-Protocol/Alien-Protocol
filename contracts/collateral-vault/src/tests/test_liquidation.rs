@@ -29,7 +29,7 @@ fn setup_env() -> (
     let config = types::VaultConfig {
         admin: admin.clone(),
         lending_pool,
-        oracle,
+        oracle: oracle.clone(),
         liquidation_engine,
     };
 
