@@ -314,9 +314,10 @@ fn test_redeposit_after_full_exit_restores_index() {
 // Budget-sensitive: N users, M assets each
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Deposit with a realistic number of users (20) and assets (5) to verify that
-/// write costs do not grow with total-user count.  This is not a fuzz test but
-/// provides a baseline for manual Soroban budget inspection during CI.
+/// Asserts that deposit and withdraw CPU costs do not grow with the number of
+/// existing users by comparing instruction counts on an empty index versus a
+/// 19-user populated one.  The 20th user's operation cost must stay within 5%
+/// of the baseline, confirming O(1) per-user behaviour.
 #[test]
 fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
     let (env, client, _admin, _oracle) = setup_env();
@@ -337,8 +338,23 @@ fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
         users[i] = Some(Address::generate(&env));
     }
 
-    // All users deposit into all assets
-    for i in 0..N_USERS {
+    // ── Baseline: measure cost for user[0] on an empty index ─────────────────
+    let baseline_user = users[0].as_ref().unwrap();
+    let baseline_token = tokens[0].as_ref().unwrap();
+    let baseline_sac = sacs[0].as_ref().unwrap();
+
+    baseline_sac.mint(baseline_user, &1000);
+
+    env.budget().reset_default();
+    client.deposit(baseline_user, baseline_token, &100);
+    let baseline_deposit_cpu = env.budget().cpu_instruction_count();
+
+    env.budget().reset_default();
+    client.withdraw(baseline_user, baseline_token, &100);
+    let baseline_withdraw_cpu = env.budget().cpu_instruction_count();
+
+    // ── Populate 19 more users ────────────────────────────────────────────────
+    for i in 1..N_USERS {
         let user = users[i].as_ref().unwrap();
         for j in 0..N_ASSETS {
             let token_id = tokens[j].as_ref().unwrap();
@@ -348,15 +364,176 @@ fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
         }
     }
 
-    assert_eq!(client.get_position_count(), N_USERS as u32);
+    assert_eq!(client.get_position_count(), N_USERS as u32 - 1);
 
-    // All users fully withdraw from all assets
-    for i in 0..N_USERS {
+    // ── Re-measure cost for user[0] re-entering a 19-user index ─────────────
+    baseline_sac.mint(baseline_user, &200);
+
+    env.budget().reset_default();
+    client.deposit(baseline_user, baseline_token, &100);
+    let populated_deposit_cpu = env.budget().cpu_instruction_count();
+
+    env.budget().reset_default();
+    client.withdraw(baseline_user, baseline_token, &100);
+    let populated_withdraw_cpu = env.budget().cpu_instruction_count();
+
+    // ── Assert costs stay within 5% of baseline (O(1) not O(n)) ─────────────
+    let deposit_delta = populated_deposit_cpu.abs_diff(baseline_deposit_cpu);
+    let withdraw_delta = populated_withdraw_cpu.abs_diff(baseline_withdraw_cpu);
+
+    assert!(
+        deposit_delta <= baseline_deposit_cpu / 20,
+        "deposit CPU grew by {deposit_delta} instructions vs baseline {baseline_deposit_cpu} — possible O(n) regression"
+    );
+    assert!(
+        withdraw_delta <= baseline_withdraw_cpu / 20,
+        "withdraw CPU grew by {withdraw_delta} instructions vs baseline {baseline_withdraw_cpu} — possible O(n) regression"
+    );
+
+    // ── Final lifecycle correctness ───────────────────────────────────────────
+    // Fully drain remaining users
+    for i in 1..N_USERS {
         let user = users[i].as_ref().unwrap();
         for j in 0..N_ASSETS {
             let token_id = tokens[j].as_ref().unwrap();
             client.withdraw(user, token_id, &100);
         }
+    }
+
+    assert_eq!(client.get_position_count(), 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Randomized operation sequence (deterministic seed via address generation)
+//
+// Simulates deposit → partial-withdraw → full-withdraw → redeposit sequences
+// and verifies balance, user-asset membership, and position-index invariants
+// after every step using a fixed address-generation seed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Model-based sequence: for each of N users run a scripted mix of
+/// deposit / partial-withdraw / full-withdraw / redeposit across M assets,
+/// asserting the three key invariants after every operation:
+///   1. `get_position_balance` matches expected value
+///   2. user-asset page contains the asset iff balance > 0
+///   3. position index contains user iff any balance > 0
+#[test]
+fn test_randomized_operation_sequence_invariants() {
+    let (env, client, _admin, _oracle) = setup_env();
+
+    // Use 4 users and 3 assets for a dense interaction matrix.
+    const N_USERS: usize = 4;
+    const N_ASSETS: usize = 3;
+
+    let mut users: [Option<Address>; N_USERS] = core::array::from_fn(|_| None);
+    let mut tokens: [Option<Address>; N_ASSETS] = core::array::from_fn(|_| None);
+    let mut sacs: [Option<token::StellarAssetClient>; N_ASSETS] = core::array::from_fn(|_| None);
+
+    for i in 0..N_ASSETS {
+        let (id, sac) = make_token(&env, &client);
+        tokens[i] = Some(id);
+        sacs[i] = Some(sac);
+    }
+    for i in 0..N_USERS {
+        users[i] = Some(Address::generate(&env));
+    }
+
+    // expected[user][asset] mirrors what we think the on-chain balance is
+    let mut expected = [[0i128; N_ASSETS]; N_USERS];
+
+    // Helper: check all three invariants for a single (user, asset) pair
+    let check = |u: usize, a: usize, exp: i128| {
+        let user = users[u].as_ref().unwrap();
+        let token_id = tokens[a].as_ref().unwrap();
+
+        // 1. balance matches
+        assert_eq!(
+            client.get_position_balance(user, token_id),
+            exp,
+            "user[{u}] asset[{a}]: balance mismatch"
+        );
+
+        // 2. user-asset page membership
+        let in_assets = {
+            let page = client.get_user_assets_page(user, &0, &50);
+            page.assets.contains(token_id)
+        };
+        assert_eq!(
+            in_assets,
+            exp > 0,
+            "user[{u}] asset[{a}]: asset-page membership inconsistent"
+        );
+
+        // 3. position-index membership: user should be in index iff any asset > 0
+        let any_balance = (0..N_ASSETS).any(|b| {
+            client.get_position_balance(user, tokens[b].as_ref().unwrap()) > 0
+        });
+        let in_index = client.get_position_index().contains(user);
+        assert_eq!(
+            in_index, any_balance,
+            "user[{u}]: position-index membership inconsistent"
+        );
+    };
+
+    // ── Sequence A: all users deposit into all assets ─────────────────────────
+    for u in 0..N_USERS {
+        for a in 0..N_ASSETS {
+            let user = users[u].as_ref().unwrap();
+            let token_id = tokens[a].as_ref().unwrap();
+            let sac = sacs[a].as_ref().unwrap();
+            sac.mint(user, &500);
+            client.deposit(user, token_id, &200);
+            expected[u][a] = 200;
+            check(u, a, expected[u][a]);
+        }
+    }
+
+    // ── Sequence B: partial withdrawal from first asset ───────────────────────
+    for u in 0..N_USERS {
+        let user = users[u].as_ref().unwrap();
+        let token_id = tokens[0].as_ref().unwrap();
+        client.withdraw(user, token_id, &100);
+        expected[u][0] -= 100;
+        check(u, 0, expected[u][0]);
+    }
+
+    // ── Sequence C: full withdrawal from second asset ─────────────────────────
+    for u in 0..N_USERS {
+        let user = users[u].as_ref().unwrap();
+        let token_id = tokens[1].as_ref().unwrap();
+        client.withdraw(user, token_id, &200);
+        expected[u][1] = 0;
+        check(u, 1, expected[u][1]);
+    }
+
+    // ── Sequence D: redeposit into second asset ───────────────────────────────
+    for u in 0..N_USERS {
+        let user = users[u].as_ref().unwrap();
+        let token_id = tokens[1].as_ref().unwrap();
+        let sac = sacs[1].as_ref().unwrap();
+        sac.mint(user, &300);
+        client.deposit(user, token_id, &150);
+        expected[u][1] = 150;
+        check(u, 1, expected[u][1]);
+    }
+
+    // ── Sequence E: full exit for all users ───────────────────────────────────
+    for u in 0..N_USERS {
+        let user = users[u].as_ref().unwrap();
+        for a in 0..N_ASSETS {
+            let bal = expected[u][a];
+            if bal > 0 {
+                let token_id = tokens[a].as_ref().unwrap();
+                client.withdraw(user, token_id, &bal);
+                expected[u][a] = 0;
+                check(u, a, 0);
+            }
+        }
+        // After full exit, user must not be in index
+        assert!(
+            !client.get_position_index().contains(users[u].as_ref().unwrap()),
+            "user[{u}] still in index after full exit"
+        );
     }
 
     assert_eq!(client.get_position_count(), 0);

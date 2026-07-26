@@ -4,7 +4,8 @@
 //! - Cursor/limit correctness for `get_positions_page`
 //! - Cursor/limit correctness for `get_supported_assets_page`
 //! - Cursor/limit correctness for `get_user_assets_page`
-//! - Rejection of limit == 0 and limit > MAX_PAGE_LIMIT
+//! - Rejection of limit == 0 and limit > MAX_PAGE_LIMIT with specific error
+//! - Boundary acceptance: limit 1 and 50 accepted across all three endpoints
 //! - Deterministic ordering of continuation cursors
 
 #![cfg(test)]
@@ -61,7 +62,7 @@ fn add_token(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// get_positions_page
+// get_positions_page — correctness
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[test]
@@ -97,17 +98,17 @@ fn test_positions_page_cursor_advances() {
     client.deposit(&user2, &token_id, &100);
     client.deposit(&user3, &token_id, &100);
 
-    // Page 1: limit=2, cursor=0 → returns 2 items, next_cursor=2
+    // Page 1: limit=2, cursor=0 → 2 items, next_cursor=2
     let page1 = client.get_positions_page(&0, &2);
     assert_eq!(page1.positions.len(), 2);
     assert_eq!(page1.next_cursor, 2);
 
-    // Page 2: limit=2, cursor=2 → returns 1 item, exhausted
+    // Page 2: limit=2, cursor=2 → 1 item, exhausted
     let page2 = client.get_positions_page(&2, &2);
     assert_eq!(page2.positions.len(), 1);
     assert_eq!(page2.next_cursor, types::NO_NEXT_CURSOR);
 
-    // Combined, all three distinct users are covered
+    // Combined covers all three users
     let mut users: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(&env);
     for p in page1.positions.iter() {
         users.push_back(p.user.clone());
@@ -141,7 +142,6 @@ fn test_positions_page_cursor_at_end_returns_empty() {
     sac.mint(&user, &1000);
     client.deposit(&user, &token_id, &100);
 
-    // cursor=1 is past the only entry
     let page = client.get_positions_page(&1, &10);
     assert!(page.positions.is_empty());
     assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
@@ -159,35 +159,41 @@ fn test_positions_page_withdrawn_user_excluded() {
     assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// get_positions_page — limit boundary tests
+// ─────────────────────────────────────────────────────────────────────────────
+
 #[test]
-fn test_positions_page_limit_zero_panics() {
+fn test_positions_page_limit_one_accepted() {
     let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
-    assert!(
-        client.try_get_positions_page(&0, &0).is_err(),
-        "limit=0 should be rejected"
-    );
+    let page = client.get_positions_page(&0, &1);
+    assert!(page.positions.is_empty());
 }
 
 #[test]
-fn test_positions_page_limit_over_max_panics() {
-    let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
-    // MAX_PAGE_LIMIT = 50
-    assert!(
-        client.try_get_positions_page(&0, &51).is_err(),
-        "limit>50 should be rejected"
-    );
-}
-
-#[test]
-fn test_positions_page_max_limit_accepted() {
+fn test_positions_page_limit_fifty_accepted() {
     let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
     let page = client.get_positions_page(&0, &50);
     assert!(page.positions.is_empty());
     assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
+#[test]
+fn test_positions_page_limit_zero_returns_page_limit_exceeded() {
+    let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
+    let result = client.try_get_positions_page(&0, &0);
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+}
+
+#[test]
+fn test_positions_page_limit_fifty_one_returns_page_limit_exceeded() {
+    let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
+    let result = client.try_get_positions_page(&0, &51);
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// get_supported_assets_page
+// get_supported_assets_page — correctness
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[test]
@@ -230,14 +236,41 @@ fn test_supported_assets_page_after_remove() {
     assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// get_supported_assets_page — limit boundary tests
+// ─────────────────────────────────────────────────────────────────────────────
+
 #[test]
-fn test_supported_assets_page_limit_zero_panics() {
+fn test_supported_assets_page_limit_one_accepted() {
     let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
-    assert!(client.try_get_supported_assets_page(&0, &0).is_err());
+    let page = client.get_supported_assets_page(&0, &1);
+    assert_eq!(page.assets.len(), 1); // setup added one token
+}
+
+#[test]
+fn test_supported_assets_page_limit_fifty_accepted() {
+    let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
+    let page = client.get_supported_assets_page(&0, &50);
+    assert_eq!(page.assets.len(), 1);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
+}
+
+#[test]
+fn test_supported_assets_page_limit_zero_returns_page_limit_exceeded() {
+    let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
+    let result = client.try_get_supported_assets_page(&0, &0);
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+}
+
+#[test]
+fn test_supported_assets_page_limit_fifty_one_returns_page_limit_exceeded() {
+    let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
+    let result = client.try_get_supported_assets_page(&0, &51);
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// get_user_assets_page
+// get_user_assets_page — correctness
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[test]
@@ -286,8 +319,42 @@ fn test_user_assets_page_removed_on_full_withdraw() {
     assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// get_user_assets_page — limit boundary tests
+// ─────────────────────────────────────────────────────────────────────────────
+
 #[test]
-fn test_user_assets_page_limit_zero_panics() {
+fn test_user_assets_page_limit_one_accepted() {
+    let (_env, client, _admin, user, token_id, sac) = setup_env();
+    sac.mint(&user, &1000);
+    client.deposit(&user, &token_id, &100);
+
+    let page = client.get_user_assets_page(&user, &0, &1);
+    assert_eq!(page.assets.len(), 1);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
+}
+
+#[test]
+fn test_user_assets_page_limit_fifty_accepted() {
+    let (_env, client, _admin, user, token_id, sac) = setup_env();
+    sac.mint(&user, &1000);
+    client.deposit(&user, &token_id, &100);
+
+    let page = client.get_user_assets_page(&user, &0, &50);
+    assert_eq!(page.assets.len(), 1);
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
+}
+
+#[test]
+fn test_user_assets_page_limit_zero_returns_page_limit_exceeded() {
     let (_env, client, _admin, user, _token_id, _sac) = setup_env();
-    assert!(client.try_get_user_assets_page(&user, &0, &0).is_err());
+    let result = client.try_get_user_assets_page(&user, &0, &0);
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+}
+
+#[test]
+fn test_user_assets_page_limit_fifty_one_returns_page_limit_exceeded() {
+    let (_env, client, _admin, user, _token_id, _sac) = setup_env();
+    let result = client.try_get_user_assets_page(&user, &0, &51);
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
 }

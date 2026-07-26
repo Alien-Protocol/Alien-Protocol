@@ -88,6 +88,16 @@ pub fn get_supported_asset_at(env: &Env, slot: u32) -> Option<Address> {
 }
 
 pub fn add_supported_asset(env: &Env, asset: &Address) {
+    // idempotent: skip if already indexed
+    if env
+        .storage()
+        .persistent()
+        .get::<_, u32>(&DataKey::SupportedAssetSlot(asset.clone()))
+        .is_some()
+    {
+        return;
+    }
+
     // sentinel flag (fast membership check)
     env.storage()
         .persistent()
@@ -107,11 +117,6 @@ pub fn add_supported_asset(env: &Env, asset: &Address) {
 
 /// Remove an asset from the supported-asset index using swap-and-pop.
 pub fn remove_supported_asset(env: &Env, asset: &Address) {
-    // remove sentinel
-    env.storage()
-        .persistent()
-        .remove(&DataKey::SupportedAsset(asset.clone()));
-
     let count: u32 = supported_asset_count(env);
     if count == 0 {
         return;
@@ -125,6 +130,11 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
         Some(s) => s,
         None => return,
     };
+
+    // remove sentinel only once the slot is confirmed valid
+    env.storage()
+        .persistent()
+        .remove(&DataKey::SupportedAsset(asset.clone()));
 
     let last_slot = count - 1;
 

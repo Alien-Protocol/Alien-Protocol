@@ -18,10 +18,10 @@ use crate::storage;
 use crate::types::{AssetsPage, Position, PositionsPage, MAX_PAGE_LIMIT, NO_NEXT_CURSOR};
 use soroban_sdk::{Address, Env, Vec};
 
-/// Panic if `limit` is outside the permitted range `1..=MAX_PAGE_LIMIT`.
+/// Panic with [`VaultError::PageLimitExceeded`] if `limit` is outside `1..=MAX_PAGE_LIMIT`.
 fn validated_limit(env: &Env, limit: u32) {
     if limit == 0 || limit > MAX_PAGE_LIMIT {
-        soroban_sdk::panic_with_error!(env, VaultError::InvalidInputs);
+        soroban_sdk::panic_with_error!(env, VaultError::PageLimitExceeded);
     }
 }
 

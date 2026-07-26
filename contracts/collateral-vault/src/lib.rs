@@ -170,7 +170,10 @@ impl VaultContract {
         token_client.transfer(&user, env.current_contract_address(), &amount);
 
         let balance = storage::get_position_balance(&env, &user, &asset);
-        storage::set_position_balance(&env, &user, &asset, balance + amount);
+        let new_balance = balance
+            .checked_add(amount)
+            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs));
+        storage::set_position_balance(&env, &user, &asset, new_balance);
 
         // O(1): only writes if not already present
         storage::add_user_asset(&env, &user, &asset);
@@ -415,18 +418,17 @@ impl VaultContract {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Legacy compatibility shim
+    // Legacy compatibility shim — test/testutils builds only.
     //
-    // `get_position_index` is preserved for existing tests but now returns the
-    // index as a Vec built by iterating the slot-keyed store.  This is an
-    // O(n) administrative read and must NOT be called from critical write paths.
+    // Gated behind cfg so it is never compiled into a production wasm binary.
+    // Production callers should use `get_positions_page` instead.
     // ─────────────────────────────────────────────────────────────────────────
 
     /// Returns all users currently in the position index as a `Vec<Address>`.
     ///
-    /// **Warning:** this is O(n) in the number of active users and is provided
-    /// only for backward-compatibility with existing tests.  Production code
-    /// should use `get_positions_page` instead.
+    /// **Warning:** this is O(n) and is compiled only for test/testutils builds.
+    /// Production code should use `get_positions_page` instead.
+    #[cfg(any(test, feature = "testutils"))]
     pub fn get_position_index(env: Env) -> soroban_sdk::Vec<Address> {
         let count = storage::position_count(&env);
         let mut result: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(&env);
