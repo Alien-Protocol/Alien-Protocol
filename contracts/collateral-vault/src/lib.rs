@@ -208,7 +208,9 @@ impl VaultContract {
         token_client.transfer(&user, env.current_contract_address(), &amount);
 
         let balance = storage::get_position_balance(&env, &user, &asset);
-        let new_balance = balance + amount;
+        // checked_add guards against overflow of user's total deposit balance.
+        let new_balance = math::checked_add(balance, amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
         // Track this asset for the user (used to build Position)
@@ -253,7 +255,10 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::BelowMinCollateralRatio);
         }
 
-        let new_balance = balance - amount;
+        // checked_sub guards against underflow; amount has already been
+        // verified <= balance, so underflow can only occur on a logic bug.
+        let new_balance = math::checked_sub(balance, amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
         // If this asset balance reached zero, remove asset from user's assets list
@@ -311,7 +316,10 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
-        let new_balance = balance - amount;
+        // checked_sub guards against underflow; amount has already been
+        // verified <= balance, so underflow can only occur on a logic bug.
+        let new_balance = math::checked_sub(balance, amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
         // If this asset balance reached zero, remove asset from user's assets list
@@ -341,38 +349,8 @@ impl VaultContract {
     }
 
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
-        let debt = if let Some(pool_addr) = storage::get_pool(&env) {
-            let pool_client = LendingPoolClient::new(&env, &pool_addr);
-            pool_client.get_user_debt(&user)
-        } else {
-            0
-        };
-
-        if debt == 0 {
-            return true;
-        }
-
-        let total_value = Self::get_collateral_value(env.clone(), user.clone());
-
-        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
-        let price_data = oracle_client.get_price(&asset).expect("price not found");
-
-        // Apply the same PRICE_PRECISION scaling used by get_collateral_value so
-        // that withdrawn_value is denominated in USD and comparable to total_value.
-        let withdrawn_value = amount
-            .checked_mul(price_data.price)
-            .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
-            / PRICE_PRECISION;
-
-        if total_value < withdrawn_value {
-            return false;
-        }
-
-        let remaining_value = total_value - withdrawn_value;
-
-        // Minimum collateral ratio: 110% (1.1)
-        remaining_value >= (debt * 110) / 100
+        risk::is_withdrawal_safe(&env, &user, &asset, amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e))
     }
 
     pub fn get_position(env: Env, user: Address) -> Position {
@@ -383,35 +361,17 @@ impl VaultContract {
     }
 
     pub fn get_collateral_value(env: Env, user: Address) -> i128 {
-        let position = Self::get_position(env.clone(), user);
-
-        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
-
-        let mut total_value: i128 = 0;
-
-        for item in position.collateral.iter() {
-            let price_data = oracle_client.get_price_or_fail(&item.asset);
-
-            // Compute USD value: amount * price / PRICE_PRECISION.
-            // checked_mul guards against overflow before the safe integer division.
-            let item_value = item
-                .amount
-                .checked_mul(price_data.price)
-                .unwrap_or_else(|| panic!("overflow in value calculation"))
-                / PRICE_PRECISION;
-
-            total_value = total_value
-                .checked_add(item_value)
-                .unwrap_or_else(|| panic!("overflow in total value calculation"));
-        }
-
-        total_value
+        // Delegates to the risk module which uses checked math helpers.
+        // Any arithmetic error is converted to a typed panic via VaultError.
+        risk::get_collateral_value(&env, &user)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e))
     }
 }
 
 mod errors;
 mod events;
+mod math;
+mod risk;
 mod storage;
 #[cfg(test)]
 mod tests;

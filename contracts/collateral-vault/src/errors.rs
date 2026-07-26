@@ -17,4 +17,14 @@ pub enum VaultError {
     AlreadyAdmin = 11,
     AlreadyPaused = 12,
     NotPaused = 13,
+    /// Arithmetic overflow in financial computation.
+    MathOverflow = 14,
+    /// Arithmetic underflow in financial computation.
+    MathUnderflow = 15,
+    /// Division by zero in financial computation.
+    MathDivisionByZero = 16,
+    /// Detectable precision loss (result truncated to zero despite non-zero
+    /// inputs). This protects against silent value truncation in price-scaled
+    /// calculations.
+    MathPrecisionLoss = 17,
 }
