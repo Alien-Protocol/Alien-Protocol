@@ -81,7 +81,7 @@ fn test_configuration_events() {
 
     let event_name = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
     assert_eq!(event_name, Symbol::new(&env, "oracle_updated"));
-    
+
     // Data contains old_oracle and new_oracle
     // Because they are multiple fields, they are encoded as map/tuple.
     // In Soroban rust sdk #[contractevent], it encodes non-topic fields as a Tuple/Map.
