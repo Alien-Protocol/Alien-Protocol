@@ -17,4 +17,10 @@ pub enum VaultError {
     AlreadyAdmin = 11,
     AlreadyPaused = 12,
     NotPaused = 13,
+    NoPendingAdmin = 14,
+    NotPendingAdmin = 15,
+    NotEmergencyPauser = 16,
+    NotAssetManager = 17,
+    NotRiskManager = 18,
+    NotUpgradeManager = 19,
 }

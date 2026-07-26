@@ -1,7 +1,7 @@
+use crate::admin::Role;
 use crate::types::{CollateralAsset, DataKey, Position};
 use soroban_sdk::{Address, Env, Vec};
 
-/// Check if the contract has been initialized (deployment/initialization shield)
 pub fn has_admin(env: &Env) -> bool {
     env.storage()
         .persistent()
@@ -15,6 +15,46 @@ pub fn get_admin(env: &Env) -> Option<Address> {
 
 pub fn set_admin(env: &Env, admin: &Address) {
     env.storage().persistent().set(&DataKey::Admin, admin);
+}
+
+pub fn get_pending_admin(env: &Env) -> Option<Address> {
+    env.storage().persistent().get(&DataKey::PendingAdmin)
+}
+
+pub fn set_pending_admin(env: &Env, admin: &Address) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::PendingAdmin, admin);
+}
+
+pub fn has_pending_admin(env: &Env) -> bool {
+    env.storage()
+        .persistent()
+        .get::<_, Address>(&DataKey::PendingAdmin)
+        .is_some()
+}
+
+pub fn clear_pending_admin(env: &Env) {
+    env.storage().persistent().remove(&DataKey::PendingAdmin);
+}
+
+pub fn has_role(env: &Env, role: &Role, addr: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Role(role.clone(), addr.clone()))
+        .unwrap_or(false)
+}
+
+pub fn set_role(env: &Env, role: &Role, addr: &Address) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Role(role.clone(), addr.clone()), &true);
+}
+
+pub fn remove_role(env: &Env, role: &Role, addr: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Role(role.clone(), addr.clone()));
 }
 
 pub fn is_paused(env: &Env) -> bool {
@@ -143,7 +183,6 @@ pub fn add_to_position_index(env: &Env, user: &Address) {
     }
 }
 
-/// Remove a user from the position index (called when their balance reaches zero).
 pub fn remove_from_position_index(env: &Env, user: &Address) {
     let index = get_position_index(env);
     let mut new_index: Vec<Address> = Vec::new(env);
@@ -157,7 +196,6 @@ pub fn remove_from_position_index(env: &Env, user: &Address) {
         .set(&DataKey::PositionIndex, &new_index);
 }
 
-/// Track which assets a user has deposited into.
 pub fn get_user_assets(env: &Env, user: &Address) -> Vec<Address> {
     env.storage()
         .persistent()
@@ -175,7 +213,6 @@ pub fn add_user_asset(env: &Env, user: &Address, asset: &Address) {
     }
 }
 
-/// Remove an asset from a user's tracked assets list (called when an asset balance hits zero).
 pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
     let assets = get_user_assets(env, user);
     let mut new_assets: Vec<Address> = Vec::new(env);
@@ -189,7 +226,6 @@ pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
         .set(&DataKey::UserAssets(user.clone()), &new_assets);
 }
 
-/// Build a Position for a user by loading all their non-zero balances.
 pub fn get_position(env: &Env, user: &Address) -> Option<Position> {
     let index = get_position_index(env);
     if !index.contains(user) {
@@ -219,7 +255,6 @@ pub fn get_position(env: &Env, user: &Address) -> Option<Position> {
     })
 }
 
-/// Returns all active positions (users with at least one non-zero balance).
 pub fn get_all_positions(env: &Env) -> Vec<Position> {
     let index = get_position_index(env);
     let mut positions: Vec<Position> = Vec::new(env);

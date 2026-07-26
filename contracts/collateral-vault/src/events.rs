@@ -1,3 +1,4 @@
+use crate::admin::Role;
 use soroban_sdk::{contractevent, Address};
 
 #[contractevent]
@@ -29,9 +30,35 @@ pub struct AssetRemoved {
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
-pub struct AdminChanged {
-    pub old_admin: Address,
+pub struct AdminProposed {
+    pub pending_admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AdminAccepted {
     pub new_admin: Address,
+    pub old_admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AdminTransferCancelled {
+    pub cancelled_by: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoleGranted {
+    pub role: Role,
+    pub address: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoleRevoked {
+    pub role: Role,
+    pub address: Address,
 }
 
 #[contractevent]
