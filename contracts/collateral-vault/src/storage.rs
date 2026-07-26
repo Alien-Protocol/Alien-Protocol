@@ -1,7 +1,10 @@
 use crate::types::{CollateralAsset, DataKey, Position};
 use soroban_sdk::{Address, Env, Vec};
 
-/// Check if the contract has been initialized (deployment/initialization shield)
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin / pause / addresses
+// ─────────────────────────────────────────────────────────────────────────────
+
 pub fn has_admin(env: &Env) -> bool {
     env.storage()
         .persistent()
@@ -38,55 +41,6 @@ pub fn set_lending_pool(env: &Env, lending_pool: &Address) {
         .set(&DataKey::LendingPool, lending_pool);
 }
 
-pub fn is_supported_asset(env: &Env, asset: &Address) -> bool {
-    env.storage()
-        .persistent()
-        .get(&DataKey::SupportedAsset(asset.clone()))
-        .unwrap_or(false)
-}
-
-pub fn get_supported_assets(env: &Env) -> Vec<Address> {
-    env.storage()
-        .persistent()
-        .get(&DataKey::SupportedAssets)
-        .unwrap_or_else(|| Vec::new(env))
-}
-
-pub fn add_supported_asset(env: &Env, asset: &Address) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::SupportedAsset(asset.clone()), &true);
-
-    let mut assets = get_supported_assets(env);
-    if !assets.contains(asset) {
-        assets.push_back(asset.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::SupportedAssets, &assets);
-    }
-}
-
-pub fn remove_supported_asset(env: &Env, asset: &Address) {
-    env.storage()
-        .persistent()
-        .remove(&DataKey::SupportedAsset(asset.clone()));
-
-    let mut assets = get_supported_assets(env);
-    let mut found_idx = None;
-    for i in 0..assets.len() {
-        if assets.get(i).unwrap() == *asset {
-            found_idx = Some(i);
-            break;
-        }
-    }
-    if let Some(idx) = found_idx {
-        assets.remove(idx);
-        env.storage()
-            .persistent()
-            .set(&DataKey::SupportedAssets, &assets);
-    }
-}
-
 pub fn get_oracle(env: &Env) -> Option<Address> {
     env.storage().persistent().get(&DataKey::Oracle)
 }
@@ -113,6 +67,103 @@ pub fn set_pool(env: &Env, pool: &Address) {
     env.storage().persistent().set(&DataKey::Pool, pool);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Supported-asset index  (slot-based, O(1) add/remove via swap-and-pop)
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub fn is_supported_asset(env: &Env, asset: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SupportedAsset(asset.clone()))
+        .unwrap_or(false)
+}
+
+pub fn supported_asset_count(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SupportedAssetCount)
+        .unwrap_or(0u32)
+}
+
+pub fn get_supported_asset_at(env: &Env, slot: u32) -> Option<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SupportedAssetAt(slot))
+}
+
+pub fn add_supported_asset(env: &Env, asset: &Address) {
+    // sentinel flag (fast membership check)
+    env.storage()
+        .persistent()
+        .set(&DataKey::SupportedAsset(asset.clone()), &true);
+
+    let count: u32 = supported_asset_count(env);
+    env.storage()
+        .persistent()
+        .set(&DataKey::SupportedAssetAt(count), asset);
+    env.storage()
+        .persistent()
+        .set(&DataKey::SupportedAssetSlot(asset.clone()), &count);
+    env.storage()
+        .persistent()
+        .set(&DataKey::SupportedAssetCount, &(count + 1));
+}
+
+/// Remove an asset from the supported-asset index using swap-and-pop.
+pub fn remove_supported_asset(env: &Env, asset: &Address) {
+    // remove sentinel
+    env.storage()
+        .persistent()
+        .remove(&DataKey::SupportedAsset(asset.clone()));
+
+    let count: u32 = supported_asset_count(env);
+    if count == 0 {
+        return;
+    }
+
+    let slot: u32 = match env
+        .storage()
+        .persistent()
+        .get(&DataKey::SupportedAssetSlot(asset.clone()))
+    {
+        Some(s) => s,
+        None => return,
+    };
+
+    let last_slot = count - 1;
+
+    if slot != last_slot {
+        // move the last entry into the vacated slot
+        let last_asset: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SupportedAssetAt(last_slot))
+            .expect("index inconsistency: last asset missing");
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::SupportedAssetAt(slot), &last_asset);
+        env.storage()
+            .persistent()
+            .set(&DataKey::SupportedAssetSlot(last_asset), &slot);
+    }
+
+    // erase the last slot and the removed asset's reverse-lookup
+    env.storage()
+        .persistent()
+        .remove(&DataKey::SupportedAssetAt(last_slot));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::SupportedAssetSlot(asset.clone()));
+    env.storage()
+        .persistent()
+        .set(&DataKey::SupportedAssetCount, &last_slot);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-(user,asset) balance
+// ─────────────────────────────────────────────────────────────────────────────
+
 pub fn get_position_balance(env: &Env, user: &Address, asset: &Address) -> i128 {
     env.storage()
         .persistent()
@@ -121,91 +172,214 @@ pub fn get_position_balance(env: &Env, user: &Address, asset: &Address) -> i128 
 }
 
 pub fn set_position_balance(env: &Env, user: &Address, asset: &Address, balance: i128) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::Position(user.clone(), asset.clone()), &balance);
-}
-
-pub fn get_position_index(env: &Env) -> Vec<Address> {
-    env.storage()
-        .persistent()
-        .get(&DataKey::PositionIndex)
-        .unwrap_or_else(|| Vec::new(env))
-}
-
-pub fn add_to_position_index(env: &Env, user: &Address) {
-    let mut index = get_position_index(env);
-    if !index.contains(user) {
-        index.push_back(user.clone());
+    if balance == 0 {
         env.storage()
             .persistent()
-            .set(&DataKey::PositionIndex, &index);
+            .remove(&DataKey::Position(user.clone(), asset.clone()));
+    } else {
+        env.storage()
+            .persistent()
+            .set(&DataKey::Position(user.clone(), asset.clone()), &balance);
     }
 }
 
-/// Remove a user from the position index (called when their balance reaches zero).
-pub fn remove_from_position_index(env: &Env, user: &Address) {
-    let index = get_position_index(env);
-    let mut new_index: Vec<Address> = Vec::new(env);
-    for addr in index.iter() {
-        if &addr != user {
-            new_index.push_back(addr);
-        }
-    }
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-user asset index  (slot-based, O(1) add/remove)
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub fn user_asset_count(env: &Env, user: &Address) -> u32 {
     env.storage()
         .persistent()
-        .set(&DataKey::PositionIndex, &new_index);
+        .get(&DataKey::UserAssetCount(user.clone()))
+        .unwrap_or(0u32)
 }
 
-/// Track which assets a user has deposited into.
-pub fn get_user_assets(env: &Env, user: &Address) -> Vec<Address> {
+pub fn get_user_asset_at(env: &Env, user: &Address, slot: u32) -> Option<Address> {
     env.storage()
         .persistent()
-        .get(&DataKey::UserAssets(user.clone()))
-        .unwrap_or_else(|| Vec::new(env))
+        .get(&DataKey::UserAssetAt(user.clone(), slot))
 }
 
 pub fn add_user_asset(env: &Env, user: &Address, asset: &Address) {
-    let mut assets = get_user_assets(env, user);
-    if !assets.contains(asset) {
-        assets.push_back(asset.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::UserAssets(user.clone()), &assets);
+    // idempotent: skip if already tracked
+    if env
+        .storage()
+        .persistent()
+        .get::<_, u32>(&DataKey::UserAssetSlot(user.clone(), asset.clone()))
+        .is_some()
+    {
+        return;
     }
-}
 
-/// Remove an asset from a user's tracked assets list (called when an asset balance hits zero).
-pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
-    let assets = get_user_assets(env, user);
-    let mut new_assets: Vec<Address> = Vec::new(env);
-    for a in assets.iter() {
-        if &a != asset {
-            new_assets.push_back(a);
-        }
-    }
+    let count: u32 = user_asset_count(env, user);
     env.storage()
         .persistent()
-        .set(&DataKey::UserAssets(user.clone()), &new_assets);
+        .set(&DataKey::UserAssetAt(user.clone(), count), asset);
+    env.storage()
+        .persistent()
+        .set(&DataKey::UserAssetSlot(user.clone(), asset.clone()), &count);
+    env.storage()
+        .persistent()
+        .set(&DataKey::UserAssetCount(user.clone()), &(count + 1));
 }
 
-/// Build a Position for a user by loading all their non-zero balances.
+/// Remove an asset from a user's index via swap-and-pop.
+pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
+    let count: u32 = user_asset_count(env, user);
+    if count == 0 {
+        return;
+    }
+
+    let slot: u32 = match env
+        .storage()
+        .persistent()
+        .get(&DataKey::UserAssetSlot(user.clone(), asset.clone()))
+    {
+        Some(s) => s,
+        None => return,
+    };
+
+    let last_slot = count - 1;
+
+    if slot != last_slot {
+        let last_asset: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserAssetAt(user.clone(), last_slot))
+            .expect("index inconsistency: last user asset missing");
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserAssetAt(user.clone(), slot), &last_asset);
+        env.storage()
+            .persistent()
+            .set(
+                &DataKey::UserAssetSlot(user.clone(), last_asset),
+                &slot,
+            );
+    }
+
+    env.storage()
+        .persistent()
+        .remove(&DataKey::UserAssetAt(user.clone(), last_slot));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::UserAssetSlot(user.clone(), asset.clone()));
+    env.storage()
+        .persistent()
+        .set(&DataKey::UserAssetCount(user.clone()), &last_slot);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Global position (user) index  (slot-based, O(1) add/remove)
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub fn position_count(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::PositionCount)
+        .unwrap_or(0u32)
+}
+
+pub fn get_position_at(env: &Env, slot: u32) -> Option<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::PositionAt(slot))
+}
+
+/// Returns `true` if the user has a slot in the position index.
+pub fn user_in_position_index(env: &Env, user: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .get::<_, u32>(&DataKey::PositionSlot(user.clone()))
+        .is_some()
+}
+
+pub fn add_to_position_index(env: &Env, user: &Address) {
+    // idempotent
+    if user_in_position_index(env, user) {
+        return;
+    }
+
+    let count: u32 = position_count(env);
+    env.storage()
+        .persistent()
+        .set(&DataKey::PositionAt(count), user);
+    env.storage()
+        .persistent()
+        .set(&DataKey::PositionSlot(user.clone()), &count);
+    env.storage()
+        .persistent()
+        .set(&DataKey::PositionCount, &(count + 1));
+}
+
+/// Remove a user from the position index via swap-and-pop.
+pub fn remove_from_position_index(env: &Env, user: &Address) {
+    let count: u32 = position_count(env);
+    if count == 0 {
+        return;
+    }
+
+    let slot: u32 = match env
+        .storage()
+        .persistent()
+        .get(&DataKey::PositionSlot(user.clone()))
+    {
+        Some(s) => s,
+        None => return,
+    };
+
+    let last_slot = count - 1;
+
+    if slot != last_slot {
+        let last_user: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PositionAt(last_slot))
+            .expect("index inconsistency: last user missing");
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PositionAt(slot), &last_user);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PositionSlot(last_user), &slot);
+    }
+
+    env.storage()
+        .persistent()
+        .remove(&DataKey::PositionAt(last_slot));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::PositionSlot(user.clone()));
+    env.storage()
+        .persistent()
+        .set(&DataKey::PositionCount, &last_slot);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Position helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Build a `Position` for a user by loading all tracked non-zero balances.
+/// Only touches per-user keys; cost is O(assets held by that user).
 pub fn get_position(env: &Env, user: &Address) -> Option<Position> {
-    let index = get_position_index(env);
-    if !index.contains(user) {
+    if !user_in_position_index(env, user) {
         return None;
     }
 
-    let all_assets = get_user_assets(env, user);
+    let count = user_asset_count(env, user);
     let mut collateral: Vec<CollateralAsset> = Vec::new(env);
 
-    for asset in all_assets.iter() {
-        let balance = get_position_balance(env, user, &asset);
-        if balance > 0 {
-            collateral.push_back(CollateralAsset {
-                asset: asset.clone(),
-                amount: balance,
-            });
+    for slot in 0..count {
+        if let Some(asset) = get_user_asset_at(env, user, slot) {
+            let balance = get_position_balance(env, user, &asset);
+            if balance > 0 {
+                collateral.push_back(CollateralAsset {
+                    asset,
+                    amount: balance,
+                });
+            }
         }
     }
 
@@ -217,16 +391,4 @@ pub fn get_position(env: &Env, user: &Address) -> Option<Position> {
         user: user.clone(),
         collateral,
     })
-}
-
-/// Returns all active positions (users with at least one non-zero balance).
-pub fn get_all_positions(env: &Env) -> Vec<Position> {
-    let index = get_position_index(env);
-    let mut positions: Vec<Position> = Vec::new(env);
-    for user in index.iter() {
-        if let Some(position) = get_position(env, &user) {
-            positions.push_back(position);
-        }
-    }
-    positions
 }

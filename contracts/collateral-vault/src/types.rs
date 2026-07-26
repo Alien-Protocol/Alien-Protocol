@@ -18,14 +18,42 @@ pub struct Position {
     pub collateral: Vec<CollateralAsset>,
 }
 
+/// A page of positions returned by the paginated view.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct PositionsPage {
+    /// The positions in this page.
+    pub positions: Vec<Position>,
+    /// The slot offset to pass as `cursor` on the next call.
+    /// Equal to `u32::MAX` when this is the last page (no more items).
+    pub next_cursor: u32,
+}
+
+/// A page of asset addresses returned by the paginated asset view.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AssetsPage {
+    /// Asset addresses in this page.
+    pub assets: Vec<Address>,
+    /// The slot offset to pass as `cursor` on the next call.
+    /// Equal to `u32::MAX` when this is the last page (no more items).
+    pub next_cursor: u32,
+}
+
+/// Sentinel value returned in `next_cursor` when there are no more pages.
+pub const NO_NEXT_CURSOR: u32 = u32::MAX;
+
+/// Maximum number of items that may be requested in a single paginated call.
+pub const MAX_PAGE_LIMIT: u32 = 50;
+
 /// Storage keys for persistent contract state.
-/// Core keys required for Issue #471 initialization:
-/// - Admin: Contract administrator address
-/// - Paused: Contract pause state
-/// - LendingPool: Lending pool address
-/// - SupportedAsset(Address): Tracks supported collateral assets
-/// - Position(Address, Address): Stores balances (user, asset)
-/// - PositionIndex: Index of all users with active positions
+///
+/// Indexed collections use a slot-based layout for O(1) add/remove:
+/// - `*Count` stores the current length (u32)
+/// - `*At(slot)` stores the item at that slot
+/// - `*Slot(item)` stores the slot index for an item (reverse lookup)
+///
+/// This avoids rewriting a monolithic `Vec<T>` on every mutation.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum DataKey {
@@ -33,18 +61,40 @@ pub enum DataKey {
     Admin,
     /// Paused state key
     Paused,
-    /// Lending pool address key (Issue #471)
+    /// Lending pool address key
     LendingPool,
-    /// Supported asset key: stores whether a specific asset is supported
+
+    // ── Supported-asset index ────────────────────────────────────────────────
+    /// Whether a specific asset address is supported (bool sentinel)
     SupportedAsset(Address),
-    /// List of all supported assets
-    SupportedAssets,
-    /// Position key: stores balance for a user's position in an asset
-    Position(Address, Address), // (user, asset)
-    /// Position index key: tracks all users with active positions
-    PositionIndex,
-    /// Tracks which assets a user has ever deposited into
-    UserAssets(Address),
+    /// Number of entries in the supported-asset index
+    SupportedAssetCount,
+    /// Supported asset at slot `n`
+    SupportedAssetAt(u32),
+    /// Slot of a supported asset (reverse lookup)
+    SupportedAssetSlot(Address),
+
+    // ── Per-(user,asset) balance ─────────────────────────────────────────────
+    /// Balance for (user, asset)
+    Position(Address, Address),
+
+    // ── Per-user asset index ─────────────────────────────────────────────────
+    /// Number of assets tracked for a user
+    UserAssetCount(Address),
+    /// Asset at slot `n` for user
+    UserAssetAt(Address, u32),
+    /// Slot of an asset in a user's index (reverse lookup)
+    UserAssetSlot(Address, Address),
+
+    // ── Global user / position index ─────────────────────────────────────────
+    /// Number of users in the position index
+    PositionCount,
+    /// User address at slot `n` in the position index
+    PositionAt(u32),
+    /// Slot of a user in the position index (reverse lookup)
+    PositionSlot(Address),
+
+    // ── Other contract addresses ─────────────────────────────────────────────
     /// Oracle adapter address
     Oracle,
     /// Liquidation engine address

@@ -2,5 +2,7 @@ mod test_admin;
 mod test_assets;
 mod test_deposit;
 mod test_liquidation;
+mod test_pagination;
+mod test_invariants;
 mod test_read_functions;
 mod test_withdraw;

@@ -1,8 +1,8 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
 use errors::VaultError;
-use types::Position;
+use types::{AssetsPage, Position, PositionsPage};
 
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
@@ -20,30 +20,27 @@ pub trait LendingPool {
 /// Dividing `amount * price` by this constant yields the USD-denominated value.
 const PRICE_PRECISION: i128 = 10_000_000;
 
-/// Maximum age (in seconds) an oracle price may have before it is considered stale.
-
 #[contract]
 pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Initialization & admin
+    // ─────────────────────────────────────────────────────────────────────────
+
     pub fn initialize(env: Env, admin: Address, lending_pool: Address) {
-        // Strict initialization guard: panic if already initialized
         if storage::has_admin(&env) {
             panic!("already initialized");
         }
 
         admin.require_auth();
 
-        // Commit admin and configured contract addresses to persistent storage
         storage::set_admin(&env, &admin);
         storage::set_lending_pool(&env, &lending_pool);
         storage::set_oracle(&env, &lending_pool);
-
-        // Explicitly set Paused to false
         storage::set_paused(&env, false);
 
-        // Emit structured contract event
         events::Initialized {
             admin,
             lending_pool,
@@ -73,16 +70,13 @@ impl VaultContract {
     pub fn set_lending_pool(env: Env, lending_pool: Address) {
         let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
-
         storage::set_lending_pool(&env, &lending_pool);
-
         events::LendingPoolUpdated { lending_pool }.publish(&env);
     }
 
     pub fn set_oracle(env: Env, oracle: Address) {
         let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
-
         storage::set_oracle(&env, &oracle);
     }
 
@@ -95,7 +89,6 @@ impl VaultContract {
         }
 
         storage::set_paused(&env, true);
-
         events::Paused { by: admin }.publish(&env);
     }
 
@@ -108,9 +101,12 @@ impl VaultContract {
         }
 
         storage::set_paused(&env, false);
-
         events::Unpaused { by: admin }.publish(&env);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Asset management
+    // ─────────────────────────────────────────────────────────────────────────
 
     pub fn add_supported_asset(env: Env, asset: Address) {
         let admin = storage::get_admin(&env).expect("not initialized");
@@ -121,7 +117,6 @@ impl VaultContract {
         }
 
         storage::add_supported_asset(&env, &asset);
-
         events::AssetAdded { asset }.publish(&env);
     }
 
@@ -134,42 +129,19 @@ impl VaultContract {
         }
 
         storage::remove_supported_asset(&env, &asset);
-
         events::AssetRemoved { asset }.publish(&env);
     }
 
     pub fn set_liquidation_engine(env: Env, engine: Address) {
         let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
-
         storage::set_liquidation_engine(&env, &engine);
-
         events::LiquidationEngineSet { engine }.publish(&env);
-    }
-
-    pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
-        let stored_engine =
-            storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
-        if liquidation_engine != stored_engine {
-            soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
-        }
-
-        liquidation_engine.require_auth();
-
-        let position = storage::get_position(&env, &user);
-        if position.is_none() {
-            soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
-        }
-
-        let pool_address = storage::get_pool(&env).expect("Lending pool not set");
-        let pool_client = LendingPoolClient::new(&env, &pool_address);
-        pool_client.is_liquidatable(&user)
     }
 
     pub fn set_pool(env: Env, pool: Address) {
         let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
-
         storage::set_pool(&env, &pool);
     }
 
@@ -177,17 +149,9 @@ impl VaultContract {
         storage::is_supported_asset(&env, &asset)
     }
 
-    pub fn get_admin(env: Env) -> Option<Address> {
-        storage::get_admin(&env)
-    }
-
-    pub fn get_position_balance(env: Env, user: Address, asset: Address) -> i128 {
-        storage::get_position_balance(&env, &user, &asset)
-    }
-
-    pub fn get_position_index(env: Env) -> Vec<Address> {
-        storage::get_position_index(&env)
-    }
+    // ─────────────────────────────────────────────────────────────────────────
+    // Core write operations  (cost is O(assets held by user), never O(all users))
+    // ─────────────────────────────────────────────────────────────────────────
 
     pub fn deposit(env: Env, user: Address, asset: Address, amount: i128) {
         user.require_auth();
@@ -195,11 +159,9 @@ impl VaultContract {
         if amount <= 0 {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
-
         if storage::is_paused(&env) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
-
         if !storage::is_supported_asset(&env, &asset) {
             soroban_sdk::panic_with_error!(&env, VaultError::UnsupportedAsset);
         }
@@ -208,12 +170,10 @@ impl VaultContract {
         token_client.transfer(&user, env.current_contract_address(), &amount);
 
         let balance = storage::get_position_balance(&env, &user, &asset);
-        let new_balance = balance + amount;
-        storage::set_position_balance(&env, &user, &asset, new_balance);
+        storage::set_position_balance(&env, &user, &asset, balance + amount);
 
-        // Track this asset for the user (used to build Position)
+        // O(1): only writes if not already present
         storage::add_user_asset(&env, &user, &asset);
-        // Add user to the global position index if not already present
         storage::add_to_position_index(&env, &user);
 
         events::Deposited {
@@ -230,16 +190,13 @@ impl VaultContract {
         if amount <= 0 {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
-
         if storage::is_paused(&env) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
-
         if !storage::is_supported_asset(&env, &asset) {
             soroban_sdk::panic_with_error!(&env, VaultError::UnsupportedAsset);
         }
-
-        if storage::get_position(&env, &user).is_none() {
+        if !storage::user_in_position_index(&env, &user) {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
@@ -248,7 +205,6 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
-        // Safety check: collateral ratio
         if !Self::is_withdrawal_safe(env.clone(), user.clone(), asset.clone(), amount) {
             soroban_sdk::panic_with_error!(&env, VaultError::BelowMinCollateralRatio);
         }
@@ -256,13 +212,13 @@ impl VaultContract {
         let new_balance = balance - amount;
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
-        // If this asset balance reached zero, remove asset from user's assets list
         if new_balance == 0 {
+            // O(1) swap-and-pop removal
             storage::remove_user_asset(&env, &user, &asset);
         }
 
-        // If the user has no remaining balance across any asset, remove from index
-        if storage::get_position(&env, &user).is_none() {
+        // O(1): check user's asset count to decide if they fully exited
+        if storage::user_asset_count(&env, &user) == 0 {
             storage::remove_from_position_index(&env, &user);
         }
 
@@ -275,10 +231,6 @@ impl VaultContract {
             amount,
         }
         .publish(&env);
-    }
-
-    pub fn get_all_positions(env: Env) -> Vec<Position> {
-        storage::get_all_positions(&env)
     }
 
     pub fn seize_collateral(
@@ -300,9 +252,8 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
-        // Verify user has an active position
-        let index = storage::get_position_index(&env);
-        if !index.contains(&user) {
+        // O(1) membership check — no Vec scan
+        if !storage::user_in_position_index(&env, &user) {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
@@ -314,13 +265,11 @@ impl VaultContract {
         let new_balance = balance - amount;
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
-        // If this asset balance reached zero, remove asset from user's assets list
         if new_balance == 0 {
             storage::remove_user_asset(&env, &user, &asset);
         }
 
-        // If the user has no remaining balance across any asset, remove from index
-        if storage::get_position(&env, &user).is_none() {
+        if storage::user_asset_count(&env, &user) == 0 {
             storage::remove_from_position_index(&env, &user);
         }
 
@@ -340,39 +289,40 @@ impl VaultContract {
         .publish(&env);
     }
 
-    pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
-        let debt = if let Some(pool_addr) = storage::get_pool(&env) {
-            let pool_client = LendingPoolClient::new(&env, &pool_addr);
-            pool_client.get_user_debt(&user)
-        } else {
-            0
-        };
-
-        if debt == 0 {
-            return true;
+    pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
+        let stored_engine =
+            storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
+        if liquidation_engine != stored_engine {
+            soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
         }
 
-        let total_value = Self::get_collateral_value(env.clone(), user.clone());
+        liquidation_engine.require_auth();
 
-        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
-        let price_data = oracle_client.get_price(&asset).expect("price not found");
-
-        // Apply the same PRICE_PRECISION scaling used by get_collateral_value so
-        // that withdrawn_value is denominated in USD and comparable to total_value.
-        let withdrawn_value = amount
-            .checked_mul(price_data.price)
-            .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
-            / PRICE_PRECISION;
-
-        if total_value < withdrawn_value {
-            return false;
+        if !storage::user_in_position_index(&env, &user) {
+            soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
-        let remaining_value = total_value - withdrawn_value;
+        let pool_address = storage::get_pool(&env).expect("Lending pool not set");
+        let pool_client = LendingPoolClient::new(&env, &pool_address);
+        pool_client.is_liquidatable(&user)
+    }
 
-        // Minimum collateral ratio: 110% (1.1)
-        remaining_value >= (debt * 110) / 100
+    // ─────────────────────────────────────────────────────────────────────────
+    // Read-only helpers (per-user, O(assets held by user))
+    // ─────────────────────────────────────────────────────────────────────────
+
+    pub fn get_admin(env: Env) -> Option<Address> {
+        storage::get_admin(&env)
+    }
+
+    pub fn get_position_balance(env: Env, user: Address, asset: Address) -> i128 {
+        storage::get_position_balance(&env, &user, &asset)
+    }
+
+    /// Returns the total number of users currently in the position index.
+    /// Useful for off-chain tooling; does not iterate.
+    pub fn get_position_count(env: Env) -> u32 {
+        storage::position_count(&env)
     }
 
     pub fn get_position(env: Env, user: Address) -> Position {
@@ -393,8 +343,6 @@ impl VaultContract {
         for item in position.collateral.iter() {
             let price_data = oracle_client.get_price_or_fail(&item.asset);
 
-            // Compute USD value: amount * price / PRICE_PRECISION.
-            // checked_mul guards against overflow before the safe integer division.
             let item_value = item
                 .amount
                 .checked_mul(price_data.price)
@@ -408,6 +356,87 @@ impl VaultContract {
 
         total_value
     }
+
+    pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
+        let debt = if let Some(pool_addr) = storage::get_pool(&env) {
+            let pool_client = LendingPoolClient::new(&env, &pool_addr);
+            pool_client.get_user_debt(&user)
+        } else {
+            0
+        };
+
+        if debt == 0 {
+            return true;
+        }
+
+        let total_value = Self::get_collateral_value(env.clone(), user.clone());
+
+        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
+        let oracle_client = OracleClient::new(&env, &oracle_address);
+        let price_data = oracle_client.get_price(&asset).expect("price not found");
+
+        let withdrawn_value = amount
+            .checked_mul(price_data.price)
+            .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
+            / PRICE_PRECISION;
+
+        if total_value < withdrawn_value {
+            return false;
+        }
+
+        let remaining_value = total_value - withdrawn_value;
+        remaining_value >= (debt * 110) / 100
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Paginated enumeration views
+    //
+    // All enumeration is cursor-based so no single call iterates the entire
+    // protocol state.  Off-chain indexers should prefer event subscriptions
+    // (deposit / withdraw / seize_collateral) over repeated page polling.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Return a bounded page of active positions.
+    ///
+    /// * `cursor` – start offset (pass `0` for first page).
+    /// * `limit`  – items per page; must be `1..=50`.
+    pub fn get_positions_page(env: Env, cursor: u32, limit: u32) -> PositionsPage {
+        views::get_positions_page(&env, cursor, limit)
+    }
+
+    /// Return a bounded page of supported asset addresses.
+    pub fn get_supported_assets_page(env: Env, cursor: u32, limit: u32) -> AssetsPage {
+        views::get_supported_assets_page(&env, cursor, limit)
+    }
+
+    /// Return a bounded page of asset addresses held by `user`.
+    pub fn get_user_assets_page(env: Env, user: Address, cursor: u32, limit: u32) -> AssetsPage {
+        views::get_user_assets_page(&env, &user, cursor, limit)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Legacy compatibility shim
+    //
+    // `get_position_index` is preserved for existing tests but now returns the
+    // index as a Vec built by iterating the slot-keyed store.  This is an
+    // O(n) administrative read and must NOT be called from critical write paths.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Returns all users currently in the position index as a `Vec<Address>`.
+    ///
+    /// **Warning:** this is O(n) in the number of active users and is provided
+    /// only for backward-compatibility with existing tests.  Production code
+    /// should use `get_positions_page` instead.
+    pub fn get_position_index(env: Env) -> soroban_sdk::Vec<Address> {
+        let count = storage::position_count(&env);
+        let mut result: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(&env);
+        for slot in 0..count {
+            if let Some(user) = storage::get_position_at(&env, slot) {
+                result.push_back(user);
+            }
+        }
+        result
+    }
 }
 
 mod errors;
@@ -416,3 +445,4 @@ mod storage;
 #[cfg(test)]
 mod tests;
 mod types;
+mod views;

@@ -17,4 +17,6 @@ pub enum VaultError {
     AlreadyAdmin = 11,
     AlreadyPaused = 12,
     NotPaused = 13,
+    /// `limit` was 0 or exceeded [`MAX_PAGE_LIMIT`].
+    PageLimitExceeded = 14,
 }

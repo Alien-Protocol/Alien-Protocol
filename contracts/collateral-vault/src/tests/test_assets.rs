@@ -107,8 +107,9 @@ fn test_is_supported_asset_false() {
 #[test]
 fn test_get_all_positions_empty() {
     let (_env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
-    let positions = client.get_all_positions();
-    assert!(positions.is_empty());
+    let page = client.get_positions_page(&0, &10);
+    assert!(page.positions.is_empty());
+    assert_eq!(page.next_cursor, types::NO_NEXT_CURSOR);
 }
 
 #[test]
@@ -122,12 +123,12 @@ fn test_get_all_positions_multiple_users() {
     token_admin.mint(&user2, &1000);
     client.deposit(&user2, &token_id, &300);
 
-    let positions = client.get_all_positions();
-    assert_eq!(positions.len(), 2);
+    let page = client.get_positions_page(&0, &10);
+    assert_eq!(page.positions.len(), 2);
 
     let mut found_user1 = false;
     let mut found_user2 = false;
-    for p in positions.iter() {
+    for p in page.positions.iter() {
         if p.user == user1 {
             found_user1 = true;
         }
@@ -146,9 +147,9 @@ fn test_get_all_positions_excludes_withdrawn() {
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    assert_eq!(client.get_all_positions().len(), 1);
+    assert_eq!(client.get_positions_page(&0, &10).positions.len(), 1);
 
     client.withdraw(&user, &token_id, &500);
 
-    assert_eq!(client.get_all_positions().len(), 0);
+    assert_eq!(client.get_positions_page(&0, &10).positions.len(), 0);
 }
