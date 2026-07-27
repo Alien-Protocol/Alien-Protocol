@@ -234,3 +234,120 @@ fn test_get_collateral_value_price_precision_applied() {
     oracle.set_price(&token_id, &20_000_000, &1000);
     assert_eq!(client.get_collateral_value(&user), 2);
 }
+
+// ---------------------------------------------------------------------------
+// get_config / VaultStatus tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_get_config_returns_initialized_vault() {
+    let (_env, client, admin, _user, _token_id, _tc, _ta, oracle_id, _) = setup_env();
+
+    let status = client.get_config();
+    assert!(status.initialized);
+    assert!(!status.paused);
+    assert_eq!(status.admin, Some(admin));
+    assert_eq!(status.oracle, Some(oracle_id));
+    assert_eq!(status.supported_assets_count, 1);
+    assert_eq!(status.version, 1);
+}
+
+#[test]
+fn test_get_config_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let res = client.try_get_config();
+    assert!(res.is_err(), "should return NotInitialized error");
+}
+
+// ---------------------------------------------------------------------------
+// get_user_view tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_get_user_view_no_position() {
+    let (_env, client, _admin, user, _token_id, _tc, _ta, _, _) = setup_env();
+
+    let view = client.get_user_view(&user);
+    assert_eq!(view.user, user);
+    assert_eq!(view.position_count, 0);
+    assert!(view.collateral_assets.is_empty());
+    assert!(view.total_collateral_value.is_none());
+}
+
+#[test]
+fn test_get_user_view_with_position_and_price() {
+    let (_env, client, _admin, user, token_id, _tc, token_admin, _, oracle) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+    oracle.set_price(&token_id, &10_000_000, &1000);
+
+    let view = client.get_user_view(&user);
+    assert_eq!(view.user, user);
+    assert_eq!(view.position_count, 1);
+    assert_eq!(view.collateral_assets.len(), 1);
+    assert_eq!(view.total_collateral_value, Some(500));
+}
+
+#[test]
+fn test_get_user_view_no_oracle_returns_none_for_value() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1000);
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    // Initialize without setting an oracle address
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin);
+    let token_contract_id = token_contract.address();
+
+    client.initialize(&admin, &token_contract_id);
+    client.add_supported_asset(&token_contract_id);
+
+    // No oracle set → get_user_view should return None for total_collateral_value
+    let view = client.get_user_view(&user);
+    assert_eq!(view.position_count, 0);
+    assert!(view.total_collateral_value.is_none());
+}
+
+#[test]
+fn test_get_user_view_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+    let user = Address::generate(&env);
+
+    let res = client.try_get_user_view(&user);
+    assert!(res.is_err(), "should return NotInitialized error");
+}
+
+// ---------------------------------------------------------------------------
+// get_supported_assets_list tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_get_supported_assets_list_returns_added_assets() {
+    let (_env, client, _admin, _user, token_id, _tc, _ta, _, _) = setup_env();
+
+    let assets = client.get_supported_assets_list();
+    assert_eq!(assets.len(), 1);
+    assert_eq!(assets.get(0).unwrap(), token_id);
+}
+
+#[test]
+fn test_get_supported_assets_list_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let res = client.try_get_supported_assets_list();
+    assert!(res.is_err(), "should return NotInitialized error");
+}

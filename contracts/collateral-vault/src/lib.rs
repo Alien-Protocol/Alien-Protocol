@@ -345,6 +345,25 @@ impl VaultContract {
 
         total_value
     }
+
+    // -----------------------------------------------------------------------
+    // Bounded, non-panicking read API (views)
+    // -----------------------------------------------------------------------
+
+    pub fn get_config(env: Env) -> Result<types::VaultStatus, errors::VaultError> {
+        views::get_config(&env)
+    }
+
+    pub fn get_user_view(
+        env: Env,
+        user: Address,
+    ) -> Result<types::UserPositionView, errors::VaultError> {
+        views::get_user_view(&env, &user)
+    }
+
+    pub fn get_supported_assets_list(env: Env) -> Result<Vec<Address>, errors::VaultError> {
+        views::get_supported_assets_list(&env)
+    }
 }
 
 mod admin;
@@ -355,3 +374,4 @@ mod storage;
 #[cfg(test)]
 mod tests;
 mod types;
+mod views;
