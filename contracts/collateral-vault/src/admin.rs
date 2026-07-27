@@ -1,5 +1,5 @@
-use crate::{errors::VaultError, events, storage};
-use soroban_sdk::{Address, BytesN, Env};
+use crate::{errors::VaultError, events, storage, types::PauseFlag};
+use soroban_sdk::{Address, BytesN, Env, Symbol};
 
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
     let current_admin = storage::get_admin(&env).ok_or(VaultError::InvalidInputs)?;
@@ -77,30 +77,47 @@ pub fn set_pool(env: Env, pool: Address) {
     .publish(&env);
 }
 
-pub fn pause(env: Env) {
+/// Pause a specific operation. Only callable by the admin (emergency role).
+/// Panics if the operation is already paused.
+pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
     let admin = storage::get_admin(&env).expect("not initialized");
     admin.require_auth();
 
-    if storage::is_paused(&env) {
+    if storage::is_operation_paused(&env, &operation) {
         soroban_sdk::panic_with_error!(&env, VaultError::AlreadyPaused);
     }
 
-    storage::set_paused(&env, true);
+    let mask = storage::get_pause_mask(&env);
+    storage::set_pause_mask(&env, mask | operation.bit());
 
-    events::Paused { by: admin }.publish(&env);
+    let op_symbol = crate::types::pause_flag_symbol(&env, &operation);
+    events::OperationPaused {
+        by: admin,
+        operation: op_symbol,
+        reason,
+    }
+    .publish(&env);
 }
 
-pub fn unpause(env: Env) {
+/// Unpause a specific operation. Only callable by the admin (emergency role).
+/// Panics if the operation is not currently paused.
+pub fn unpause_operation(env: Env, operation: PauseFlag) {
     let admin = storage::get_admin(&env).expect("not initialized");
     admin.require_auth();
 
-    if !storage::is_paused(&env) {
+    if !storage::is_operation_paused(&env, &operation) {
         soroban_sdk::panic_with_error!(&env, VaultError::NotPaused);
     }
 
-    storage::set_paused(&env, false);
+    let mask = storage::get_pause_mask(&env);
+    storage::set_pause_mask(&env, mask & !operation.bit());
 
-    events::Unpaused { by: admin }.publish(&env);
+    let op_symbol = crate::types::pause_flag_symbol(&env, &operation);
+    events::OperationUnpaused {
+        by: admin,
+        operation: op_symbol,
+    }
+    .publish(&env);
 }
 
 pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {

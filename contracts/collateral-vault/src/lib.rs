@@ -1,8 +1,8 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol, Vec};
 
 use errors::VaultError;
-use types::Position;
+use types::{PauseFlag, Position};
 
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
@@ -40,8 +40,8 @@ impl VaultContract {
         storage::set_lending_pool(&env, &lending_pool);
         storage::set_oracle(&env, &lending_pool);
 
-        // Explicitly set Paused to false
-        storage::set_paused(&env, false);
+        // Initialize pause mask to 0 (no operations paused)
+        storage::set_pause_mask(&env, 0);
 
         // Emit structured contract event
         events::Initialized {
@@ -71,12 +71,12 @@ impl VaultContract {
         admin::set_pool(env, pool)
     }
 
-    pub fn pause(env: Env) {
-        admin::pause(env)
+    pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
+        admin::pause_operation(env, operation, reason)
     }
 
-    pub fn unpause(env: Env) {
-        admin::unpause(env)
+    pub fn unpause_operation(env: Env, operation: PauseFlag) {
+        admin::unpause_operation(env, operation)
     }
 
     pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
@@ -133,7 +133,7 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
-        if storage::is_paused(&env) {
+        if storage::is_operation_paused(&env, &PauseFlag::Deposit) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
@@ -168,7 +168,7 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
-        if storage::is_paused(&env) {
+        if storage::is_operation_paused(&env, &PauseFlag::Withdraw) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
@@ -233,7 +233,7 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
         }
 
-        if storage::is_paused(&env) {
+        if storage::is_operation_paused(&env, &PauseFlag::Liquidation) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 

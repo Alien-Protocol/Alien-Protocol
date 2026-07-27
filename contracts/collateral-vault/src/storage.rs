@@ -1,4 +1,4 @@
-use crate::types::{CollateralAsset, DataKey, Position};
+use crate::types::{CollateralAsset, DataKey, PauseFlag, Position};
 use soroban_sdk::{Address, Env, Vec};
 
 /// Check if the contract has been initialized (deployment/initialization shield)
@@ -17,15 +17,23 @@ pub fn set_admin(env: &Env, admin: &Address) {
     env.storage().persistent().set(&DataKey::Admin, admin);
 }
 
-pub fn is_paused(env: &Env) -> bool {
+/// Returns the current pause bitmask. A set bit means the corresponding
+/// operation is paused. Default is 0 (nothing paused).
+pub fn get_pause_mask(env: &Env) -> u32 {
     env.storage()
         .persistent()
-        .get(&DataKey::Paused)
-        .unwrap_or(false)
+        .get(&DataKey::PauseMask)
+        .unwrap_or(0)
 }
 
-pub fn set_paused(env: &Env, paused: bool) {
-    env.storage().persistent().set(&DataKey::Paused, &paused);
+/// Stores the full pause bitmask.
+pub fn set_pause_mask(env: &Env, mask: u32) {
+    env.storage().persistent().set(&DataKey::PauseMask, &mask);
+}
+
+/// Returns true if the given operation is currently paused.
+pub fn is_operation_paused(env: &Env, flag: &PauseFlag) -> bool {
+    get_pause_mask(env) & flag.bit() != 0
 }
 
 pub fn _get_lending_pool(env: &Env) -> Option<Address> {
