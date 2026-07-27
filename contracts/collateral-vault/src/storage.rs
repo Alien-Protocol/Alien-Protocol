@@ -1,4 +1,4 @@
-use crate::types::{CollateralAsset, DataKey, Position};
+use crate::types::{AssetConfig, CollateralAsset, DataKey, Position};
 use soroban_sdk::{Address, Env, Vec};
 
 /// Check if the contract has been initialized (deployment/initialization shield)
@@ -70,6 +70,9 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
     env.storage()
         .persistent()
         .remove(&DataKey::SupportedAsset(asset.clone()));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::AssetConfig(asset.clone()));
 
     let mut assets = get_supported_assets(env);
     let mut found_idx = None;
@@ -85,6 +88,32 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
             .persistent()
             .set(&DataKey::SupportedAssets, &assets);
     }
+}
+
+pub fn get_asset_config(env: &Env, asset: &Address) -> Option<AssetConfig> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::AssetConfig(asset.clone()))
+}
+
+pub fn get_asset_config_or_default(env: &Env, asset: &Address) -> AssetConfig {
+    get_asset_config(env, asset).unwrap_or(AssetConfig::default())
+}
+
+pub fn set_asset_config(env: &Env, asset: &Address, config: &AssetConfig) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::AssetConfig(asset.clone()), config);
+}
+
+pub fn has_open_position(env: &Env, asset: &Address) -> bool {
+    let index = get_position_index(env);
+    for user in index.iter() {
+        if get_position_balance(env, &user, asset) > 0 {
+            return true;
+        }
+    }
+    false
 }
 
 pub fn get_oracle(env: &Env) -> Option<Address> {

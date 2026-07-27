@@ -17,4 +17,6 @@ pub enum VaultError {
     AlreadyAdmin = 11,
     AlreadyPaused = 12,
     NotPaused = 13,
+    InvalidAssetConfig = 14,
+    ImmutableMetadata = 15,
 }

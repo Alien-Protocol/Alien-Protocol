@@ -1,4 +1,4 @@
-use crate::{errors::VaultError, events, storage};
+use crate::{errors::VaultError, events, storage, types::AssetConfig};
 use soroban_sdk::{Address, Env};
 
 pub fn add_supported_asset(env: Env, asset: Address) {
@@ -10,8 +10,44 @@ pub fn add_supported_asset(env: Env, asset: Address) {
     }
 
     storage::add_supported_asset(&env, &asset);
+    storage::set_asset_config(&env, &asset, &AssetConfig::default());
 
     events::AssetAdded { asset }.publish(&env);
+}
+
+pub fn set_asset_config(
+    env: Env,
+    asset: Address,
+    token_decimals: u32,
+    oracle_price_decimals: u32,
+) -> Result<(), VaultError> {
+    let admin = storage::get_admin(&env).expect("not initialized");
+    admin.require_auth();
+
+    if !storage::is_supported_asset(&env, &asset) {
+        return Err(VaultError::UnsupportedAsset);
+    }
+
+    if storage::has_open_position(&env, &asset) {
+        let existing = storage::get_asset_config(&env, &asset).unwrap_or(AssetConfig::default());
+        if existing.token_decimals != token_decimals
+            || existing.oracle_price_decimals != oracle_price_decimals
+        {
+            return Err(VaultError::ImmutableMetadata);
+        }
+    }
+
+    crate::risk::validate_asset_config(token_decimals, oracle_price_decimals)?;
+    storage::set_asset_config(
+        &env,
+        &asset,
+        &AssetConfig {
+            token_decimals,
+            oracle_price_decimals,
+        },
+    );
+
+    Ok(())
 }
 
 pub fn remove_supported_asset(env: Env, asset: Address) {
