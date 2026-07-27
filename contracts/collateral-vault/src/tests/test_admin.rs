@@ -131,11 +131,63 @@ fn test_initialize_sets_paused_false() {
         _token_admin,
     ) = setup_env();
 
-    // Vault should not be paused after init — verify by attempting a deposit
-    // (which would fail if paused). We just confirm the unpause call fails
-    // (meaning it's already unpaused).
     let res = client.try_unpause();
-    assert!(res.is_err()); // NotPaused error
+    assert_eq!(
+        res,
+        Err(Ok(soroban_sdk::Error::from_contract_error(
+            VaultError::NotPaused as u32
+        )))
+    );
+}
+
+#[test]
+fn test_set_lending_pool_oracle_collision_fails() {
+    let (
+        _env,
+        client,
+        _admin,
+        _user,
+        oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    // Setting lending_pool equal to current oracle should fail
+    let res = client.try_set_lending_pool(&oracle);
+    assert_eq!(
+        res,
+        Err(Ok(soroban_sdk::Error::from_contract_error(
+            VaultError::InvalidAddress as u32
+        )))
+    );
+}
+
+#[test]
+fn test_set_oracle_lending_pool_collision_fails() {
+    let (
+        _env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    // Setting oracle equal to current lending_pool should fail
+    let res = client.try_set_oracle(&lending_pool);
+    assert_eq!(
+        res,
+        Err(Ok(soroban_sdk::Error::from_contract_error(
+            VaultError::InvalidAddress as u32
+        )))
+    );
 }
 
 // ── Admin transfer tests ───────────────────────────────────────────────

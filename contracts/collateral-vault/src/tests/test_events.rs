@@ -101,8 +101,8 @@ fn test_failed_invocation_no_events() {
 
     // try to initialize again which should fail
     let res = client.try_initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
-    assert!(res.is_err());
+    assert_eq!(res, Err(Ok(VaultError::AlreadyInitialized)));
 
-    // Failed invocation rolls back events.
+    // Failed invocation emits no events
     assert!(env.events().all().is_empty());
 }
