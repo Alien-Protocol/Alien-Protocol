@@ -24,7 +24,7 @@ pub fn set_lending_pool(env: Env, lending_pool: Address) {
     let admin = storage::get_admin(&env).expect("not initialized");
     admin.require_auth();
 
-    let old_pool = crate::storage::_get_lending_pool(&env);
+    let old_pool = storage::get_lending_pool(&env);
 
     storage::set_lending_pool(&env, &lending_pool);
 
@@ -59,20 +59,6 @@ pub fn set_liquidation_engine(env: Env, engine: Address) {
     events::LiquidationEngineUpdated {
         old_engine,
         new_engine: engine,
-    }
-    .publish(&env);
-}
-
-pub fn set_pool(env: Env, pool: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
-    admin.require_auth();
-
-    let old_pool = storage::get_pool(&env);
-    storage::set_pool(&env, &pool);
-
-    events::PoolUpdated {
-        old_pool,
-        new_pool: pool,
     }
     .publish(&env);
 }

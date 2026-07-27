@@ -5,6 +5,8 @@ use soroban_sdk::{contractevent, Address, BytesN};
 pub struct Initialized {
     pub admin: Address,
     pub lending_pool: Address,
+    pub oracle: Address,
+    pub liquidation_engine: Address,
 }
 
 #[contractevent]
@@ -94,12 +96,6 @@ pub struct OracleUpdated {
     pub new_oracle: Address,
 }
 
-#[contractevent]
-#[derive(Clone, Debug, PartialEq)]
-pub struct PoolUpdated {
-    pub old_pool: Option<Address>,
-    pub new_pool: Address,
-}
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]

@@ -33,7 +33,9 @@ fn setup_env() -> (
 fn test_deposit_event_topics() {
     let (env, client, admin, lending_pool, user, token_id) = setup_env();
 
-    client.initialize(&admin, &lending_pool);
+    let oracle = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
     client.add_supported_asset(&token_id);
 
     // Set up user token balance
@@ -68,7 +70,9 @@ fn test_deposit_event_topics() {
 fn test_configuration_events() {
     let (env, client, admin, lending_pool, _, _) = setup_env();
 
-    client.initialize(&admin, &lending_pool);
+    let oracle = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
     let new_oracle = Address::generate(&env);
 
@@ -90,10 +94,13 @@ fn test_configuration_events() {
 #[test]
 fn test_failed_invocation_no_events() {
     let (env, client, admin, lending_pool, _, _) = setup_env();
-    client.initialize(&admin, &lending_pool);
+
+    let oracle = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
     // try to initialize again which should fail
-    let res = client.try_initialize(&admin, &lending_pool);
+    let res = client.try_initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
     assert!(res.is_err());
 
     // Failed invocation rolls back events.

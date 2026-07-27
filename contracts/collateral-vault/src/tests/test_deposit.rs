@@ -23,8 +23,10 @@ fn setup_env() -> (
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
