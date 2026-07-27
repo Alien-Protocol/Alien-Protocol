@@ -7,10 +7,10 @@ use soroban_sdk::{token, Address, Env};
 fn setup_env() -> (
     Env,
     VaultContractClient<'static>,
-    Address,
-    Address,
-    Address,
-    Address,
+    Address, // admin
+    Address, // user
+    Address, // oracle
+    Address, // token_id
     token::Client<'static>,
     token::StellarAssetClient<'static>,
 ) {
@@ -46,6 +46,8 @@ fn setup_env() -> (
     )
 }
 
+// ── happy paths ─────────────────────────────────────────────────────────────
+
 #[test]
 fn test_deposit_success() {
     let (_env, client, _admin, user, _oracle, token_id, token_client, token_admin) = setup_env();
@@ -72,25 +74,47 @@ fn test_deposit_increases_existing_balance() {
 }
 
 #[test]
-fn test_deposit_zero_amount_fails() {
+fn test_deposit_token_transfer() {
+    let (_env, client, _admin, user, _oracle, token_id, token_client, token_admin) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    assert_eq!(token_client.balance(&user), 1000);
+    assert_eq!(token_client.balance(&client.address), 0);
+
+    client.deposit(&user, &token_id, &500);
+
+    assert_eq!(token_client.balance(&user), 500);
+    assert_eq!(token_client.balance(&client.address), 500);
+}
+
+// ── validation failures ──────────────────────────────────────────────────────
+
+#[test]
+fn test_deposit_zero_amount_fails_with_invalid_inputs() {
     let (_env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
 
     token_admin.mint(&user, &1000);
-    let res = client.try_deposit(&user, &token_id, &0);
-    assert!(res.is_err());
+    let err = client
+        .try_deposit(&user, &token_id, &0)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::InvalidInputs);
 }
 
 #[test]
-fn test_deposit_negative_amount_fails() {
+fn test_deposit_negative_amount_fails_with_invalid_inputs() {
     let (_env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
 
     token_admin.mint(&user, &1000);
-    let res = client.try_deposit(&user, &token_id, &-100);
-    assert!(res.is_err());
+    let err = client
+        .try_deposit(&user, &token_id, &-100)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::InvalidInputs);
 }
 
 #[test]
-fn test_deposit_unsupported_asset_fails() {
+fn test_deposit_unsupported_asset_fails_with_unsupported_asset() {
     let (env, client, _admin, user, _oracle, _token_id, _token_client, _token_admin) = setup_env();
 
     let other_token_admin = Address::generate(&env);
@@ -99,19 +123,25 @@ fn test_deposit_unsupported_asset_fails() {
     let other_token_admin_client = token::StellarAssetClient::new(&env, &other_token_id);
 
     other_token_admin_client.mint(&user, &1000);
-    let res = client.try_deposit(&user, &other_token_id, &500);
-    assert!(res.is_err());
+    let err = client
+        .try_deposit(&user, &other_token_id, &500)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::UnsupportedAsset);
 }
 
 #[test]
-fn test_deposit_when_paused_fails() {
+fn test_deposit_when_paused_fails_with_vault_paused() {
     let (_env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
 
     token_admin.mint(&user, &1000);
     client.pause();
 
-    let res = client.try_deposit(&user, &token_id, &500);
-    assert!(res.is_err());
+    let err = client
+        .try_deposit(&user, &token_id, &500)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::VaultPaused);
 }
 
 #[test]
@@ -119,16 +149,17 @@ fn test_deposit_without_auth_fails() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
 
     token_admin.mint(&user, &1000);
-
-    // Disable mock auths after setup so this call must satisfy user.require_auth().
+    // Disable mock auths — require_auth() on user will now reject.
     env.set_auths(&[]);
 
     let res = client.try_deposit(&user, &token_id, &500);
     assert!(res.is_err());
 }
 
+// ── events ───────────────────────────────────────────────────────────────────
+
 #[test]
-fn test_deposit_emits_event() {
+fn test_deposit_emits_deposited_event() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
 
     token_admin.mint(&user, &1000);
@@ -141,23 +172,4 @@ fn test_deposit_emits_event() {
     let event_symbol =
         soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
     assert_eq!(event_symbol, soroban_sdk::Symbol::new(&env, "deposited"));
-
-    // With #[contractevent], data is a map/struct Val; verify fields via the topics symbol
-    // and confirm the event was emitted from the correct contract (already checked above).
-    // The symbol topic check above is sufficient to confirm the correct event type was emitted.
-}
-
-#[test]
-fn test_deposit_token_transfer() {
-    let (_env, client, _admin, user, _oracle, token_id, token_client, token_admin) = setup_env();
-
-    token_admin.mint(&user, &1000);
-
-    assert_eq!(token_client.balance(&user), 1000);
-    assert_eq!(token_client.balance(&client.address), 0);
-
-    client.deposit(&user, &token_id, &500);
-
-    assert_eq!(token_client.balance(&user), 500);
-    assert_eq!(token_client.balance(&client.address), 500);
 }

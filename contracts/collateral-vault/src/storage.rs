@@ -74,9 +74,12 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
     let mut assets = get_supported_assets(env);
     let mut found_idx = None;
     for i in 0..assets.len() {
-        if assets.get(i).unwrap() == *asset {
-            found_idx = Some(i);
-            break;
+        // Safety: `i` is within `0..assets.len()`, so `get` always returns Some.
+        if let Some(a) = assets.get(i) {
+            if a == *asset {
+                found_idx = Some(i);
+                break;
+            }
         }
     }
     if let Some(idx) = found_idx {

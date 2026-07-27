@@ -30,15 +30,15 @@ impl MockOracle {
     }
 
     pub fn get_price_or_fail(env: Env, asset: Address) -> types::PriceData {
-        let price_data: types::PriceData = match env.storage().persistent().get(&asset) {
-            Some(pd) => pd,
-            None => panic!("price not found"),
-        };
+        let price_data: types::PriceData = env
+            .storage()
+            .persistent()
+            .get(&asset)
+            .expect("price not found");
         let current_time = env.ledger().timestamp();
-        let age = match current_time.checked_sub(price_data.timestamp) {
-            Some(delta) => delta,
-            None => panic!("stale price"),
-        };
+        let age = current_time
+            .checked_sub(price_data.timestamp)
+            .expect("stale price");
         if age > ORACLE_STALE_THRESHOLD {
             panic!("stale price");
         }
@@ -54,8 +54,8 @@ impl MockOracle {
 fn setup_env() -> (
     Env,
     VaultContractClient<'static>,
-    Address,
-    Address,
+    Address, // admin
+    Address, // user
     token::Client<'static>,
     token::StellarAssetClient<'static>,
     MockLendingPoolClient<'static>,
@@ -90,7 +90,7 @@ fn setup_env() -> (
     let pool_client = MockLendingPoolClient::new(&env, &pool_id);
     client.set_pool(&pool_id);
 
-    // Default price: 1 token = 100USD (7 decimals)
+    // Default price: 1 token = $100 (7-decimal format)
     oracle_client.set_price(&token_id, &1_000_000_000, &1000);
 
     (
@@ -106,6 +106,8 @@ fn setup_env() -> (
     )
 }
 
+// ── happy paths ─────────────────────────────────────────────────────────────
+
 #[test]
 fn test_withdraw_success() {
     let (_env, client, _admin, user, token_client, token_admin, _pool, _oracle, token_id) =
@@ -113,7 +115,6 @@ fn test_withdraw_success() {
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
-
     client.withdraw(&user, &token_id, &500);
 
     assert_eq!(client.get_position_balance(&user, &token_id), 0);
@@ -127,7 +128,6 @@ fn test_withdraw_partial() {
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
-
     client.withdraw(&user, &token_id, &200);
 
     assert_eq!(client.get_position_balance(&user, &token_id), 300);
@@ -141,59 +141,83 @@ fn test_withdraw_clears_position_on_zero() {
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
-
     assert!(client.get_position_index().contains(&user));
 
     client.withdraw(&user, &token_id, &500);
-
     assert!(!client.get_position_index().contains(&user));
 }
 
 #[test]
-fn test_withdraw_exceeds_balance_fails() {
+fn test_withdraw_tokens_returned() {
+    let (_env, client, _admin, user, token_client, token_admin, _pool, _oracle, token_id) =
+        setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+    assert_eq!(token_client.balance(&user), 500);
+
+    client.withdraw(&user, &token_id, &200);
+    assert_eq!(token_client.balance(&user), 700);
+}
+
+// ── validation failures ──────────────────────────────────────────────────────
+
+#[test]
+fn test_withdraw_zero_amount_fails_with_invalid_inputs() {
     let (_env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
         setup_env();
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    let res = client.try_withdraw(&user, &token_id, &600);
-    assert!(res.is_err());
+    let err = client
+        .try_withdraw(&user, &token_id, &0)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::InvalidInputs);
 }
 
 #[test]
-fn test_withdraw_zero_amount_fails() {
+fn test_withdraw_exceeds_balance_fails_with_insufficient_balance() {
     let (_env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
         setup_env();
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    let res = client.try_withdraw(&user, &token_id, &0);
-    assert!(res.is_err());
+    let err = client
+        .try_withdraw(&user, &token_id, &600)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::InsufficientBalance);
 }
 
 #[test]
-fn test_withdraw_no_position_fails() {
+fn test_withdraw_no_position_fails_with_no_position() {
     let (_env, client, _admin, user, _token_client, _token_admin, _pool, _oracle, token_id) =
         setup_env();
 
-    let res = client.try_withdraw(&user, &token_id, &100);
-    assert!(res.is_err());
+    let err = client
+        .try_withdraw(&user, &token_id, &100)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::NoPosition);
 }
 
 #[test]
-fn test_withdraw_when_paused_fails() {
+fn test_withdraw_when_paused_fails_with_vault_paused() {
     let (_env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
         setup_env();
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
-
     client.pause();
 
-    let res = client.try_withdraw(&user, &token_id, &100);
-    assert!(res.is_err());
+    let err = client
+        .try_withdraw(&user, &token_id, &100)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::VaultPaused);
 }
 
 #[test]
@@ -204,69 +228,66 @@ fn test_withdraw_without_auth_fails() {
     let user = Address::generate(&env);
     let token = Address::generate(&env);
 
-    // No mock_all_auths - withdraw should fail auth check immediately
+    // No mock_all_auths — require_auth() on user must reject.
     let res = client.try_withdraw(&user, &token, &100);
     assert!(res.is_err());
 }
 
 #[test]
-fn test_withdraw_collateral_ratio_check() {
+fn test_withdraw_collateral_ratio_check_fails_with_below_min_collateral_ratio() {
     let (_env, client, _admin, user, _token_client, token_admin, pool, oracle, token_id) =
         setup_env();
 
-    // Price: $1.00 encoded as 10_000_000 (7-decimal oracle format).
-    // 500 tokens → collateral_value = 500 * 10_000_000 / PRICE_PRECISION = $500 USD.
+    // Price: $1.00 → collateral_value of 500 tokens = $500 USD.
     oracle.set_price(&token_id, &10_000_000, &1000);
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    // Debt is denominated in USD (same unit as collateral_value after PRICE_PRECISION).
-    // debt = $400.  Minimum required collateral = 400 * 110 / 100 = $440.
-    // Withdrawing 101 → remaining = 500 − 101 = $399 < $440 → blocked.
+    // Debt = $400 → min collateral = 400 * 110 / 100 = $440.
+    // Withdrawing 101 → remaining = $399 < $440.
     pool.set_user_debt(&400);
 
-    let res = client.try_withdraw(&user, &token_id, &101);
-    assert!(
-        res.is_err(),
-        "should block withdrawal that reduces ratio below 110%"
-    );
+    let err = client
+        .try_withdraw(&user, &token_id, &101)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::BelowMinCollateralRatio);
+}
 
-    // Withdrawing 50 → remaining = 500 − 50 = $450 ≥ $440 → allowed.
+#[test]
+fn test_withdraw_collateral_ratio_safe_succeeds() {
+    let (_env, client, _admin, user, _token_client, token_admin, pool, oracle, token_id) =
+        setup_env();
+
+    oracle.set_price(&token_id, &10_000_000, &1000);
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    // Debt = $400 → min collateral = $440.
+    // Withdrawing 50 → remaining = $450 ≥ $440 → allowed.
+    pool.set_user_debt(&400);
+
     client.withdraw(&user, &token_id, &50);
     assert_eq!(client.get_position_balance(&user, &token_id), 450);
 }
 
+// ── events ───────────────────────────────────────────────────────────────────
+
 #[test]
-fn test_withdraw_emits_event() {
+fn test_withdraw_emits_withdrawn_event() {
     let (env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
         setup_env();
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
-
     client.withdraw(&user, &token_id, &100);
 
     let last_event = env.events().all().last().unwrap();
     assert_eq!(last_event.0, client.address);
-    // Verify it's a "Withdrawn" event
     use soroban_sdk::TryFromVal;
     let event_symbol =
         soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
     assert_eq!(event_symbol, soroban_sdk::Symbol::new(&env, "withdrawn"));
-}
-
-#[test]
-fn test_withdraw_tokens_returned() {
-    let (_env, client, _admin, user, token_client, token_admin, _pool, _oracle, token_id) =
-        setup_env();
-
-    token_admin.mint(&user, &1000);
-    client.deposit(&user, &token_id, &500);
-
-    assert_eq!(token_client.balance(&user), 500);
-
-    client.withdraw(&user, &token_id, &200);
-
-    assert_eq!(token_client.balance(&user), 700);
 }

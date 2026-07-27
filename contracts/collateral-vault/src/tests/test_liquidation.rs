@@ -7,10 +7,10 @@ use soroban_sdk::{token, Address, Env};
 fn setup_env() -> (
     Env,
     VaultContractClient<'static>,
-    Address,
-    Address,
-    Address,
-    Address,
+    Address, // admin
+    Address, // user
+    Address, // oracle
+    Address, // token_id
     token::Client<'static>,
     token::StellarAssetClient<'static>,
 ) {
@@ -46,31 +46,17 @@ fn setup_env() -> (
     )
 }
 
+// ── authorize_liquidation ───────────────────────────────────────────────────
+
 #[test]
-fn test_authorize_liquidation_success() {
+fn test_authorize_liquidation_engine_can_be_set() {
     let (env, client, _admin, _user, _oracle, _token_id, _token_client, _token_admin) = setup_env();
     let engine = Address::generate(&env);
 
     client.set_liquidation_engine(&engine);
 }
 
-#[test]
-fn test_seize_collateral_emits_event() {
-    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
-    let engine = Address::generate(&env);
-
-    client.set_liquidation_engine(&engine);
-
-    token_admin.mint(&user, &1000);
-    client.deposit(&user, &token_id, &500);
-
-    client.seize_collateral(&engine, &user, &token_id, &200);
-
-    // In Soroban, we can't easily "check" events in the same way as logs,
-    // but the contract publishes them. If we wanted to verify, we would usually
-    // check the ledger's events.
-    // For now, we've verified it doesn't panic.
-}
+// ── seize_collateral ────────────────────────────────────────────────────────
 
 #[test]
 fn test_seize_collateral_success() {
@@ -78,7 +64,6 @@ fn test_seize_collateral_success() {
     let engine = Address::generate(&env);
 
     client.set_liquidation_engine(&engine);
-
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
@@ -90,44 +75,23 @@ fn test_seize_collateral_success() {
 }
 
 #[test]
-fn test_seize_collateral_unauthorized_engine_fails() {
-    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
-    let engine = Address::generate(&env);
-    let malicious_engine = Address::generate(&env);
-
-    client.set_liquidation_engine(&engine);
-
-    token_admin.mint(&user, &1000);
-    client.deposit(&user, &token_id, &500);
-
-    let res = client.try_seize_collateral(&malicious_engine, &user, &token_id, &200);
-    assert!(res.is_err());
-}
-
-#[test]
-fn test_seize_collateral_insufficient_balance_fails() {
+fn test_seize_collateral_emits_event() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
     let engine = Address::generate(&env);
 
     client.set_liquidation_engine(&engine);
-
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    let res = client.try_seize_collateral(&engine, &user, &token_id, &600);
-    assert!(res.is_err());
-}
+    // Should not return an error.
+    client.seize_collateral(&engine, &user, &token_id, &200);
 
-#[test]
-fn test_seize_collateral_no_position_fails() {
-    let (env, client, _admin, user, _oracle, token_id, _token_client, _token_admin) = setup_env();
-    let engine = Address::generate(&env);
-
-    client.set_liquidation_engine(&engine);
-
-    // User has NO position
-    let res = client.try_seize_collateral(&engine, &user, &token_id, &200);
-    assert!(res.is_err());
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let sym =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(sym, soroban_sdk::Symbol::new(&env, "collateral_seized"));
 }
 
 #[test]
@@ -136,7 +100,6 @@ fn test_seize_collateral_removes_from_index_on_zero() {
     let engine = Address::generate(&env);
 
     client.set_liquidation_engine(&engine);
-
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
@@ -148,18 +111,84 @@ fn test_seize_collateral_removes_from_index_on_zero() {
     assert!(!client.get_position_index().contains(&user));
 }
 
+// ── failure paths ────────────────────────────────────────────────────────────
+
 #[test]
-fn test_seize_collateral_paused_fails() {
+fn test_seize_collateral_no_engine_configured_fails_with_liquidation_engine_not_set() {
+    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
+    let engine = Address::generate(&env);
+
+    // Intentionally do NOT call set_liquidation_engine.
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    let err = client
+        .try_seize_collateral(&engine, &user, &token_id, &200)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::LiquidationEngineNotSet);
+}
+
+#[test]
+fn test_seize_collateral_unauthorized_engine_fails_with_unauthorized() {
+    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
+    let engine = Address::generate(&env);
+    let malicious_engine = Address::generate(&env);
+
+    client.set_liquidation_engine(&engine);
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    let err = client
+        .try_seize_collateral(&malicious_engine, &user, &token_id, &200)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::Unauthorized);
+}
+
+#[test]
+fn test_seize_collateral_insufficient_balance_fails_with_insufficient_balance() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
     let engine = Address::generate(&env);
 
     client.set_liquidation_engine(&engine);
-
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
+    let err = client
+        .try_seize_collateral(&engine, &user, &token_id, &600)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::InsufficientBalance);
+}
+
+#[test]
+fn test_seize_collateral_no_position_fails_with_no_position() {
+    let (env, client, _admin, user, _oracle, token_id, _token_client, _token_admin) = setup_env();
+    let engine = Address::generate(&env);
+
+    client.set_liquidation_engine(&engine);
+    // User has NO position.
+    let err = client
+        .try_seize_collateral(&engine, &user, &token_id, &200)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::NoPosition);
+}
+
+#[test]
+fn test_seize_collateral_paused_fails_with_vault_paused() {
+    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
+    let engine = Address::generate(&env);
+
+    client.set_liquidation_engine(&engine);
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
     client.pause();
 
-    let res = client.try_seize_collateral(&engine, &user, &token_id, &200);
-    assert!(res.is_err());
+    let err = client
+        .try_seize_collateral(&engine, &user, &token_id, &200)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::VaultPaused);
 }

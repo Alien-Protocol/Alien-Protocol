@@ -7,9 +7,9 @@ use soroban_sdk::{token, Address, Env};
 fn setup_env() -> (
     Env,
     VaultContractClient<'static>,
-    Address,
-    Address,
-    Address,
+    Address, // admin
+    Address, // user
+    Address, // token_id
     token::Client<'static>,
     token::StellarAssetClient<'static>,
 ) {
@@ -44,6 +44,8 @@ fn setup_env() -> (
     )
 }
 
+// ── add_supported_asset ─────────────────────────────────────────────────────
+
 #[test]
 fn test_add_asset_success() {
     let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
@@ -54,12 +56,17 @@ fn test_add_asset_success() {
 }
 
 #[test]
-fn test_add_asset_duplicate_fails() {
+fn test_add_asset_duplicate_fails_with_already_supported() {
     let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
 
-    let res = client.try_add_supported_asset(&token_id);
-    assert!(res.is_err());
+    let err = client
+        .try_add_supported_asset(&token_id)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::AlreadySupported);
 }
+
+// ── remove_supported_asset ──────────────────────────────────────────────────
 
 #[test]
 fn test_remove_asset_success() {
@@ -71,12 +78,15 @@ fn test_remove_asset_success() {
 }
 
 #[test]
-fn test_remove_asset_not_found_fails() {
+fn test_remove_asset_not_found_fails_with_asset_not_found() {
     let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
     let unknown_token = Address::generate(&env);
 
-    let res = client.try_remove_supported_asset(&unknown_token);
-    assert!(res.is_err());
+    let err = client
+        .try_remove_supported_asset(&unknown_token)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, VaultError::AssetNotFound);
 }
 
 #[test]
@@ -85,11 +95,12 @@ fn test_remove_asset_does_not_clear_existing_positions() {
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
-
     client.remove_supported_asset(&token_id);
 
     assert_eq!(client.get_position_balance(&user, &token_id), 500);
 }
+
+// ── is_supported_asset ──────────────────────────────────────────────────────
 
 #[test]
 fn test_is_supported_asset_true() {
@@ -103,6 +114,8 @@ fn test_is_supported_asset_false() {
     let unknown_token = Address::generate(&env);
     assert!(!client.is_supported_asset(&unknown_token));
 }
+
+// ── get_all_positions ───────────────────────────────────────────────────────
 
 #[test]
 fn test_get_all_positions_empty() {
@@ -145,10 +158,8 @@ fn test_get_all_positions_excludes_withdrawn() {
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
-
     assert_eq!(client.get_all_positions().len(), 1);
 
     client.withdraw(&user, &token_id, &500);
-
     assert_eq!(client.get_all_positions().len(), 0);
 }
