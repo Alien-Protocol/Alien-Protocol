@@ -96,7 +96,6 @@ pub struct OracleUpdated {
     pub new_oracle: Address,
 }
 
-
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContractUpgraded {
