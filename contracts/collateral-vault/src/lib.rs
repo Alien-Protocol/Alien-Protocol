@@ -44,83 +44,48 @@ impl VaultContract {
         .publish(&env);
     }
 
-    pub fn propose_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
-        admin::propose_admin(&env, new_admin)
-    }
-
-    pub fn accept_admin(env: Env) -> Result<(), VaultError> {
-        admin::accept_admin(&env)
-    }
-
-    pub fn cancel_admin_transfer(env: Env) -> Result<(), VaultError> {
-        admin::cancel_admin_transfer(&env)
-    }
-
-    pub fn grant_role(env: Env, role: Role, address: Address) -> Result<(), VaultError> {
-        admin::grant_role(&env, role, address)
-    }
-
-    pub fn revoke_role(env: Env, role: Role, address: Address) -> Result<(), VaultError> {
-        admin::revoke_role(&env, role, address)
+    pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
+        admin::set_admin(env, new_admin)
     }
 
     pub fn set_lending_pool(env: Env, lending_pool: Address) {
-        admin::require_role(&env, &Role::RiskManager);
-        storage::set_lending_pool(&env, &lending_pool);
-        events::LendingPoolUpdated { lending_pool }.publish(&env);
+        admin::set_lending_pool(env, lending_pool)
     }
 
     pub fn set_oracle(env: Env, oracle: Address) {
-        admin::require_role(&env, &Role::RiskManager);
-        storage::set_oracle(&env, &oracle);
-    }
-
-    pub fn pause(env: Env) {
-        admin::require_role(&env, &Role::EmergencyPauser);
-        if storage::is_paused(&env) {
-            soroban_sdk::panic_with_error!(&env, VaultError::AlreadyPaused);
-        }
-        storage::set_paused(&env, true);
-        events::Paused {
-            by: env.current_contract_address(),
-        }
-        .publish(&env);
-    }
-
-    pub fn unpause(env: Env) {
-        admin::require_role(&env, &Role::EmergencyPauser);
-        if !storage::is_paused(&env) {
-            soroban_sdk::panic_with_error!(&env, VaultError::NotPaused);
-        }
-        storage::set_paused(&env, false);
-        events::Unpaused {
-            by: env.current_contract_address(),
-        }
-        .publish(&env);
-    }
-
-    pub fn add_supported_asset(env: Env, asset: Address) {
-        admin::require_role(&env, &Role::AssetManager);
-        if storage::is_supported_asset(&env, &asset) {
-            soroban_sdk::panic_with_error!(&env, VaultError::AlreadySupported);
-        }
-        storage::add_supported_asset(&env, &asset);
-        events::AssetAdded { asset }.publish(&env);
-    }
-
-    pub fn remove_supported_asset(env: Env, asset: Address) {
-        admin::require_role(&env, &Role::AssetManager);
-        if !storage::is_supported_asset(&env, &asset) {
-            soroban_sdk::panic_with_error!(&env, VaultError::AssetNotFound);
-        }
-        storage::remove_supported_asset(&env, &asset);
-        events::AssetRemoved { asset }.publish(&env);
+        admin::set_oracle(env, oracle)
     }
 
     pub fn set_liquidation_engine(env: Env, engine: Address) {
-        admin::require_role(&env, &Role::RiskManager);
-        storage::set_liquidation_engine(&env, &engine);
-        events::LiquidationEngineSet { engine }.publish(&env);
+        admin::set_liquidation_engine(env, engine)
+    }
+
+    pub fn set_pool(env: Env, pool: Address) {
+        admin::set_pool(env, pool)
+    }
+
+    pub fn pause(env: Env) {
+        admin::pause(env)
+    }
+
+    pub fn unpause(env: Env) {
+        admin::unpause(env)
+    }
+
+    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
+        admin::upgrade(env, new_wasm_hash)
+    }
+
+    pub fn add_supported_asset(env: Env, asset: Address) {
+        assets::add_supported_asset(env, asset)
+    }
+
+    pub fn remove_supported_asset(env: Env, asset: Address) {
+        assets::remove_supported_asset(env, asset)
+    }
+
+    pub fn is_supported_asset(env: Env, asset: Address) -> bool {
+        assets::is_supported_asset(env, asset)
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
@@ -140,15 +105,6 @@ impl VaultContract {
         let pool_address = storage::get_pool(&env).expect("Lending pool not set");
         let pool_client = LendingPoolClient::new(&env, &pool_address);
         pool_client.is_liquidatable(&user)
-    }
-
-    pub fn set_pool(env: Env, pool: Address) {
-        admin::require_role(&env, &Role::RiskManager);
-        storage::set_pool(&env, &pool);
-    }
-
-    pub fn is_supported_asset(env: Env, asset: Address) -> bool {
-        storage::is_supported_asset(&env, &asset)
     }
 
     pub fn get_admin(env: Env) -> Option<Address> {
@@ -376,6 +332,7 @@ impl VaultContract {
 }
 
 mod admin;
+mod assets;
 mod errors;
 mod events;
 mod storage;

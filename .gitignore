@@ -1,2 +1,8 @@
 plan.md
 target
+
+# Test snapshots
+**/test_snapshots/
+**/__snapshots__/
+*.snap
+*.snapshot
