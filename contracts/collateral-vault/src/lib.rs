@@ -98,10 +98,6 @@ impl VaultContract {
         admin::unpause(env)
     }
 
-    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
-        admin::upgrade(env, new_wasm_hash)
-    }
-
     pub fn add_supported_asset(env: Env, asset: Address) {
         assets::add_supported_asset(env, asset)
     }

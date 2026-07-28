@@ -25,6 +25,7 @@ pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
 
     env.deployer()
         .update_current_contract_wasm(wasm_hash.clone());
+
     storage::set_contract_version(&env, CURRENT_CONTRACT_VERSION);
 
     ContractUpgraded {

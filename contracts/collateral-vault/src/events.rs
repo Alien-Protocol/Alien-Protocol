@@ -103,13 +103,6 @@ pub struct PoolUpdated {
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContractUpgraded {
-    pub old_hash: Option<BytesN<32>>,
-    pub new_hash: BytesN<32>,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, PartialEq)]
-pub struct ContractUpgraded {
     pub actor: Address,
     pub old_contract_version: u32,
     pub new_contract_version: u32,
