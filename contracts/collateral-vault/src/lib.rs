@@ -3,7 +3,7 @@
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
 
 use errors::VaultError;
-use types::Position;
+use types::{AssetsPage, Position, PositionsPage};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Module declarations
@@ -12,7 +12,7 @@ use types::Position;
 mod admin;
 mod assets;
 pub mod clients;
-mod errors;
+pub mod errors;
 mod events;
 mod liquidation;
 mod position;
@@ -20,7 +20,8 @@ mod risk;
 mod storage;
 #[cfg(test)]
 mod tests;
-mod types;
+pub mod types;
+mod views;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Contract entry point
@@ -119,7 +120,7 @@ impl VaultContract {
 
     pub fn get_position(env: Env, user: Address) -> Position {
         match storage::get_position(&env, &user) {
-            Some(position) => position,
+            Some(p) => p,
             None => soroban_sdk::panic_with_error!(&env, VaultError::NoPosition),
         }
     }
@@ -136,7 +137,25 @@ impl VaultContract {
         storage::get_position_index(&env)
     }
 
+    pub fn get_position_count(env: Env) -> u32 {
+        storage::position_count(&env)
+    }
+
     pub fn get_all_positions(env: Env) -> soroban_sdk::Vec<Position> {
         storage::get_all_positions(&env)
+    }
+
+    // ── Paginated enumeration views ───────────────────────────────────────────
+
+    pub fn get_positions_page(env: Env, cursor: u32, limit: u32) -> PositionsPage {
+        views::get_positions_page(&env, cursor, limit)
+    }
+
+    pub fn get_supported_assets_page(env: Env, cursor: u32, limit: u32) -> AssetsPage {
+        views::get_supported_assets_page(&env, cursor, limit)
+    }
+
+    pub fn get_user_assets_page(env: Env, user: Address, cursor: u32, limit: u32) -> AssetsPage {
+        views::get_user_assets_page(&env, &user, cursor, limit)
     }
 }

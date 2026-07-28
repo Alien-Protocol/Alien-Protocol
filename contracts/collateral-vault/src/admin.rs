@@ -7,15 +7,6 @@ use crate::{errors::VaultError, events, storage};
 use soroban_sdk::{Address, BytesN, Env};
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Load the admin or panic.
-pub fn require_admin(env: &Env) -> Address {
-    storage::get_admin(env).unwrap_or_else(|| panic!("not initialized"))
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Initialization
 // ─────────────────────────────────────────────────────────────────────────────
 

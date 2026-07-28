@@ -18,12 +18,12 @@ const MIN_COLLATERAL_RATIO_PCT: i128 = 110;
 // Dependency loaders
 // ─────────────────────────────────────────────────────────────────────────────
 
-pub fn oracle_client(env: &Env) -> OracleClient {
+pub(crate) fn oracle_client(env: &Env) -> OracleClient {
     let addr = storage::get_oracle(env).unwrap_or_else(|| panic!("oracle not configured"));
     OracleClient::new(env, &addr)
 }
 
-pub fn pool_client(env: &Env) -> Option<LendingPoolClient> {
+pub(crate) fn pool_client(env: &Env) -> Option<LendingPoolClient> {
     storage::get_pool(env).map(|addr| LendingPoolClient::new(env, &addr))
 }
 
@@ -32,7 +32,7 @@ pub fn pool_client(env: &Env) -> Option<LendingPoolClient> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Sum the USD value of every collateral asset in `position`.
-pub fn collateral_value(env: &Env, position: &Position) -> i128 {
+pub(crate) fn collateral_value(env: &Env, position: &Position) -> i128 {
     let oracle = oracle_client(env);
     let mut total: i128 = 0;
 
@@ -52,11 +52,11 @@ pub fn collateral_value(env: &Env, position: &Position) -> i128 {
     total
 }
 
-/// Total collateral value for `user`. Returns 0 if the user has no position.
+/// Total collateral value for `user`. Panics with `NoPosition` if the user has no position.
 pub fn get_collateral_value(env: &Env, user: &Address) -> i128 {
     match storage::get_position(env, user) {
         Some(pos) => collateral_value(env, &pos),
-        None => 0,
+        None => soroban_sdk::panic_with_error!(env, crate::errors::VaultError::NoPosition),
     }
 }
 

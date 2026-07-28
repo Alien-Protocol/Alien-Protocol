@@ -31,10 +31,38 @@ pub fn set_paused(env: &Env, paused: bool) {
     env.storage().persistent().set(&DataKey::Paused, &paused);
 }
 
+pub fn _get_lending_pool(env: &Env) -> Option<Address> {
+    env.storage().persistent().get(&DataKey::LendingPool)
+}
+
 pub fn set_lending_pool(env: &Env, lending_pool: &Address) {
     env.storage()
         .persistent()
         .set(&DataKey::LendingPool, lending_pool);
+}
+
+pub fn get_position_index(env: &Env) -> soroban_sdk::Vec<Address> {
+    let count = position_count(env);
+    let mut result = soroban_sdk::Vec::new(env);
+    for slot in 0..count {
+        if let Some(user) = get_position_at(env, slot) {
+            result.push_back(user);
+        }
+    }
+    result
+}
+
+pub fn get_all_positions(env: &Env) -> soroban_sdk::Vec<Position> {
+    let count = position_count(env);
+    let mut positions = soroban_sdk::Vec::new(env);
+    for slot in 0..count {
+        if let Some(user) = get_position_at(env, slot) {
+            if let Some(pos) = get_position(env, &user) {
+                positions.push_back(pos);
+            }
+        }
+    }
+    positions
 }
 
 pub fn get_oracle(env: &Env) -> Option<Address> {
