@@ -35,14 +35,14 @@ pub struct BudgetMockOracle;
 
 #[contractimpl]
 impl BudgetMockOracle {
-    pub fn get_price(env: Env, asset: Address) -> Option<types::PriceData> {
+    pub fn get_price(env: Env, _asset: Address) -> Option<types::PriceData> {
         Some(types::PriceData {
             price: 10_000_000,
             timestamp: env.ledger().timestamp(),
         })
     }
 
-    pub fn get_price_or_fail(env: Env, asset: Address) -> types::PriceData {
+    pub fn get_price_or_fail(env: Env, _asset: Address) -> types::PriceData {
         types::PriceData {
             price: 10_000_000,
             timestamp: env.ledger().timestamp(),
@@ -100,9 +100,9 @@ fn test_budget_deposit_within_cpu_limit() {
     let user = Address::generate(&f.env);
     f.token_admin.mint(&user, &1_000);
 
-    f.env.budget().reset_default();
+    f.env.cost_estimate().budget().reset_default();
     f.client.deposit(&user, &f.token_id, &500);
-    let cpu = f.env.budget().cpu_instruction_cost();
+    let cpu = f.env.cost_estimate().budget().cpu_instruction_cost();
 
     assert!(
         cpu < CPU_LIMIT,
@@ -117,9 +117,9 @@ fn test_budget_withdraw_within_cpu_limit() {
     f.token_admin.mint(&user, &1_000);
     f.client.deposit(&user, &f.token_id, &500);
 
-    f.env.budget().reset_default();
+    f.env.cost_estimate().budget().reset_default();
     f.client.withdraw(&user, &f.token_id, &500);
-    let cpu = f.env.budget().cpu_instruction_cost();
+    let cpu = f.env.cost_estimate().budget().cpu_instruction_cost();
 
     assert!(
         cpu < CPU_LIMIT,
@@ -137,9 +137,9 @@ fn test_budget_seize_collateral_within_cpu_limit() {
     f.token_admin.mint(&user, &1_000);
     f.client.deposit(&user, &f.token_id, &1_000);
 
-    f.env.budget().reset_default();
+    f.env.cost_estimate().budget().reset_default();
     f.client.seize_collateral(&engine, &user, &f.token_id, &500);
-    let cpu = f.env.budget().cpu_instruction_cost();
+    let cpu = f.env.cost_estimate().budget().cpu_instruction_cost();
 
     assert!(
         cpu < CPU_LIMIT,
@@ -159,9 +159,9 @@ fn test_budget_get_all_positions_20_users_within_cpu_limit() {
         f.client.deposit(&user, &f.token_id, &100);
     }
 
-    f.env.budget().reset_default();
+    f.env.cost_estimate().budget().reset_default();
     let positions = f.client.get_all_positions();
-    let cpu = f.env.budget().cpu_instruction_cost();
+    let cpu = f.env.cost_estimate().budget().cpu_instruction_cost();
 
     assert_eq!(positions.len(), N as u32);
     assert!(
@@ -182,11 +182,11 @@ fn test_budget_add_20_supported_assets_within_cpu_limit() {
         extra_assets.push(asset);
     }
 
-    f.env.budget().reset_default();
+    f.env.cost_estimate().budget().reset_default();
     for asset in &extra_assets {
         f.client.add_supported_asset(asset);
     }
-    let cpu = f.env.budget().cpu_instruction_cost();
+    let cpu = f.env.cost_estimate().budget().cpu_instruction_cost();
 
     assert!(
         cpu < CPU_LIMIT,
@@ -282,22 +282,14 @@ fn test_upgrade_requires_admin_auth() {
 
     // With mock_all_auths active, the upgrade call should be accepted by the
     // auth layer (even if the WASM install itself fails in the test env).
-    // We verify: if it fails, it must NOT fail with an auth error.
-    let result = f.client.try_upgrade(&dummy_hash);
-
-    // If the call fails it should be an env error (invalid wasm hash), not auth
-    if let Err(ref e) = result {
-        // If it fails, it must be an environment-level error (bad wasm hash),
-        // not an auth error.  Auth failures produce Ok(VaultError::Unauthorized)
-        // in try_ calls, so verify it's not that.
-        if let Ok(sdk_err) = e {
-            // Convert via Debug string comparison — cheapest no_std approach
-            let err_str = alloc::format!("{sdk_err:?}");
-            assert!(
-                !err_str.contains("Unauthorized"),
-                "upgrade must not fail due to authorization when admin auth is mocked"
-            );
-        }
+    // If it fails, it must be an env-level error (bad wasm hash), not an auth error.
+    // Auth failures surface as Ok(VaultError::Unauthorized) in try_ calls.
+    if let Err(Ok(sdk_err)) = f.client.try_upgrade(&dummy_hash) {
+        let err_str = alloc::format!("{sdk_err:?}");
+        assert!(
+            !err_str.contains("Unauthorized"),
+            "upgrade must not fail due to authorization when admin auth is mocked"
+        );
     }
 }
 
@@ -314,10 +306,10 @@ fn test_budget_baseline_deposit_print_cpu() {
     let user = Address::generate(&f.env);
     f.token_admin.mint(&user, &1_000);
 
-    f.env.budget().reset_default();
+    f.env.cost_estimate().budget().reset_default();
     f.client.deposit(&user, &f.token_id, &500);
-    let cpu = f.env.budget().cpu_instruction_cost();
-    let mem = f.env.budget().memory_bytes_cost();
+    let cpu = f.env.cost_estimate().budget().cpu_instruction_cost();
+    let mem = f.env.cost_estimate().budget().memory_bytes_cost();
 
     // Document measured baselines (update these if contract logic changes)
     assert!(
@@ -335,10 +327,10 @@ fn test_budget_baseline_withdraw_print_cpu() {
     f.token_admin.mint(&user, &1_000);
     f.client.deposit(&user, &f.token_id, &500);
 
-    f.env.budget().reset_default();
+    f.env.cost_estimate().budget().reset_default();
     f.client.withdraw(&user, &f.token_id, &500);
-    let cpu = f.env.budget().cpu_instruction_cost();
-    let mem = f.env.budget().memory_bytes_cost();
+    let cpu = f.env.cost_estimate().budget().cpu_instruction_cost();
+    let mem = f.env.cost_estimate().budget().memory_bytes_cost();
 
     assert!(
         cpu < CPU_LIMIT,
