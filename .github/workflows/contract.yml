@@ -22,7 +22,12 @@ jobs:
         with:
           components: rustfmt, clippy
           targets: wasm32v1-none
-
+      - name: Build collateral-vault wasm for upgrade tests
+        run: |
+          cargo build \
+            -p collateral-vault \
+            --target wasm32v1-none \
+            --release
       - name: Check formatting
         run: cargo fmt --all --check
 
