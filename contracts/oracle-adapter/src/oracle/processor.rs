@@ -98,9 +98,9 @@ pub(crate) fn process_redstone_payload(
 
     for symbol in feed_ids.iter() {
         let feed_id = feed_id_from_symbol(env, &symbol)?;
-        requested_feed_ids.push(feed_id.clone());
+        requested_feed_ids.push(feed_id);
         if !unique_feed_ids.iter().any(|existing| existing == &feed_id) {
-            unique_feed_ids.push(feed_id.clone());
+            unique_feed_ids.push(feed_id);
         }
     }
 
@@ -135,7 +135,7 @@ pub(crate) fn process_redstone_payload(
         let mut found = false;
         for feed_value in validated.values.iter() {
             if feed_value.feed == *feed_id {
-                prices.push_back(Bytes::from_slice(env, &feed_value.value.as_be_bytes()));
+                prices.push_back(Bytes::from_slice(env, feed_value.value.as_be_bytes()));
                 found = true;
                 break;
             }
