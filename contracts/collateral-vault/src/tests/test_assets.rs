@@ -44,6 +44,10 @@ fn setup_env() -> (
     )
 }
 
+// ---------------------------------------------------------------------------
+// Existing add/remove tests (updated for new lifecycle)
+// ---------------------------------------------------------------------------
+
 #[test]
 fn test_add_asset_success() {
     let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
@@ -57,14 +61,16 @@ fn test_add_asset_success() {
 fn test_add_asset_duplicate_fails() {
     let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
 
+    // Re-adding a known asset (Active or DepositDisabled) must fail.
     let res = client.try_add_supported_asset(&token_id);
     assert!(res.is_err());
 }
 
 #[test]
-fn test_remove_asset_success() {
+fn test_remove_asset_with_no_balance_succeeds() {
     let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
 
+    // No positions exist, so hard-removal is allowed.
     assert!(client.is_supported_asset(&token_id));
     client.remove_supported_asset(&token_id);
     assert!(!client.is_supported_asset(&token_id));
@@ -79,6 +85,42 @@ fn test_remove_asset_not_found_fails() {
     assert!(res.is_err());
 }
 
+/// Hard removal must fail while any user balance remains.
+#[test]
+fn test_remove_asset_with_open_position_fails() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    // Asset has an open position — removal must be blocked.
+    let res = client.try_remove_supported_asset(&token_id);
+    assert!(
+        res.is_err(),
+        "should reject removal when user balance is non-zero"
+    );
+
+    // Balance must be untouched.
+    assert_eq!(client.get_position_balance(&user, &token_id), 500);
+}
+
+/// After all balances are withdrawn the hard-remove succeeds.
+#[test]
+fn test_remove_asset_after_full_withdrawal_succeeds() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    // First delist so the user can withdraw.
+    client.delist_supported_asset(&token_id);
+    client.withdraw(&user, &token_id, &500);
+
+    // Now the balance is zero — hard removal should succeed.
+    client.remove_supported_asset(&token_id);
+    assert!(!client.is_supported_asset(&token_id));
+}
+
 #[test]
 fn test_remove_asset_does_not_clear_existing_positions() {
     let (_env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
@@ -86,7 +128,8 @@ fn test_remove_asset_does_not_clear_existing_positions() {
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    client.remove_supported_asset(&token_id);
+    // Even though removal is blocked, verify the guard preserves the balance.
+    let _ = client.try_remove_supported_asset(&token_id);
 
     assert_eq!(client.get_position_balance(&user, &token_id), 500);
 }
@@ -103,6 +146,87 @@ fn test_is_supported_asset_false() {
     let unknown_token = Address::generate(&env);
     assert!(!client.is_supported_asset(&unknown_token));
 }
+
+// ---------------------------------------------------------------------------
+// Lifecycle / delist tests
+// ---------------------------------------------------------------------------
+
+/// `delist_supported_asset` transitions an Active asset to DepositDisabled.
+#[test]
+fn test_delist_asset_sets_deposit_disabled() {
+    let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
+
+    // Initially Active — is_supported_asset returns true.
+    assert!(client.is_supported_asset(&token_id));
+
+    client.delist_supported_asset(&token_id);
+
+    // After delisting, is_supported_asset must return false (no new deposits).
+    assert!(!client.is_supported_asset(&token_id));
+
+    // But get_asset_status must return DepositDisabled, not None.
+    let status = client.get_asset_status(&token_id);
+    assert!(
+        matches!(status, Some(types::AssetStatus::DepositDisabled)),
+        "expected DepositDisabled, got {:?}",
+        status
+    );
+}
+
+/// Delisting an unknown asset must fail.
+#[test]
+fn test_delist_unknown_asset_fails() {
+    let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let unknown = Address::generate(&env);
+
+    let res = client.try_delist_supported_asset(&unknown);
+    assert!(res.is_err());
+}
+
+/// Delisting an already-delisted asset is idempotent (no panic).
+#[test]
+fn test_delist_already_delisted_is_idempotent() {
+    let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
+
+    client.delist_supported_asset(&token_id);
+    // Second call must not panic.
+    client.delist_supported_asset(&token_id);
+
+    assert!(!client.is_supported_asset(&token_id));
+}
+
+/// Deposits into a delisted (DepositDisabled) asset must be rejected.
+#[test]
+fn test_deposit_into_delisted_asset_fails() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.delist_supported_asset(&token_id);
+
+    let res = client.try_deposit(&user, &token_id, &100);
+    assert!(
+        res.is_err(),
+        "should reject deposit into DepositDisabled asset"
+    );
+}
+
+/// Re-adding an asset after delisting must fail (it's still a known asset).
+#[test]
+fn test_add_asset_after_delist_fails() {
+    let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
+
+    client.delist_supported_asset(&token_id);
+
+    let res = client.try_add_supported_asset(&token_id);
+    assert!(
+        res.is_err(),
+        "should not allow re-adding a known (delisted) asset"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Position and get_all_positions helpers
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_get_all_positions_empty() {

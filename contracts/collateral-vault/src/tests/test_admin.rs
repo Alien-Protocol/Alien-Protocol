@@ -216,12 +216,23 @@ fn test_remove_supported_asset_keeps_existing_positions() {
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    client.remove_supported_asset(&token_id);
+    // Hard-removal is blocked while the position is open.
+    let res = client.try_remove_supported_asset(&token_id);
+    assert!(
+        res.is_err(),
+        "remove_supported_asset must be blocked when a user balance exists"
+    );
 
-    // Existing position is untouched
+    // The existing position must be completely untouched.
     let position = client.get_position(&user);
     assert_eq!(position.collateral.len(), 1);
     assert_eq!(position.collateral.get(0).unwrap().amount, 500);
+
+    // The correct workflow to stop new deposits while preserving withdrawals
+    // is delist_supported_asset.
+    client.delist_supported_asset(&token_id);
+    let position_after_delist = client.get_position(&user);
+    assert_eq!(position_after_delist.collateral.get(0).unwrap().amount, 500);
 }
 
 #[test]

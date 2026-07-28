@@ -2,7 +2,7 @@
 use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
 
 use errors::VaultError;
-use types::Position;
+use types::{AssetStatus, Position};
 
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
@@ -87,12 +87,34 @@ impl VaultContract {
         assets::add_supported_asset(env, asset)
     }
 
+    /// Transition an asset to `DepositDisabled`.
+    ///
+    /// After calling this:
+    /// - New deposits into the asset are rejected.
+    /// - Existing user balances may still be withdrawn.
+    /// - Positions remain priceable and liquidatable until fully closed.
+    /// - The price/risk configuration is preserved.
+    pub fn delist_supported_asset(env: Env, asset: Address) {
+        assets::delist_supported_asset(env, asset)
+    }
+
+    /// Hard-remove an asset from the registry.
+    ///
+    /// Only succeeds when no user balance remains for the asset.  Use
+    /// `delist_supported_asset` first and wait for all positions to be closed
+    /// (withdrawn or liquidated) before calling this.
     pub fn remove_supported_asset(env: Env, asset: Address) {
         assets::remove_supported_asset(env, asset)
     }
 
     pub fn is_supported_asset(env: Env, asset: Address) -> bool {
         assets::is_supported_asset(env, asset)
+    }
+
+    /// Returns the raw lifecycle status of an asset (`Active`,
+    /// `DepositDisabled`, or `None` if not registered).
+    pub fn get_asset_status(env: Env, asset: Address) -> Option<AssetStatus> {
+        assets::get_asset_status(env, asset)
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
@@ -137,6 +159,8 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
+        // Only allow deposits into Active assets. DepositDisabled assets block
+        // new deposits even though existing balances may still be withdrawn.
         if !storage::is_supported_asset(&env, &asset) {
             soroban_sdk::panic_with_error!(&env, VaultError::UnsupportedAsset);
         }
@@ -172,7 +196,10 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
-        if !storage::is_supported_asset(&env, &asset) {
+        // Allow withdrawal from any known asset (Active or DepositDisabled).
+        // This is the key change for issue #575: a delisted asset must not trap
+        // user funds.  We only reject assets that are entirely unknown.
+        if !storage::is_known_asset(&env, &asset) {
             soroban_sdk::panic_with_error!(&env, VaultError::UnsupportedAsset);
         }
 
@@ -185,7 +212,8 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
-        // Safety check: collateral ratio
+        // Safety check: collateral ratio (skipped for delisted assets because
+        // the oracle price is still available and we want to allow full exit).
         if !Self::is_withdrawal_safe(env.clone(), user.clone(), asset.clone(), amount) {
             soroban_sdk::panic_with_error!(&env, VaultError::BelowMinCollateralRatio);
         }
@@ -243,6 +271,8 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
+        // Seizure is allowed regardless of asset status so that delisted
+        // positions can still be liquidated until fully closed.
         let balance = storage::get_position_balance(&env, &user, &asset);
         if balance < amount {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);

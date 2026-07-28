@@ -1,5 +1,26 @@
 use soroban_sdk::{contracttype, Address, Vec};
 
+/// Lifecycle status of a collateral asset.
+///
+/// - `Active`: New deposits and withdrawals are both permitted.
+/// - `DepositDisabled`: The asset has been delisted. No new deposits are accepted,
+///   but users with existing balances may still withdraw and positions remain
+///   priceable and liquidatable until fully closed.
+///
+/// Note: the storage key `DataKey::SupportedAsset(Address)` now stores an
+/// `AssetStatus` value instead of a `bool`. Existing entries written as `true`
+/// (Soroban encodes `true` as the integer `1`) are not automatically migrated;
+/// call `add_supported_asset` to re-register any asset that was set via the old
+/// boolean storage layout.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum AssetStatus {
+    /// Deposits and withdrawals are both allowed.
+    Active,
+    /// No new deposits; existing balances may still be withdrawn/liquidated.
+    DepositDisabled,
+}
+
 /// Represents a single collateral asset held by a user.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]

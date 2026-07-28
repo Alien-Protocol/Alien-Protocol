@@ -31,6 +31,15 @@ pub struct AssetRemoved {
     pub asset: Address,
 }
 
+/// Emitted when an asset is transitioned to `DepositDisabled`.
+/// Existing positions remain valid; new deposits are rejected.
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AssetDelisted {
+    #[topic]
+    pub asset: Address,
+}
+
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct AdminChanged {

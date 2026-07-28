@@ -270,3 +270,152 @@ fn test_withdraw_tokens_returned() {
 
     assert_eq!(token_client.balance(&user), 700);
 }
+
+// ---------------------------------------------------------------------------
+// Post-delist withdrawal tests (issue #575)
+// ---------------------------------------------------------------------------
+
+/// A user can perform a partial withdrawal after an asset is delisted.
+#[test]
+fn test_withdraw_partial_after_delist() {
+    let (_env, client, _admin, user, token_client, token_admin, _pool, _oracle, token_id) =
+        setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    // Delist the asset — no new deposits allowed.
+    client.delist_supported_asset(&token_id);
+
+    // Partial withdrawal must succeed.
+    client.withdraw(&user, &token_id, &200);
+
+    assert_eq!(
+        client.get_position_balance(&user, &token_id),
+        300,
+        "remaining balance should be 300 after partial withdrawal"
+    );
+    assert_eq!(
+        token_client.balance(&user),
+        700,
+        "user should receive the withdrawn tokens back"
+    );
+}
+
+/// A user can withdraw their full balance after an asset is delisted.
+#[test]
+fn test_withdraw_full_after_delist() {
+    let (_env, client, _admin, user, token_client, token_admin, _pool, _oracle, token_id) =
+        setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    client.delist_supported_asset(&token_id);
+
+    client.withdraw(&user, &token_id, &500);
+
+    assert_eq!(
+        client.get_position_balance(&user, &token_id),
+        0,
+        "balance should be zero after full withdrawal"
+    );
+    assert_eq!(
+        token_client.balance(&user),
+        1000,
+        "user should get all tokens back"
+    );
+    // User should be removed from the position index.
+    assert!(
+        !client.get_position_index().contains(&user),
+        "user should be removed from position index after full withdrawal"
+    );
+}
+
+/// New deposits into a delisted asset are rejected even when the user still
+/// has an existing balance.
+#[test]
+fn test_deposit_blocked_after_delist_with_existing_balance() {
+    let (_env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
+        setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &300);
+
+    client.delist_supported_asset(&token_id);
+
+    let res = client.try_deposit(&user, &token_id, &100);
+    assert!(res.is_err(), "deposit into delisted asset must be rejected");
+}
+
+/// A delisted position remains priceable: get_collateral_value should work.
+#[test]
+fn test_delisted_position_remains_priceable() {
+    let (_env, client, _admin, user, _token_client, token_admin, _pool, oracle, token_id) =
+        setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    // Price: $1.00 encoded with 7 decimal places.
+    oracle.set_price(&token_id, &10_000_000, &1000);
+
+    client.delist_supported_asset(&token_id);
+
+    // Valuation must still work — 500 tokens × $1.00 / 10_000_000 = $500 USD.
+    let value = client.get_collateral_value(&user);
+    assert_eq!(value, 500, "delisted position must remain priceable");
+}
+
+/// A delisted position is still liquidatable via seize_collateral.
+#[test]
+fn test_delisted_position_is_liquidatable() {
+    let (env, client, _admin, user, token_client, token_admin, _pool, _oracle, token_id) =
+        setup_env();
+
+    let engine = Address::generate(&env);
+    client.set_liquidation_engine(&engine);
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    // Delist the asset.
+    client.delist_supported_asset(&token_id);
+
+    // Seizure must succeed regardless of asset status.
+    client.seize_collateral(&engine, &user, &token_id, &300);
+
+    assert_eq!(
+        client.get_position_balance(&user, &token_id),
+        200,
+        "200 tokens should remain after partial seizure"
+    );
+    assert_eq!(
+        token_client.balance(&engine),
+        300,
+        "engine should receive the seized tokens"
+    );
+}
+
+/// Full liquidation of a delisted position cleans up the user's index entry.
+#[test]
+fn test_full_liquidation_after_delist_clears_position() {
+    let (env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
+        setup_env();
+
+    let engine = Address::generate(&env);
+    client.set_liquidation_engine(&engine);
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    client.delist_supported_asset(&token_id);
+
+    client.seize_collateral(&engine, &user, &token_id, &500);
+
+    assert_eq!(client.get_position_balance(&user, &token_id), 0);
+    assert!(
+        !client.get_position_index().contains(&user),
+        "user should be removed from index after full liquidation"
+    );
+}

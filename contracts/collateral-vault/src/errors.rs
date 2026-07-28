@@ -17,4 +17,8 @@ pub enum VaultError {
     AlreadyAdmin = 11,
     AlreadyPaused = 12,
     NotPaused = 13,
+    /// Returned when `remove_supported_asset` is called while user balances
+    /// still exist for that asset. Delist first and wait for all positions to
+    /// be closed (withdrawn or liquidated) before hard-removing.
+    AssetHasOpenPositions = 14,
 }

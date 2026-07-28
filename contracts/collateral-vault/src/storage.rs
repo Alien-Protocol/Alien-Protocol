@@ -1,4 +1,4 @@
-use crate::types::{CollateralAsset, DataKey, Position};
+use crate::types::{AssetStatus, CollateralAsset, DataKey, Position};
 use soroban_sdk::{Address, Env, Vec};
 
 /// Check if the contract has been initialized (deployment/initialization shield)
@@ -38,11 +38,26 @@ pub fn set_lending_pool(env: &Env, lending_pool: &Address) {
         .set(&DataKey::LendingPool, lending_pool);
 }
 
-pub fn is_supported_asset(env: &Env, asset: &Address) -> bool {
+/// Return the lifecycle status of an asset, or `None` if the asset has never
+/// been registered.
+pub fn get_asset_status(env: &Env, asset: &Address) -> Option<AssetStatus> {
     env.storage()
         .persistent()
         .get(&DataKey::SupportedAsset(asset.clone()))
-        .unwrap_or(false)
+}
+
+/// Returns `true` only when the asset status is `Active`, i.e. the asset
+/// accepts new deposits.  Assets in `DepositDisabled` state still have open
+/// positions that can be withdrawn / liquidated, but are not considered
+/// "supported" for deposit purposes.
+pub fn is_supported_asset(env: &Env, asset: &Address) -> bool {
+    matches!(get_asset_status(env, asset), Some(AssetStatus::Active))
+}
+
+/// Returns `true` when an asset is known to the contract (any status), meaning
+/// existing positions are still trackable, priceable, and liquidatable.
+pub fn is_known_asset(env: &Env, asset: &Address) -> bool {
+    get_asset_status(env, asset).is_some()
 }
 
 pub fn get_supported_assets(env: &Env) -> Vec<Address> {
@@ -53,9 +68,10 @@ pub fn get_supported_assets(env: &Env) -> Vec<Address> {
 }
 
 pub fn add_supported_asset(env: &Env, asset: &Address) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::SupportedAsset(asset.clone()), &true);
+    env.storage().persistent().set(
+        &DataKey::SupportedAsset(asset.clone()),
+        &AssetStatus::Active,
+    );
 
     let mut assets = get_supported_assets(env);
     if !assets.contains(asset) {
@@ -66,6 +82,20 @@ pub fn add_supported_asset(env: &Env, asset: &Address) {
     }
 }
 
+/// Transition an asset to `DepositDisabled`.  The asset record is kept so that
+/// existing positions remain priceable and liquidatable.  Returns an error
+/// (caller must handle) if the asset is not currently `Active`.
+pub fn delist_supported_asset(env: &Env, asset: &Address) {
+    env.storage().persistent().set(
+        &DataKey::SupportedAsset(asset.clone()),
+        &AssetStatus::DepositDisabled,
+    );
+    // NOTE: the asset is intentionally kept in the SupportedAssets list so
+    // callers can still iterate over all known assets (for valuation, etc.).
+}
+
+/// Hard-remove an asset from the registry.  Only safe when no user balance
+/// remains; callers are responsible for checking this precondition.
 pub fn remove_supported_asset(env: &Env, asset: &Address) {
     env.storage()
         .persistent()
