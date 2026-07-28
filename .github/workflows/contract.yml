@@ -69,3 +69,36 @@ jobs:
 
       - name: Run Cargo tests
         run: cargo test --workspace --all-features --verbose
+
+  vault-security-suite:
+    name: Vault Security Suite
+    runs-on: ubuntu-latest
+    needs: checks
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Run vault security, invariant, integration, and budget tests
+        run: |
+          cargo test \
+            -p collateral-vault \
+            --all-features \
+            --verbose \
+            -- \
+            test_auth \
+            test_invariants \
+            test_integration \
+            test_budget
+
+      - name: Build collateral-vault WASM
+        run: |
+          cargo build \
+            -p collateral-vault \
+            --target wasm32v1-none \
+            --release \
+            --verbose

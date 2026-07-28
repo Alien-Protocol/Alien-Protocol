@@ -1,7 +1,11 @@
 mod test_admin;
 mod test_assets;
+mod test_auth;
+mod test_budget;
 mod test_deposit;
 mod test_events;
+mod test_integration;
+mod test_invariants;
 mod test_liquidation;
 mod test_read_functions;
 mod test_withdraw;
