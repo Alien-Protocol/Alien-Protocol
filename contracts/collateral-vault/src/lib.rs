@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
 use errors::VaultError;
 use types::Position;
@@ -43,12 +43,31 @@ impl VaultContract {
         // Explicitly set Paused to false
         storage::set_paused(&env, false);
 
+        storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
+        storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
+
         // Emit structured contract event
         events::Initialized {
             admin,
             lending_pool,
         }
         .publish(&env);
+    }
+
+    pub fn get_contract_version(env: Env) -> u32 {
+        upgrade::get_contract_version(&env)
+    }
+
+    pub fn get_storage_schema_version(env: Env) -> u32 {
+        upgrade::get_storage_schema_version(&env)
+    }
+
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        upgrade::upgrade(env, wasm_hash)
+    }
+
+    pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
+        upgrade::migrate(env, target_storage_schema_version)
     }
 
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
@@ -77,10 +96,6 @@ impl VaultContract {
 
     pub fn unpause(env: Env) {
         admin::unpause(env)
-    }
-
-    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
-        admin::upgrade(env, new_wasm_hash)
     }
 
     pub fn add_supported_asset(env: Env, asset: Address) {
@@ -355,3 +370,4 @@ mod storage;
 #[cfg(test)]
 mod tests;
 mod types;
+mod upgrade;
