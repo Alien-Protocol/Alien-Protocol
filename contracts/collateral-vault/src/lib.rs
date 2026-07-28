@@ -1,9 +1,9 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
 
 use errors::VaultError;
-use types::{AssetsPage, Position, PositionsPage};
+use types::Position;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Module declarations
@@ -21,7 +21,6 @@ mod storage;
 #[cfg(test)]
 mod tests;
 mod types;
-mod views;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Contract entry point
@@ -39,45 +38,49 @@ impl VaultContract {
     }
 
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
-        admin::set_admin(&env, new_admin)
+        admin::set_admin(env, new_admin)
     }
 
     pub fn set_lending_pool(env: Env, lending_pool: Address) {
-        admin::set_lending_pool(&env, lending_pool);
+        admin::set_lending_pool(env, lending_pool);
     }
 
     pub fn set_oracle(env: Env, oracle: Address) {
-        admin::set_oracle(&env, oracle);
+        admin::set_oracle(env, oracle);
+    }
+
+    pub fn set_liquidation_engine(env: Env, engine: Address) {
+        admin::set_liquidation_engine(env, engine);
+    }
+
+    pub fn set_pool(env: Env, pool: Address) {
+        admin::set_pool(env, pool);
     }
 
     pub fn pause(env: Env) {
-        admin::pause(&env);
+        admin::pause(env);
     }
 
     pub fn unpause(env: Env) {
-        admin::unpause(&env);
+        admin::unpause(env);
+    }
+
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
+        admin::upgrade(env, new_wasm_hash);
     }
 
     // ── Asset management ──────────────────────────────────────────────────────
 
     pub fn add_supported_asset(env: Env, asset: Address) {
-        assets::add_supported_asset(&env, asset);
+        assets::add_supported_asset(env, asset);
     }
 
     pub fn remove_supported_asset(env: Env, asset: Address) {
-        assets::remove_supported_asset(&env, asset);
-    }
-
-    pub fn set_liquidation_engine(env: Env, engine: Address) {
-        assets::set_liquidation_engine(&env, engine);
-    }
-
-    pub fn set_pool(env: Env, pool: Address) {
-        admin::set_pool(&env, pool);
+        assets::remove_supported_asset(env, asset);
     }
 
     pub fn is_supported_asset(env: Env, asset: Address) -> bool {
-        assets::is_supported_asset(&env, &asset)
+        assets::is_supported_asset(env, asset)
     }
 
     // ── Core write operations ─────────────────────────────────────────────────
@@ -114,10 +117,6 @@ impl VaultContract {
         storage::get_position_balance(&env, &user, &asset)
     }
 
-    pub fn get_position_count(env: Env) -> u32 {
-        storage::position_count(&env)
-    }
-
     pub fn get_position(env: Env, user: Address) -> Position {
         match storage::get_position(&env, &user) {
             Some(position) => position,
@@ -133,39 +132,11 @@ impl VaultContract {
         risk::is_withdrawal_safe(&env, &user, &asset, amount)
     }
 
-    // ── Paginated enumeration views ───────────────────────────────────────────
-
-    pub fn get_positions_page(env: Env, cursor: u32, limit: u32) -> PositionsPage {
-        views::get_positions_page(&env, cursor, limit)
-    }
-
-    pub fn get_supported_assets_page(env: Env, cursor: u32, limit: u32) -> AssetsPage {
-        views::get_supported_assets_page(&env, cursor, limit)
-    }
-
-    pub fn get_user_assets_page(env: Env, user: Address, cursor: u32, limit: u32) -> AssetsPage {
-        views::get_user_assets_page(&env, &user, cursor, limit)
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Legacy compatibility shim — test / testutils builds only.
-// ─────────────────────────────────────────────────────────────────────────────
-
-#[cfg(any(test, feature = "testutils"))]
-impl VaultContract {
-    /// Returns all users currently in the position index as a `Vec<Address>`.
-    ///
-    /// O(n) — compiled only for test/testutils builds.
-    /// Production code should use `get_positions_page` instead.
     pub fn get_position_index(env: Env) -> soroban_sdk::Vec<Address> {
-        let count = storage::position_count(&env);
-        let mut result: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(&env);
-        for slot in 0..count {
-            if let Some(user) = storage::get_position_at(&env, slot) {
-                result.push_back(user);
-            }
-        }
-        result
+        storage::get_position_index(&env)
+    }
+
+    pub fn get_all_positions(env: Env) -> soroban_sdk::Vec<Position> {
+        storage::get_all_positions(&env)
     }
 }

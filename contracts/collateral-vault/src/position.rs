@@ -1,7 +1,7 @@
 //! Position domain — deposit, withdraw, and shared debit/cleanup helpers.
 //!
 //! `debit_position` is the single implementation of "subtract amount from a
-//! user's balance and clean up empty asset / user-index entries".  Both
+//! user's balance and clean up empty asset / user-index entries". Both
 //! `withdraw` and `liquidation::seize_collateral` call it so the invariant
 //! lives in exactly one place.
 
@@ -12,35 +12,39 @@ use crate::storage;
 use soroban_sdk::{token, Address, Env};
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared helpers
+// Shared guards
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Guard: panic if the vault is paused.
+/// Panic if the vault is paused.
 pub fn require_not_paused(env: &Env) {
     if storage::is_paused(env) {
         soroban_sdk::panic_with_error!(env, VaultError::VaultPaused);
     }
 }
 
-/// Guard: panic if `asset` is not in the supported-asset index.
+/// Panic if `asset` is not in the supported-asset index.
 pub fn require_supported_asset(env: &Env, asset: &Address) {
     if !storage::is_supported_asset(env, asset) {
         soroban_sdk::panic_with_error!(env, VaultError::UnsupportedAsset);
     }
 }
 
-/// Guard: panic if `user` has no position in the index.
+/// Panic if `user` has no active position.
 pub fn require_position(env: &Env, user: &Address) {
-    if !storage::user_in_position_index(env, user) {
+    if storage::get_position(env, user).is_none() {
         soroban_sdk::panic_with_error!(env, VaultError::NoPosition);
     }
 }
 
-/// Subtract `amount` from `user`'s balance for `asset`, then remove empty
-/// asset / user-index entries.  Returns the updated balance.
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared debit helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Subtract `amount` from `user`'s balance for `asset`, then clean up empty
+/// asset / user-index entries.
 ///
 /// Panics with `InvalidInputs` if `amount > balance`.
-pub fn debit_position(env: &Env, user: &Address, asset: &Address, amount: i128) -> i128 {
+pub fn debit_position(env: &Env, user: &Address, asset: &Address, amount: i128) {
     let balance = storage::get_position_balance(env, user, asset);
     if amount > balance {
         soroban_sdk::panic_with_error!(env, VaultError::InvalidInputs);
@@ -53,11 +57,9 @@ pub fn debit_position(env: &Env, user: &Address, asset: &Address, amount: i128) 
         storage::remove_user_asset(env, user, asset);
     }
 
-    if storage::user_asset_count(env, user) == 0 {
+    if storage::get_position(env, user).is_none() {
         storage::remove_from_position_index(env, user);
     }
-
-    new_balance
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,9 +79,7 @@ pub fn deposit(env: &Env, user: Address, asset: Address, amount: i128) {
     token_client.transfer(&user, &env.current_contract_address(), &amount);
 
     let balance = storage::get_position_balance(env, &user, &asset);
-    let new_balance = balance
-        .checked_add(amount)
-        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::InvalidInputs));
+    let new_balance = balance + amount;
     storage::set_position_balance(env, &user, &asset, new_balance);
 
     storage::add_user_asset(env, &user, &asset);
@@ -103,7 +103,12 @@ pub fn withdraw(env: &Env, user: Address, asset: Address, amount: i128) {
     require_supported_asset(env, &asset);
     require_position(env, &user);
 
-    // safety check before any state mutation
+    let balance = storage::get_position_balance(env, &user, &asset);
+    if amount > balance {
+        soroban_sdk::panic_with_error!(env, VaultError::InvalidInputs);
+    }
+
+    // Safety check before any state mutation
     if !risk::is_withdrawal_safe(env, &user, &asset, amount) {
         soroban_sdk::panic_with_error!(env, VaultError::BelowMinCollateralRatio);
     }

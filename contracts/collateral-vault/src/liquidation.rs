@@ -1,7 +1,8 @@
 //! Liquidation domain.
 //!
-//! `seize_collateral` and `authorize_liquidation` both reuse `position::debit_position`
-//! for balance mutation so there is a single implementation of that invariant.
+//! Both `seize_collateral` and `authorize_liquidation` delegate balance
+//! mutation to `position::debit_position` — the single source of truth
+//! for that invariant.
 
 use crate::clients::LendingPoolClient;
 use crate::errors::VaultError;
@@ -12,8 +13,7 @@ use soroban_sdk::{token, Address, Env};
 
 /// Transfer `amount` of `asset` from `user`'s position to `liquidation_engine`.
 ///
-/// Only the registered liquidation engine may call this; the caller must also
-/// have authorised itself (`liquidation_engine.require_auth()`).
+/// Only the registered liquidation engine may call this.
 pub fn seize_collateral(
     env: &Env,
     liquidation_engine: Address,
@@ -32,7 +32,7 @@ pub fn seize_collateral(
     require_not_paused(env);
     require_position(env, &user);
 
-    // debit_position handles balance check, asset-index cleanup, and user-index cleanup
+    // debit_position handles balance check, asset cleanup, and user-index cleanup
     debit_position(env, &user, &asset, amount);
 
     let token_client = token::Client::new(env, &asset);
@@ -48,7 +48,7 @@ pub fn seize_collateral(
 }
 
 /// Returns `true` when the registered lending pool reports that `user` is
-/// liquidatable.  Panics if the caller is not the registered engine.
+/// liquidatable. Panics if the caller is not the registered engine.
 pub fn authorize_liquidation(env: &Env, liquidation_engine: Address, user: Address) -> bool {
     let stored_engine =
         storage::get_liquidation_engine(env).expect("Liquidation engine not set");

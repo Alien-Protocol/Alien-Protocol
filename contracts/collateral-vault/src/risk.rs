@@ -1,6 +1,6 @@
 //! Risk and valuation domain.
 //!
-//! All collateral-ratio maths lives here.  Nothing in this module writes
+//! All collateral-ratio maths lives here. Nothing in this module writes
 //! to storage — every function is a pure read (plus external oracle/pool calls).
 
 use crate::clients::{LendingPoolClient, OracleClient};
@@ -11,7 +11,7 @@ use soroban_sdk::{Address, Env};
 /// Oracle prices are encoded with 7 decimal places ($1.00 = 10_000_000).
 const PRICE_PRECISION: i128 = 10_000_000;
 
-/// Minimum collateral ratio expressed as a percentage (110 %).
+/// Minimum collateral ratio: 110%.
 const MIN_COLLATERAL_RATIO_PCT: i128 = 110;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ pub fn collateral_value(env: &Env, position: &Position) -> i128 {
     total
 }
 
-/// Total collateral value for `user`.  Returns 0 if the user has no position.
+/// Total collateral value for `user`. Returns 0 if the user has no position.
 pub fn get_collateral_value(env: &Env, user: &Address) -> i128 {
     match storage::get_position(env, user) {
         Some(pos) => collateral_value(env, &pos),
@@ -64,8 +64,8 @@ pub fn get_collateral_value(env: &Env, user: &Address) -> i128 {
 // Safety check
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Returns `true` when withdrawing `amount` of `asset` from `user` would keep
-/// their remaining collateral at or above the minimum collateral ratio.
+/// Returns `true` when withdrawing `amount` of `asset` keeps the user's
+/// remaining collateral at or above the minimum collateral ratio.
 pub fn is_withdrawal_safe(env: &Env, user: &Address, asset: &Address, amount: i128) -> bool {
     let debt = pool_client(env)
         .map(|c| c.get_user_debt(user))
