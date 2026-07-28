@@ -349,6 +349,7 @@ impl VaultContract {
 
 mod admin;
 mod assets;
+pub mod constants;
 mod errors;
 mod events;
 mod storage;
