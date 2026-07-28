@@ -60,7 +60,6 @@ jobs:
             --target wasm32v1-none \
             --release \
             --verbose
-
   test:
     name: Run Tests (native)
     runs-on: ubuntu-latest
@@ -71,6 +70,15 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Build collateral-vault wasm for upgrade tests
+        run: |
+          cargo build \
+            -p collateral-vault \
+            --target wasm32v1-none \
+            --release
 
       - name: Run Cargo tests
         run: cargo test --workspace --all-features --verbose
