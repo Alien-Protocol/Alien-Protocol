@@ -1,14 +1,7 @@
 //! Configuration and administration domain.
-//!
-//! All functions require the stored admin to have authorised the call
-//! before any state is written.
 
 use crate::{errors::VaultError, events, storage};
-use soroban_sdk::{Address, BytesN, Env};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Initialization
-// ─────────────────────────────────────────────────────────────────────────────
+use soroban_sdk::{Address, Env};
 
 pub fn initialize(env: &Env, admin: Address, lending_pool: Address) {
     if storage::has_admin(env) {
@@ -21,6 +14,8 @@ pub fn initialize(env: &Env, admin: Address, lending_pool: Address) {
     storage::set_lending_pool(env, &lending_pool);
     storage::set_oracle(env, &lending_pool);
     storage::set_paused(env, false);
+    storage::set_contract_version(env, crate::upgrade::CURRENT_CONTRACT_VERSION);
+    storage::set_storage_schema_version(env, crate::upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
 
     events::Initialized {
         admin,
@@ -28,10 +23,6 @@ pub fn initialize(env: &Env, admin: Address, lending_pool: Address) {
     }
     .publish(env);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Admin rotation
-// ─────────────────────────────────────────────────────────────────────────────
 
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
     let current_admin = storage::get_admin(&env).ok_or(VaultError::InvalidInputs)?;
@@ -51,10 +42,6 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
 
     Ok(())
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Dependency addresses
-// ─────────────────────────────────────────────────────────────────────────────
 
 pub fn set_lending_pool(env: Env, lending_pool: Address) {
     let admin = storage::get_admin(&env).expect("not initialized");
@@ -112,10 +99,6 @@ pub fn set_pool(env: Env, pool: Address) {
     .publish(&env);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Pause / unpause
-// ─────────────────────────────────────────────────────────────────────────────
-
 pub fn pause(env: Env) {
     let admin = storage::get_admin(&env).expect("not initialized");
     admin.require_auth();
@@ -138,22 +121,4 @@ pub fn unpause(env: Env) {
 
     storage::set_paused(&env, false);
     events::Unpaused { by: admin }.publish(&env);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Contract upgrade
-// ─────────────────────────────────────────────────────────────────────────────
-
-pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
-    let admin = storage::get_admin(&env).expect("not initialized");
-    admin.require_auth();
-
-    env.deployer()
-        .update_current_contract_wasm(new_wasm_hash.clone());
-
-    events::ContractUpgraded {
-        old_hash: None,
-        new_hash: new_wasm_hash,
-    }
-    .publish(&env);
 }

@@ -6,4 +6,5 @@ mod test_liquidation;
 mod test_pagination;
 mod test_invariants;
 mod test_read_functions;
+mod test_upgrade;
 mod test_withdraw;

@@ -41,30 +41,6 @@ pub fn set_lending_pool(env: &Env, lending_pool: &Address) {
         .set(&DataKey::LendingPool, lending_pool);
 }
 
-pub fn get_position_index(env: &Env) -> soroban_sdk::Vec<Address> {
-    let count = position_count(env);
-    let mut result = soroban_sdk::Vec::new(env);
-    for slot in 0..count {
-        if let Some(user) = get_position_at(env, slot) {
-            result.push_back(user);
-        }
-    }
-    result
-}
-
-pub fn get_all_positions(env: &Env) -> soroban_sdk::Vec<Position> {
-    let count = position_count(env);
-    let mut positions = soroban_sdk::Vec::new(env);
-    for slot in 0..count {
-        if let Some(user) = get_position_at(env, slot) {
-            if let Some(pos) = get_position(env, &user) {
-                positions.push_back(pos);
-            }
-        }
-    }
-    positions
-}
-
 pub fn get_oracle(env: &Env) -> Option<Address> {
     env.storage().persistent().get(&DataKey::Oracle)
 }
@@ -92,7 +68,7 @@ pub fn set_pool(env: &Env, pool: &Address) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Supported-asset index  (slot-based, O(1) add/remove via swap-and-pop)
+// Supported-asset index (slot-based, O(1) add/remove via swap-and-pop)
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub fn is_supported_asset(env: &Env, asset: &Address) -> bool {
@@ -116,7 +92,6 @@ pub fn get_supported_asset_at(env: &Env, slot: u32) -> Option<Address> {
 }
 
 pub fn add_supported_asset(env: &Env, asset: &Address) {
-    // idempotent: skip if already indexed
     if env
         .storage()
         .persistent()
@@ -126,7 +101,6 @@ pub fn add_supported_asset(env: &Env, asset: &Address) {
         return;
     }
 
-    // sentinel flag (fast membership check)
     env.storage()
         .persistent()
         .set(&DataKey::SupportedAsset(asset.clone()), &true);
@@ -143,7 +117,6 @@ pub fn add_supported_asset(env: &Env, asset: &Address) {
         .set(&DataKey::SupportedAssetCount, &(count + 1));
 }
 
-/// Remove an asset from the supported-asset index using swap-and-pop.
 pub fn remove_supported_asset(env: &Env, asset: &Address) {
     let count: u32 = supported_asset_count(env);
     if count == 0 {
@@ -159,7 +132,6 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
         None => return,
     };
 
-    // remove sentinel only once the slot is confirmed valid
     env.storage()
         .persistent()
         .remove(&DataKey::SupportedAsset(asset.clone()));
@@ -167,7 +139,6 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
     let last_slot = count - 1;
 
     if slot != last_slot {
-        // move the last entry into the vacated slot
         let last_asset: Address = env
             .storage()
             .persistent()
@@ -182,7 +153,6 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
             .set(&DataKey::SupportedAssetSlot(last_asset), &slot);
     }
 
-    // erase the last slot and the removed asset's reverse-lookup
     env.storage()
         .persistent()
         .remove(&DataKey::SupportedAssetAt(last_slot));
@@ -218,7 +188,7 @@ pub fn set_position_balance(env: &Env, user: &Address, asset: &Address, balance:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Per-user asset index  (slot-based, O(1) add/remove)
+// Per-user asset index (slot-based, O(1) add/remove)
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub fn user_asset_count(env: &Env, user: &Address) -> u32 {
@@ -235,7 +205,6 @@ pub fn get_user_asset_at(env: &Env, user: &Address, slot: u32) -> Option<Address
 }
 
 pub fn add_user_asset(env: &Env, user: &Address, asset: &Address) {
-    // idempotent: skip if already tracked
     if env
         .storage()
         .persistent()
@@ -257,7 +226,6 @@ pub fn add_user_asset(env: &Env, user: &Address, asset: &Address) {
         .set(&DataKey::UserAssetCount(user.clone()), &(count + 1));
 }
 
-/// Remove an asset from a user's index via swap-and-pop.
 pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
     let count: u32 = user_asset_count(env, user);
     if count == 0 {
@@ -303,7 +271,7 @@ pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Global position (user) index  (slot-based, O(1) add/remove)
+// Global position (user) index (slot-based, O(1) add/remove)
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub fn position_count(env: &Env) -> u32 {
@@ -319,7 +287,6 @@ pub fn get_position_at(env: &Env, slot: u32) -> Option<Address> {
         .get(&DataKey::PositionAt(slot))
 }
 
-/// Returns `true` if the user has a slot in the position index.
 pub fn user_in_position_index(env: &Env, user: &Address) -> bool {
     env.storage()
         .persistent()
@@ -328,7 +295,6 @@ pub fn user_in_position_index(env: &Env, user: &Address) -> bool {
 }
 
 pub fn add_to_position_index(env: &Env, user: &Address) {
-    // idempotent
     if user_in_position_index(env, user) {
         return;
     }
@@ -345,7 +311,6 @@ pub fn add_to_position_index(env: &Env, user: &Address) {
         .set(&DataKey::PositionCount, &(count + 1));
 }
 
-/// Remove a user from the position index via swap-and-pop.
 pub fn remove_from_position_index(env: &Env, user: &Address) {
     let count: u32 = position_count(env);
     if count == 0 {
@@ -393,8 +358,6 @@ pub fn remove_from_position_index(env: &Env, user: &Address) {
 // Position helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Build a `Position` for a user by loading all tracked non-zero balances.
-/// Only touches per-user keys; cost is O(assets held by that user).
 pub fn get_position(env: &Env, user: &Address) -> Option<Position> {
     if !user_in_position_index(env, user) {
         return None;
@@ -423,4 +386,61 @@ pub fn get_position(env: &Env, user: &Address) -> Option<Position> {
         user: user.clone(),
         collateral,
     })
+}
+
+pub fn get_position_index(env: &Env) -> soroban_sdk::Vec<Address> {
+    let count = position_count(env);
+    let mut result = soroban_sdk::Vec::new(env);
+    for slot in 0..count {
+        if let Some(user) = get_position_at(env, slot) {
+            result.push_back(user);
+        }
+    }
+    result
+}
+
+pub fn get_all_positions(env: &Env) -> soroban_sdk::Vec<Position> {
+    let count = position_count(env);
+    let mut positions = soroban_sdk::Vec::new(env);
+    for slot in 0..count {
+        if let Some(user) = get_position_at(env, slot) {
+            if let Some(pos) = get_position(env, &user) {
+                positions.push_back(pos);
+            }
+        }
+    }
+    positions
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contract / storage version (from upgrade module)
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const DEFAULT_CONTRACT_VERSION: u32 = 1;
+pub const DEFAULT_STORAGE_SCHEMA_VERSION: u32 = 1;
+
+pub fn get_contract_version(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ContractVersion)
+        .unwrap_or(DEFAULT_CONTRACT_VERSION)
+}
+
+pub fn set_contract_version(env: &Env, version: u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::ContractVersion, &version);
+}
+
+pub fn get_storage_schema_version(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::StorageSchemaVersion)
+        .unwrap_or(DEFAULT_STORAGE_SCHEMA_VERSION)
+}
+
+pub fn set_storage_schema_version(env: &Env, version: u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::StorageSchemaVersion, &version);
 }

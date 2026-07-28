@@ -21,10 +21,11 @@ mod storage;
 #[cfg(test)]
 mod tests;
 pub mod types;
+mod upgrade;
 mod views;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Contract entry point
+// Contract entry point — thin delegating stubs only
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -32,11 +33,31 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    // ── Initialization & admin ────────────────────────────────────────────────
+    // ── Initialization ────────────────────────────────────────────────────────
 
     pub fn initialize(env: Env, admin: Address, lending_pool: Address) {
         admin::initialize(&env, admin, lending_pool);
     }
+
+    // ── Upgrade / versioning (from #599) ──────────────────────────────────────
+
+    pub fn get_contract_version(env: Env) -> u32 {
+        upgrade::get_contract_version(&env)
+    }
+
+    pub fn get_storage_schema_version(env: Env) -> u32 {
+        upgrade::get_storage_schema_version(&env)
+    }
+
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        upgrade::upgrade(env, wasm_hash)
+    }
+
+    pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
+        upgrade::migrate(env, target_storage_schema_version)
+    }
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
 
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
         admin::set_admin(env, new_admin)
@@ -64,10 +85,6 @@ impl VaultContract {
 
     pub fn unpause(env: Env) {
         admin::unpause(env);
-    }
-
-    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
-        admin::upgrade(env, new_wasm_hash);
     }
 
     // ── Asset management ──────────────────────────────────────────────────────
