@@ -116,3 +116,15 @@ pub struct ContractUpgraded {
     pub old_hash: Option<BytesN<32>>,
     pub new_hash: BytesN<32>,
 }
+
+/// Emitted when per-asset risk parameters are set or updated (issue #579).
+/// Carries both the previous and the new configuration so off-chain indexers
+/// can track every governance action without additional storage reads.
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct RiskParamsUpdated {
+    #[topic]
+    pub asset: Address,
+    pub old_params: Option<crate::types::AssetRiskParams>,
+    pub new_params: crate::types::AssetRiskParams,
+}

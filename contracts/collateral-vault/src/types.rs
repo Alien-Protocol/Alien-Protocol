@@ -72,6 +72,30 @@ pub enum DataKey {
     LiquidationEngine,
     /// Lending pool address (alternative key)
     Pool,
+    /// Per-asset risk parameters (issue #579)
+    RiskParams(Address),
+}
+
+/// Per-asset risk parameters stored on-chain.
+///
+/// All ratio fields use basis points (bps) where 10_000 = 100%.
+///
+/// - `ltv_bps`: Maximum loan-to-value ratio. Determines how much a user can
+///   borrow against this asset. Must be strictly less than
+///   `liquidation_threshold_bps`.  Example: 8_000 = 80% LTV.
+///
+/// - `liquidation_threshold_bps`: The weighted collateral ratio at which a
+///   position becomes eligible for liquidation. Must be > `ltv_bps`.
+///   Example: 8_500 = 85% threshold.
+///
+/// - `liquidation_bonus_bps`: The bonus paid to liquidators as a percentage
+///   of the seized collateral value.  Example: 500 = 5% bonus.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AssetRiskParams {
+    pub ltv_bps: i128,
+    pub liquidation_threshold_bps: i128,
+    pub liquidation_bonus_bps: i128,
 }
 
 /// Price data from the oracle.

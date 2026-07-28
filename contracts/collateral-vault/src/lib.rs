@@ -2,7 +2,7 @@
 use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
 
 use errors::VaultError;
-use types::{AssetStatus, Position};
+use types::{AssetRiskParams, AssetStatus, Position};
 
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
@@ -15,12 +15,6 @@ pub trait LendingPool {
     fn get_user_debt(env: Env, user: Address) -> i128;
     fn is_liquidatable(user: &Address) -> bool;
 }
-
-/// Oracle prices are encoded with 7 decimal places (e.g. $1.00 = 10_000_000).
-/// Dividing `amount * price` by this constant yields the USD-denominated value.
-const PRICE_PRECISION: i128 = 10_000_000;
-
-/// Maximum age (in seconds) an oracle price may have before it is considered stale.
 
 #[contract]
 pub struct VaultContract;
@@ -115,6 +109,39 @@ impl VaultContract {
     /// `DepositDisabled`, or `None` if not registered).
     pub fn get_asset_status(env: Env, asset: Address) -> Option<AssetStatus> {
         assets::get_asset_status(env, asset)
+    }
+
+    /// Set or update the per-asset risk parameters for a registered asset.
+    ///
+    /// Only callable by the admin.  Parameters are validated before storage
+    /// and the old/new values are emitted in a `RiskParamsUpdated` event.
+    ///
+    /// The asset does not need to be `Active`; risk params can be pre-set
+    /// before the first deposit or updated while the asset is `DepositDisabled`.
+    pub fn set_risk_params(env: Env, asset: Address, params: AssetRiskParams) {
+        let admin = storage::get_admin(&env).expect("not initialized");
+        admin.require_auth();
+
+        // Validate before any state mutation.
+        risk::validate_risk_params(&env, &params).unwrap_or_else(|_| {
+            soroban_sdk::panic_with_error!(&env, VaultError::InvalidRiskParams)
+        });
+
+        let old_params = risk::get_risk_params(&env, &asset);
+        risk::set_risk_params(&env, &asset, &params);
+
+        events::RiskParamsUpdated {
+            asset,
+            old_params,
+            new_params: params,
+        }
+        .publish(&env);
+    }
+
+    /// Returns the risk parameters for `asset`, or `None` if none have been
+    /// configured.
+    pub fn get_risk_params(env: Env, asset: Address) -> Option<AssetRiskParams> {
+        risk::get_risk_params(&env, &asset)
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
@@ -315,31 +342,11 @@ impl VaultContract {
             0
         };
 
-        if debt == 0 {
-            return true;
-        }
-
-        let total_value = Self::get_collateral_value(env.clone(), user.clone());
-
         let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
-        let price_data = oracle_client.get_price(&asset).expect("price not found");
 
-        // Apply the same PRICE_PRECISION scaling used by get_collateral_value so
-        // that withdrawn_value is denominated in USD and comparable to total_value.
-        let withdrawn_value = amount
-            .checked_mul(price_data.price)
-            .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
-            / PRICE_PRECISION;
-
-        if total_value < withdrawn_value {
-            return false;
-        }
-
-        let remaining_value = total_value - withdrawn_value;
-
-        // Minimum collateral ratio: 110% (1.1)
-        remaining_value >= (debt * 110) / 100
+        // Delegate to the risk module which uses per-asset weighted liquidation
+        // thresholds instead of a hardcoded global ratio.
+        risk::is_withdrawal_safe(&env, &user, &asset, amount, debt, &oracle_address)
     }
 
     pub fn get_position(env: Env, user: Address) -> Position {
@@ -366,7 +373,7 @@ impl VaultContract {
                 .amount
                 .checked_mul(price_data.price)
                 .unwrap_or_else(|| panic!("overflow in value calculation"))
-                / PRICE_PRECISION;
+                / constants::PRICE_PRECISION;
 
             total_value = total_value
                 .checked_add(item_value)
@@ -379,8 +386,10 @@ impl VaultContract {
 
 mod admin;
 mod assets;
+mod constants;
 mod errors;
 mod events;
+mod risk;
 mod storage;
 #[cfg(test)]
 mod tests;

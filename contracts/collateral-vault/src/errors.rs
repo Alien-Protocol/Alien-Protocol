@@ -21,4 +21,10 @@ pub enum VaultError {
     /// still exist for that asset. Delist first and wait for all positions to
     /// be closed (withdrawn or liquidated) before hard-removing.
     AssetHasOpenPositions = 14,
+    /// Returned when a withdrawal safety check or health computation requires
+    /// risk parameters for an asset that has none configured yet.
+    RiskParamsNotSet = 15,
+    /// Returned when `set_risk_params` is called with an invalid configuration
+    /// (e.g. ltv_bps >= liquidation_threshold_bps, values out of bounds).
+    InvalidRiskParams = 16,
 }

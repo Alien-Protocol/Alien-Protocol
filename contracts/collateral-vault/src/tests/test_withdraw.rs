@@ -215,26 +215,40 @@ fn test_withdraw_collateral_ratio_check() {
         setup_env();
 
     // Price: $1.00 encoded as 10_000_000 (7-decimal oracle format).
-    // 500 tokens → collateral_value = 500 * 10_000_000 / PRICE_PRECISION = $500 USD.
+    // 500 tokens → collateral_value = $500 USD.
     oracle.set_price(&token_id, &10_000_000, &1000);
+
+    // Risk params: 80% LTV, 85% liquidation threshold.
+    client.set_risk_params(
+        &token_id,
+        &types::AssetRiskParams {
+            ltv_bps: 8_000,
+            liquidation_threshold_bps: 8_500,
+            liquidation_bonus_bps: 500,
+        },
+    );
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    // Debt is denominated in USD (same unit as collateral_value after PRICE_PRECISION).
-    // debt = $400.  Minimum required collateral = 400 * 110 / 100 = $440.
-    // Withdrawing 101 → remaining = 500 − 101 = $399 < $440 → blocked.
+    // debt = $400.
+    // Safe boundary: need remaining_lv >= 400
+    //   remaining_lv = remaining * 8500/10000 >= 400
+    //   remaining >= 471 (ceiling of 400*10000/8500 = 470.6)
+    //   max safe withdrawal = 500 - 471 = 29 tokens.
+    //
+    // Withdrawing 101 → remaining = 399, liq_value = 339 < 400 → blocked.
     pool.set_user_debt(&400);
 
     let res = client.try_withdraw(&user, &token_id, &101);
     assert!(
         res.is_err(),
-        "should block withdrawal that reduces ratio below 110%"
+        "should block withdrawal that reduces liq_value below debt"
     );
 
-    // Withdrawing 50 → remaining = 500 − 50 = $450 ≥ $440 → allowed.
-    client.withdraw(&user, &token_id, &50);
-    assert_eq!(client.get_position_balance(&user, &token_id), 450);
+    // Withdrawing 29 → remaining = 471, liq_value = 471*8500/10000 = 400 >= 400 → allowed.
+    client.withdraw(&user, &token_id, &29);
+    assert_eq!(client.get_position_balance(&user, &token_id), 471);
 }
 
 #[test]
