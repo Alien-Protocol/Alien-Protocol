@@ -82,7 +82,12 @@ fn setup_budget() -> BudgetFixture {
 
     client.add_supported_asset(&token_id);
 
-    BudgetFixture { env, client, token_id, token_admin }
+    BudgetFixture {
+        env,
+        client,
+        token_id,
+        token_admin,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +241,10 @@ fn test_ttl_admin_readable_after_init() {
     f.env.ledger().set_sequence_number(100);
 
     let admin = f.client.get_admin();
-    assert!(admin.is_some(), "admin storage must survive ledger advancement");
+    assert!(
+        admin.is_some(),
+        "admin storage must survive ledger advancement"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +320,10 @@ fn test_budget_baseline_deposit_print_cpu() {
     let mem = f.env.budget().memory_bytes_cost();
 
     // Document measured baselines (update these if contract logic changes)
-    assert!(cpu < CPU_LIMIT, "deposit CPU regression: {cpu} >= {CPU_LIMIT}");
+    assert!(
+        cpu < CPU_LIMIT,
+        "deposit CPU regression: {cpu} >= {CPU_LIMIT}"
+    );
     // Memory limit: 40 MB
     assert!(mem < 40_000_000, "deposit memory regression: {mem} bytes");
 }
@@ -329,6 +340,9 @@ fn test_budget_baseline_withdraw_print_cpu() {
     let cpu = f.env.budget().cpu_instruction_cost();
     let mem = f.env.budget().memory_bytes_cost();
 
-    assert!(cpu < CPU_LIMIT, "withdraw CPU regression: {cpu} >= {CPU_LIMIT}");
+    assert!(
+        cpu < CPU_LIMIT,
+        "withdraw CPU regression: {cpu} >= {CPU_LIMIT}"
+    );
     assert!(mem < 40_000_000, "withdraw memory regression: {mem} bytes");
 }

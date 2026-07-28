@@ -46,9 +46,13 @@ impl IntMockOracle {
 
     pub fn set_price(env: Env, asset: Address, price: i128) {
         let ts = env.ledger().timestamp();
-        env.storage()
-            .persistent()
-            .set(&asset, &types::PriceData { price, timestamp: ts });
+        env.storage().persistent().set(
+            &asset,
+            &types::PriceData {
+                price,
+                timestamp: ts,
+            },
+        );
     }
 }
 
@@ -76,7 +80,14 @@ fn setup_integration() -> IntegrationFixture {
     client.add_supported_asset(&token_id);
     oracle_client.set_price(&token_id, &10_000_000);
 
-    IntegrationFixture { env, client, token_id, token_client, token_admin, oracle_id }
+    IntegrationFixture {
+        env,
+        client,
+        token_id,
+        token_client,
+        token_admin,
+        oracle_id,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -94,10 +105,16 @@ fn test_integration_deposit_moves_real_token_balance() {
 
     f.client.deposit(&user, &f.token_id, &600);
 
-    assert_eq!(f.token_client.balance(&user), 400,
-        "user balance should decrease by deposit amount");
-    assert_eq!(f.token_client.balance(&f.client.address), 600,
-        "vault balance should increase by deposit amount");
+    assert_eq!(
+        f.token_client.balance(&user),
+        400,
+        "user balance should decrease by deposit amount"
+    );
+    assert_eq!(
+        f.token_client.balance(&f.client.address),
+        600,
+        "vault balance should increase by deposit amount"
+    );
     assert_eq!(f.client.get_position_balance(&user, &f.token_id), 600);
 }
 
@@ -110,10 +127,16 @@ fn test_integration_withdraw_returns_real_token_balance() {
     f.client.deposit(&user, &f.token_id, &800);
     f.client.withdraw(&user, &f.token_id, &300);
 
-    assert_eq!(f.token_client.balance(&user), 500,
-        "user should have received back withdrawn tokens");
-    assert_eq!(f.token_client.balance(&f.client.address), 500,
-        "vault should hold the remainder");
+    assert_eq!(
+        f.token_client.balance(&user),
+        500,
+        "user should have received back withdrawn tokens"
+    );
+    assert_eq!(
+        f.token_client.balance(&f.client.address),
+        500,
+        "vault should hold the remainder"
+    );
     assert_eq!(f.client.get_position_balance(&user, &f.token_id), 500);
 }
 
@@ -126,8 +149,16 @@ fn test_integration_full_deposit_then_full_withdrawal() {
     f.client.deposit(&user, &f.token_id, &500);
     f.client.withdraw(&user, &f.token_id, &500);
 
-    assert_eq!(f.token_client.balance(&user), 500, "user must have all tokens back");
-    assert_eq!(f.token_client.balance(&f.client.address), 0, "vault must be empty");
+    assert_eq!(
+        f.token_client.balance(&user),
+        500,
+        "user must have all tokens back"
+    );
+    assert_eq!(
+        f.token_client.balance(&f.client.address),
+        0,
+        "vault must be empty"
+    );
     assert!(!f.client.get_position_index().contains(&user));
 }
 
@@ -168,10 +199,16 @@ fn test_integration_seize_transfers_real_tokens_to_engine() {
 
     f.client.seize_collateral(&engine, &user, &f.token_id, &350);
 
-    assert_eq!(f.token_client.balance(&engine), 350,
-        "engine must receive seized tokens");
-    assert_eq!(f.token_client.balance(&f.client.address), 650,
-        "vault must hold remaining tokens");
+    assert_eq!(
+        f.token_client.balance(&engine),
+        350,
+        "engine must receive seized tokens"
+    );
+    assert_eq!(
+        f.token_client.balance(&f.client.address),
+        650,
+        "vault must hold remaining tokens"
+    );
     assert_eq!(f.client.get_position_balance(&user, &f.token_id), 650);
 }
 
@@ -186,10 +223,16 @@ fn test_integration_deposit_zero_does_not_change_token_balances() {
     let res = f.client.try_deposit(&user, &f.token_id, &0);
     assert!(res.is_err());
 
-    assert_eq!(f.token_client.balance(&f.client.address), vault_before,
-        "vault balance must not change on failed deposit");
-    assert_eq!(f.token_client.balance(&user), 500,
-        "user balance must not change on failed deposit");
+    assert_eq!(
+        f.token_client.balance(&f.client.address),
+        vault_before,
+        "vault balance must not change on failed deposit"
+    );
+    assert_eq!(
+        f.token_client.balance(&user),
+        500,
+        "user balance must not change on failed deposit"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -288,7 +331,11 @@ fn test_integration_pause_blocks_token_transfer() {
     // Both deposit and withdraw are blocked; token balances must not change
     let res = f.client.try_deposit(&user, &f.token_id, &100);
     assert!(res.is_err());
-    assert_eq!(f.token_client.balance(&user), 500, "token must not move while paused");
+    assert_eq!(
+        f.token_client.balance(&user),
+        500,
+        "token must not move while paused"
+    );
     assert_eq!(f.token_client.balance(&f.client.address), 0);
 }
 
@@ -302,6 +349,9 @@ fn test_integration_unpause_resumes_token_transfers() {
     f.client.unpause();
 
     f.client.deposit(&user, &f.token_id, &200);
-    assert_eq!(f.token_client.balance(&f.client.address), 200,
-        "deposits must resume after unpause");
+    assert_eq!(
+        f.token_client.balance(&f.client.address),
+        200,
+        "deposits must resume after unpause"
+    );
 }

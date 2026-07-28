@@ -6,14 +6,23 @@
 extern crate alloc;
 
 use super::super::*;
-use soroban_sdk::testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, MockAuth, MockAuthInvoke};
+use soroban_sdk::testutils::{
+    Address as _, AuthorizedFunction, AuthorizedInvocation, MockAuth, MockAuthInvoke,
+};
 use soroban_sdk::{token, Address, Env, IntoVal, Symbol};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn base_setup() -> (Env, VaultContractClient<'static>, Address, Address, Address, token::StellarAssetClient<'static>) {
+fn base_setup() -> (
+    Env,
+    VaultContractClient<'static>,
+    Address,
+    Address,
+    Address,
+    token::StellarAssetClient<'static>,
+) {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -121,7 +130,10 @@ fn test_deposit_wrong_signer_fails() {
     }]);
 
     let res = client.try_deposit(&user, &token_id, &500);
-    assert!(res.is_err(), "deposit must fail when wrong signer authorizes");
+    assert!(
+        res.is_err(),
+        "deposit must fail when wrong signer authorizes"
+    );
 }
 
 #[test]
@@ -574,7 +586,10 @@ fn test_seize_excess_amount_rollback() {
     let balance_before = client.get_position_balance(&user, &token_id);
     let res = client.try_seize_collateral(&engine, &user, &token_id, &600);
     assert!(res.is_err());
-    assert_eq!(client.get_position_balance(&user, &token_id), balance_before);
+    assert_eq!(
+        client.get_position_balance(&user, &token_id),
+        balance_before
+    );
 }
 
 // ---------------------------------------------------------------------------

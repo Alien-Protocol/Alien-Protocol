@@ -62,9 +62,13 @@ impl InvMockOracle {
 
     pub fn set_price(env: Env, asset: Address, price: i128) {
         let ts = env.ledger().timestamp();
-        env.storage()
-            .persistent()
-            .set(&asset, &types::PriceData { price, timestamp: ts });
+        env.storage().persistent().set(
+            &asset,
+            &types::PriceData {
+                price,
+                timestamp: ts,
+            },
+        );
     }
 }
 
@@ -111,7 +115,15 @@ fn setup() -> Fixture {
     // Default price: $1.00 (7-decimal format = 10_000_000)
     oracle.set_price(&token_id, &10_000_000);
 
-    Fixture { env, client, pool, oracle, token_id, token_client, token_admin }
+    Fixture {
+        env,
+        client,
+        pool,
+        oracle,
+        token_id,
+        token_client,
+        token_admin,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +147,10 @@ fn assert_custody_invariant(f: &Fixture, users: &[Address]) {
 fn assert_balance_invariant(f: &Fixture, users: &[Address]) {
     for user in users {
         let bal = f.client.get_position_balance(user, &f.token_id);
-        assert!(bal >= 0, "balance invariant violated: user has negative balance {bal}");
+        assert!(
+            bal >= 0,
+            "balance invariant violated: user has negative balance {bal}"
+        );
     }
 }
 
@@ -147,13 +162,17 @@ fn assert_index_invariant(f: &Fixture, users: &[Address]) {
         let in_index = index.contains(user);
         let bal = f.client.get_position_balance(user, &f.token_id);
         if in_index {
-            assert!(bal > 0 || f.client.try_get_position(user).is_ok(),
-                "index invariant: user in index but has no position");
+            assert!(
+                bal > 0 || f.client.try_get_position(user).is_ok(),
+                "index invariant: user in index but has no position"
+            );
         } else {
             // Not in index means either bal == 0 or they never deposited
             // We only assert the balance is 0 for users who previously deposited
-            assert_eq!(bal, 0,
-                "index invariant: user not in index but has non-zero balance {bal}");
+            assert_eq!(
+                bal, 0,
+                "index invariant: user not in index but has non-zero balance {bal}"
+            );
         }
     }
 }
@@ -421,8 +440,11 @@ fn test_delisted_asset_existing_position_withdrawal_blocked() {
     );
 
     // Verify funds still in vault (documenting the locked state)
-    assert_eq!(f.client.get_position_balance(&user, &f.token_id), 500,
-        "balance remains locked after delist");
+    assert_eq!(
+        f.client.get_position_balance(&user, &f.token_id),
+        500,
+        "balance remains locked after delist"
+    );
 }
 
 #[test]
