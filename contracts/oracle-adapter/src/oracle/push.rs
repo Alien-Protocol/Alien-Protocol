@@ -1,7 +1,7 @@
 extern crate alloc;
 
-use crate::OracleError;
 use crate::oracle::{processor, storage};
+use crate::OracleError;
 use soroban_sdk::{contractevent, Address, Bytes, Env, Symbol, Vec};
 
 #[contractevent]
@@ -36,7 +36,8 @@ pub fn write_prices(
         return Err(OracleError::OraclePaused);
     }
 
-    let (timestamp, validated_prices) = processor::process_redstone_payload(&env, feed_ids.clone(), payload)?;
+    let (timestamp, validated_prices) =
+        processor::process_redstone_payload(&env, feed_ids.clone(), payload)?;
     let write_timestamp = env.ledger().timestamp();
 
     for (index, sym) in feed_ids.iter().enumerate() {
