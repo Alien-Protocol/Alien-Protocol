@@ -69,7 +69,10 @@ pub fn get_collateral_value(env: &Env, user: &Address) -> i128 {
 /// Returns `true` when withdrawing `amount` of `asset` keeps the user's
 /// remaining collateral at or above the minimum collateral ratio.
 pub fn is_withdrawal_safe(env: &Env, user: &Address, asset: &Address, amount: i128) -> bool {
-    let debt = pool_client(env).map(|c| c.get_user_debt(user)).unwrap_or(0);
+    let debt = pool_client(env)
+        .and_then(|c| c.try_get_user_debt(user).ok())
+        .and_then(|r| r.ok())
+        .unwrap_or(0);
 
     if debt == 0 {
         return true;
