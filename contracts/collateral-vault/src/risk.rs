@@ -18,12 +18,12 @@ const MIN_COLLATERAL_RATIO_PCT: i128 = 110;
 // Dependency loaders
 // ─────────────────────────────────────────────────────────────────────────────
 
-pub(crate) fn oracle_client(env: &Env) -> OracleClient {
+pub(crate) fn oracle_client(env: &Env) -> OracleClient<'_> {
     let addr = storage::get_oracle(env).unwrap_or_else(|| panic!("oracle not configured"));
     OracleClient::new(env, &addr)
 }
 
-pub(crate) fn pool_client(env: &Env) -> Option<LendingPoolClient> {
+pub(crate) fn pool_client(env: &Env) -> Option<LendingPoolClient<'_>> {
     storage::get_pool(env).map(|addr| LendingPoolClient::new(env, &addr))
 }
 
