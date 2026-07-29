@@ -319,6 +319,7 @@ fn test_redeposit_after_full_exit_restores_index() {
 /// 19-user populated one.  The 20th user's operation cost must stay within 5%
 /// of the baseline, confirming O(1) per-user behaviour.
 #[test]
+#[allow(clippy::needless_range_loop)]
 fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
     let (env, client, _admin, _oracle) = setup_env();
 
@@ -436,6 +437,7 @@ fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
 ///   2. user-asset page contains the asset iff balance > 0
 ///   3. position index contains user iff any balance > 0
 #[test]
+#[allow(clippy::needless_range_loop)]
 fn test_randomized_operation_sequence_invariants() {
     let (env, client, _admin, _oracle) = setup_env();
 

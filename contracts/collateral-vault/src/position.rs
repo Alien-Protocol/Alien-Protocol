@@ -76,7 +76,7 @@ pub fn deposit(env: &Env, user: Address, asset: Address, amount: i128) {
     require_supported_asset(env, &asset);
 
     let token_client = token::Client::new(env, &asset);
-    token_client.transfer(&user, &env.current_contract_address(), &amount);
+    token_client.transfer(&user, env.current_contract_address(), &amount);
 
     let balance = storage::get_position_balance(env, &user, &asset);
     let new_balance = balance + amount;
