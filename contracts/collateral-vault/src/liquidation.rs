@@ -36,7 +36,11 @@ pub fn seize_collateral(
     debit_position(env, &user, &asset, amount);
 
     let token_client = token::Client::new(env, &asset);
-    token_client.transfer(&env.current_contract_address(), &liquidation_engine, &amount);
+    token_client.transfer(
+        &env.current_contract_address(),
+        &liquidation_engine,
+        &amount,
+    );
 
     events::CollateralSeized {
         user,
@@ -50,8 +54,7 @@ pub fn seize_collateral(
 /// Returns `true` when the registered lending pool reports that `user` is
 /// liquidatable. Panics if the caller is not the registered engine.
 pub fn authorize_liquidation(env: &Env, liquidation_engine: Address, user: Address) -> bool {
-    let stored_engine =
-        storage::get_liquidation_engine(env).expect("Liquidation engine not set");
+    let stored_engine = storage::get_liquidation_engine(env).expect("Liquidation engine not set");
     if liquidation_engine != stored_engine {
         soroban_sdk::panic_with_error!(env, VaultError::Unauthorized);
     }
