@@ -233,3 +233,32 @@ pub fn get_all_positions(env: &Env) -> Vec<Position> {
     }
     positions
 }
+
+pub const DEFAULT_CONTRACT_VERSION: u32 = 1;
+pub const DEFAULT_STORAGE_SCHEMA_VERSION: u32 = 1;
+
+pub fn get_contract_version(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ContractVersion)
+        .unwrap_or(DEFAULT_CONTRACT_VERSION)
+}
+
+pub fn set_contract_version(env: &Env, version: u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::ContractVersion, &version);
+}
+
+pub fn get_storage_schema_version(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::StorageSchemaVersion)
+        .unwrap_or(DEFAULT_STORAGE_SCHEMA_VERSION)
+}
+
+pub fn set_storage_schema_version(env: &Env, version: u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::StorageSchemaVersion, &version);
+}

@@ -39,6 +39,10 @@ impl VaultContract {
         storage::set_oracle(&env, &lending_pool);
         storage::set_paused(&env, false);
 
+        storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
+        storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
+
+        // Emit structured contract event
         events::Initialized {
             admin,
             lending_pool,
@@ -53,6 +57,22 @@ impl VaultContract {
     /// Transfer admin authority to `new_admin`.
     ///
     /// Errors: `NotInitialized`, `AlreadyAdmin`.
+    pub fn get_contract_version(env: Env) -> u32 {
+        upgrade::get_contract_version(&env)
+    }
+
+    pub fn get_storage_schema_version(env: Env) -> u32 {
+        upgrade::get_storage_schema_version(&env)
+    }
+
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        upgrade::upgrade(env, wasm_hash)
+    }
+
+    pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
+        upgrade::migrate(env, target_storage_schema_version)
+    }
+
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
         admin::set_admin(env, new_admin)
     }
@@ -112,6 +132,7 @@ impl VaultContract {
     ///
     /// Errors: `NotInitialized`, `AlreadySupported`.
     pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
+    pub fn add_supported_asset(env: Env, asset: Address) {
         assets::add_supported_asset(env, asset)
     }
 
@@ -394,3 +415,13 @@ impl VaultContract {
         risk::is_withdrawal_safe(&env, &user, &asset, amount)
     }
 }
+
+mod admin;
+mod assets;
+mod errors;
+mod events;
+mod storage;
+#[cfg(test)]
+mod tests;
+mod types;
+mod upgrade;

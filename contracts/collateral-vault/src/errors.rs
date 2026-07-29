@@ -76,4 +76,8 @@ pub enum VaultError {
     PoolNotSet = 19,
     /// The requested withdrawal amount exceeds the user's recorded balance.
     InsufficientBalance = 20,
+    UpgradeUnauthorized = 14,
+    MigrationAlreadyApplied = 15,
+    MigrationSkipped = 16,
+    MigrationOutOfOrder = 17,
 }
