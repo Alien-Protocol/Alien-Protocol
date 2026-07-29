@@ -1,5 +1,4 @@
 use soroban_sdk::{contractevent, Address, BytesN};
-
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Initialized {
@@ -99,6 +98,16 @@ pub struct OracleUpdated {
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContractUpgraded {
-    pub old_hash: Option<BytesN<32>>,
-    pub new_hash: BytesN<32>,
+    pub actor: Address,
+    pub old_contract_version: u32,
+    pub new_contract_version: u32,
+    pub wasm_hash: BytesN<32>,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct StorageMigrated {
+    pub actor: Address,
+    pub old_storage_schema_version: u32,
+    pub new_storage_schema_version: u32,
 }

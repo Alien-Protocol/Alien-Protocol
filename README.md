@@ -127,13 +127,21 @@ rustup target add wasm32v1-none
 stellar --version
 ```
 
-### 3. Run the test suite
+### 3. Build the test fixture
+
+The collateral-vault upgrade tests load their release WASM at compile time, so build that artifact before running native tests:
+
+```bash
+cargo build -p collateral-vault --target wasm32v1-none --release
+```
+
+### 4. Run the test suite
 
 ```bash
 cargo test --workspace --all-features
 ```
 
-### 4. Build the contracts
+### 5. Build the contracts
 
 ```bash
 stellar contract build --locked
@@ -147,6 +155,7 @@ Run the full local verification suite before opening a pull request:
 
 ```bash
 cargo fmt --all --check
+cargo build -p collateral-vault --target wasm32v1-none --release
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo check --workspace
 cargo test --workspace --all-features
