@@ -4,6 +4,7 @@
 //! to storage — every function is a pure read (plus external oracle/pool calls).
 
 use crate::clients::{LendingPoolClient, OracleClient};
+use crate::errors::VaultError;
 use crate::storage;
 use crate::types::Position;
 use soroban_sdk::{Address, Env};
@@ -19,9 +20,8 @@ const MIN_COLLATERAL_RATIO_PCT: i128 = 110;
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub(crate) fn oracle_client(env: &Env) -> OracleClient<'_> {
-    let addr = storage::get_oracle(env).unwrap_or_else(|| {
-        soroban_sdk::panic_with_error!(env, crate::errors::VaultError::NotInitialized)
-    });
+    let addr = storage::get_oracle(env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::NotInitialized));
     OracleClient::new(env, &addr)
 }
 
@@ -43,12 +43,12 @@ pub(crate) fn collateral_value(env: &Env, position: &Position) -> i128 {
         let item_value = item
             .amount
             .checked_mul(price_data.price)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, crate::errors::VaultError::InvalidInputs))
+            .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::InvalidInputs))
             / PRICE_PRECISION;
 
         total = total
             .checked_add(item_value)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, crate::errors::VaultError::InvalidInputs));
+            .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::InvalidInputs));
     }
 
     total
@@ -58,7 +58,7 @@ pub(crate) fn collateral_value(env: &Env, position: &Position) -> i128 {
 pub fn get_collateral_value(env: &Env, user: &Address) -> i128 {
     match storage::get_position(env, user) {
         Some(pos) => collateral_value(env, &pos),
-        None => soroban_sdk::panic_with_error!(env, crate::errors::VaultError::NoPosition),
+        None => soroban_sdk::panic_with_error!(env, VaultError::NoPosition),
     }
 }
 
@@ -80,11 +80,11 @@ pub fn is_withdrawal_safe(env: &Env, user: &Address, asset: &Address, amount: i1
     let oracle = oracle_client(env);
     let price_data = oracle
         .get_price(asset)
-        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, crate::errors::VaultError::NotInitialized));
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::NotInitialized));
 
     let withdrawn_value = amount
         .checked_mul(price_data.price)
-        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, crate::errors::VaultError::InvalidInputs))
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::InvalidInputs))
         / PRICE_PRECISION;
 
     if total_value < withdrawn_value {
