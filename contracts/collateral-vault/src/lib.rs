@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
 use errors::VaultError;
 use types::{AssetsPage, Position, PositionsPage};
@@ -41,6 +41,10 @@ impl VaultContract {
         storage::set_oracle(&env, &lending_pool);
         storage::set_paused(&env, false);
 
+        storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
+        storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
+
+        // Emit structured contract event
         events::Initialized {
             admin,
             lending_pool,
@@ -48,23 +52,24 @@ impl VaultContract {
         .publish(&env);
     }
 
+    pub fn get_contract_version(env: Env) -> u32 {
+        upgrade::get_contract_version(&env)
+    }
+
+    pub fn get_storage_schema_version(env: Env) -> u32 {
+        upgrade::get_storage_schema_version(&env)
+    }
+
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        upgrade::upgrade(env, wasm_hash)
+    }
+
+    pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
+        upgrade::migrate(env, target_storage_schema_version)
+    }
+
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
-        let current_admin = storage::get_admin(&env).ok_or(VaultError::InvalidInputs)?;
-        current_admin.require_auth();
-
-        if current_admin == new_admin {
-            return Err(VaultError::AlreadyAdmin);
-        }
-
-        storage::set_admin(&env, &new_admin);
-
-        events::AdminChanged {
-            old_admin: current_admin,
-            new_admin,
-        }
-        .publish(&env);
-
-        Ok(())
+        admin::set_admin(env, new_admin)
     }
 
     pub fn set_lending_pool(env: Env, lending_pool: Address) {
@@ -150,7 +155,7 @@ impl VaultContract {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Core write operations  (cost is O(assets held by user), never O(all users))
+    // Core write operations (cost is O(assets held by user), never O(all users))
     // ─────────────────────────────────────────────────────────────────────────
 
     pub fn deposit(env: Env, user: Address, asset: Address, amount: i128) {
@@ -393,10 +398,6 @@ impl VaultContract {
 
     // ─────────────────────────────────────────────────────────────────────────
     // Paginated enumeration views
-    //
-    // All enumeration is cursor-based so no single call iterates the entire
-    // protocol state.  Off-chain indexers should prefer event subscriptions
-    // (deposit / withdraw / seize_collateral) over repeated page polling.
     // ─────────────────────────────────────────────────────────────────────────
 
     /// Return a bounded page of active positions.
@@ -418,19 +419,19 @@ impl VaultContract {
     }
 }
 
+mod admin;
+mod assets;
 mod errors;
 mod events;
 mod storage;
 #[cfg(test)]
 mod tests;
 mod types;
+mod upgrade;
 mod views;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy compatibility shim — test/testutils builds only.
-//
-// Separate impl block so the #[cfg] does not interact with #[contractimpl].
-// Production wasm builds never see this method.
 // ─────────────────────────────────────────────────────────────────────────────
 #[cfg(any(test, feature = "testutils"))]
 impl VaultContract {
@@ -438,9 +439,9 @@ impl VaultContract {
     ///
     /// O(n) — compiled only for test/testutils builds.
     /// Production code should use `get_positions_page` instead.
-    pub fn get_position_index(env: Env) -> soroban_sdk::Vec<Address> {
+    pub fn get_position_index(env: Env) -> Vec<Address> {
         let count = storage::position_count(&env);
-        let mut result: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(&env);
+        let mut result: Vec<Address> = Vec::new(&env);
         for slot in 0..count {
             if let Some(user) = storage::get_position_at(&env, slot) {
                 result.push_back(user);

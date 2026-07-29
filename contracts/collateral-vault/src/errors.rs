@@ -19,4 +19,8 @@ pub enum VaultError {
     NotPaused = 13,
     /// `limit` was 0 or exceeded [`crate::types::MAX_PAGE_LIMIT`].
     PageLimitExceeded = 14,
+    UpgradeUnauthorized = 15,
+    MigrationAlreadyApplied = 16,
+    MigrationSkipped = 17,
+    MigrationOutOfOrder = 18,
 }

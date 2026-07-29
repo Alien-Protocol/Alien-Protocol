@@ -101,6 +101,10 @@ pub enum DataKey {
     LiquidationEngine,
     /// Lending pool address (alternative key)
     Pool,
+    /// Contract version key
+    ContractVersion,
+    /// Storage schema version key
+    StorageSchemaVersion,
 }
 
 /// Price data from the oracle.
