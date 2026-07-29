@@ -78,7 +78,9 @@ pub fn is_withdrawal_safe(env: &Env, user: &Address, asset: &Address, amount: i1
     let total_value = get_collateral_value(env, user);
 
     let oracle = oracle_client(env);
-    let price_data = oracle.get_price(asset).expect("price not found");
+    let price_data = oracle
+        .get_price(asset)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, crate::errors::VaultError::NotInitialized));
 
     let withdrawn_value = amount
         .checked_mul(price_data.price)

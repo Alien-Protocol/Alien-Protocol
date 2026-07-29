@@ -143,7 +143,7 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
             .storage()
             .persistent()
             .get(&DataKey::SupportedAssetAt(last_slot))
-            .expect("index inconsistency: last asset missing");
+            .unwrap();
 
         env.storage()
             .persistent()
@@ -248,7 +248,7 @@ pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
             .storage()
             .persistent()
             .get(&DataKey::UserAssetAt(user.clone(), last_slot))
-            .expect("index inconsistency: last user asset missing");
+            .unwrap();
 
         env.storage()
             .persistent()
@@ -330,7 +330,7 @@ pub fn remove_from_position_index(env: &Env, user: &Address) {
             .storage()
             .persistent()
             .get(&DataKey::PositionAt(last_slot))
-            .expect("index inconsistency: last user missing");
+            .unwrap();
 
         env.storage()
             .persistent()
