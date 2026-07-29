@@ -57,19 +57,20 @@ impl VaultContract {
         let current_admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
         current_admin.require_auth();
 
-        if current_admin == new_admin {
-            return Err(VaultError::AlreadyAdmin);
-        }
+    pub fn get_storage_schema_version(env: Env) -> u32 {
+        upgrade::get_storage_schema_version(&env)
+    }
 
-        storage::set_admin(&env, &new_admin);
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        upgrade::upgrade(env, wasm_hash)
+    }
 
-        events::AdminChanged {
-            old_admin: current_admin,
-            new_admin,
-        }
-        .publish(&env);
+    pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
+        upgrade::migrate(env, target_storage_schema_version)
+    }
 
-        Ok(())
+    pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
+        admin::set_admin(env, new_admin)
     }
 
     pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultError> {
@@ -433,9 +434,12 @@ impl VaultContract {
     }
 }
 
+mod admin;
+mod assets;
 mod errors;
 mod events;
 mod storage;
 #[cfg(test)]
 mod tests;
 mod types;
+mod upgrade;
