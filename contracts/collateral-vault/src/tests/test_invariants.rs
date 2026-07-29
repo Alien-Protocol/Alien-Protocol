@@ -345,13 +345,13 @@ fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
 
     baseline_sac.mint(baseline_user, &1000);
 
-    let start_cpu = env.budget().cpu_instruction_cost();
+    let start_cpu = env.cost_estimate().budget().cpu_instruction_cost();
     client.deposit(baseline_user, baseline_token, &100);
-    let baseline_deposit_cpu = env.budget().cpu_instruction_cost().saturating_sub(start_cpu);
+    let baseline_deposit_cpu = env.cost_estimate().budget().cpu_instruction_cost().saturating_sub(start_cpu);
 
-    let start_cpu = env.budget().cpu_instruction_cost();
+    let start_cpu = env.cost_estimate().budget().cpu_instruction_cost();
     client.withdraw(baseline_user, baseline_token, &100);
-    let baseline_withdraw_cpu = env.budget().cpu_instruction_cost().saturating_sub(start_cpu);
+    let baseline_withdraw_cpu = env.cost_estimate().budget().cpu_instruction_cost().saturating_sub(start_cpu);
 
     // ── Populate 19 more users ────────────────────────────────────────────────
     for i in 1..N_USERS {
@@ -369,13 +369,13 @@ fn test_budget_twenty_users_five_assets_deposit_and_withdraw() {
     // ── Re-measure cost for user[0] re-entering a 19-user index ─────────────
     baseline_sac.mint(baseline_user, &200);
 
-    let start_cpu = env.budget().cpu_instruction_cost();
+    let start_cpu = env.cost_estimate().budget().cpu_instruction_cost();
     client.deposit(baseline_user, baseline_token, &100);
-    let populated_deposit_cpu = env.budget().cpu_instruction_cost().saturating_sub(start_cpu);
+    let populated_deposit_cpu = env.cost_estimate().budget().cpu_instruction_cost().saturating_sub(start_cpu);
 
-    let start_cpu = env.budget().cpu_instruction_cost();
+    let start_cpu = env.cost_estimate().budget().cpu_instruction_cost();
     client.withdraw(baseline_user, baseline_token, &100);
-    let populated_withdraw_cpu = env.budget().cpu_instruction_cost().saturating_sub(start_cpu);
+    let populated_withdraw_cpu = env.cost_estimate().budget().cpu_instruction_cost().saturating_sub(start_cpu);
 
     // ── Assert costs stay within baseline bounds (O(1) not O(n)) ─────────────
     let deposit_delta = populated_deposit_cpu.abs_diff(baseline_deposit_cpu);

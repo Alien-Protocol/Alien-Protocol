@@ -47,7 +47,7 @@ pub fn set_lending_pool(env: Env, lending_pool: Address) {
     let admin = storage::get_admin(&env).expect("not initialized");
     admin.require_auth();
 
-    let old_pool = storage::_get_lending_pool(&env);
+    let old_pool = storage::get_lending_pool(&env);
     storage::set_lending_pool(&env, &lending_pool);
 
     events::LendingPoolUpdated {
