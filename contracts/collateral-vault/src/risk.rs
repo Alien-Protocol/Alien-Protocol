@@ -26,7 +26,7 @@ pub(crate) fn oracle_client(env: &Env) -> OracleClient<'_> {
 }
 
 pub(crate) fn pool_client(env: &Env) -> Option<LendingPoolClient<'_>> {
-    storage::get_pool(env).map(|addr| LendingPoolClient::new(env, &addr))
+    storage::get_lending_pool(env).map(|addr| LendingPoolClient::new(env, &addr))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

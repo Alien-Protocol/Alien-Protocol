@@ -55,7 +55,6 @@ pub enum DataKey {
     LendingPool,
     Oracle,
     LiquidationEngine,
-    Pool,
 
     // ── Supported-asset slot index ────────────────────────────────────────────
     SupportedAsset(Address),

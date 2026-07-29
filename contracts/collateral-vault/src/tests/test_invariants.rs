@@ -34,7 +34,9 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let oracle = Address::generate(&env);
-    client.initialize(&admin, &oracle);
+    let lending_pool = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
     (env, client, admin, oracle)
 }

@@ -1,4 +1,4 @@
-﻿use crate::types::{CollateralAsset, DataKey, Position};
+use crate::types::{CollateralAsset, DataKey, Position};
 use soroban_sdk::{Address, Env, Vec};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,14 +57,6 @@ pub fn set_liquidation_engine(env: &Env, engine: &Address) {
     env.storage()
         .persistent()
         .set(&DataKey::LiquidationEngine, engine);
-}
-
-pub fn get_pool(env: &Env) -> Option<Address> {
-    env.storage().persistent().get(&DataKey::Pool)
-}
-
-pub fn set_pool(env: &Env, pool: &Address) {
-    env.storage().persistent().set(&DataKey::Pool, pool);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

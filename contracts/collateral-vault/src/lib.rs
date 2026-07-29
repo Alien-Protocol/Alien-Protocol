@@ -35,11 +35,17 @@ pub struct VaultContract;
 impl VaultContract {
     // ── Initialization ────────────────────────────────────────────────────────
 
-    pub fn initialize(env: Env, admin: Address, lending_pool: Address) {
-        admin::initialize(&env, admin, lending_pool);
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        lending_pool: Address,
+        oracle: Address,
+        liquidation_engine: Address,
+    ) -> Result<(), VaultError> {
+        admin::initialize(&env, admin, lending_pool, oracle, liquidation_engine)
     }
 
-    // ── Upgrade / versioning (from #599) ──────────────────────────────────────
+    // ── Upgrade / versioning ──────────────────────────────────────────────────
 
     pub fn get_contract_version(env: Env) -> u32 {
         upgrade::get_contract_version(&env)
@@ -73,10 +79,6 @@ impl VaultContract {
 
     pub fn set_liquidation_engine(env: Env, engine: Address) {
         admin::set_liquidation_engine(env, engine);
-    }
-
-    pub fn set_pool(env: Env, pool: Address) {
-        admin::set_pool(env, pool);
     }
 
     pub fn pause(env: Env) {
@@ -129,6 +131,18 @@ impl VaultContract {
 
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
+    }
+
+    pub fn get_lending_pool(env: Env) -> Option<Address> {
+        storage::get_lending_pool(&env)
+    }
+
+    pub fn get_oracle(env: Env) -> Option<Address> {
+        storage::get_oracle(&env)
+    }
+
+    pub fn get_liquidation_engine(env: Env) -> Option<Address> {
+        storage::get_liquidation_engine(&env)
     }
 
     pub fn get_position_balance(env: Env, user: Address, asset: Address) -> i128 {

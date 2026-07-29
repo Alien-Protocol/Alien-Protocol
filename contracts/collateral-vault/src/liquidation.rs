@@ -62,7 +62,7 @@ pub fn authorize_liquidation(env: &Env, liquidation_engine: Address, user: Addre
     liquidation_engine.require_auth();
     require_position(env, &user);
 
-    let pool_address = storage::get_pool(env)
+    let pool_address = storage::get_lending_pool(env)
         .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::NotInitialized));
     let pool_client = LendingPoolClient::new(env, &pool_address);
     pool_client.is_liquidatable(&user)

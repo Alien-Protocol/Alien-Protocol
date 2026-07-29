@@ -2,7 +2,17 @@
 
 use super::super::*;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{contract, contractimpl, token, Address, Env};
+
+#[contract]
+pub struct MockLendingPool;
+
+#[contractimpl]
+impl MockLendingPool {
+    pub fn get_user_debt(_env: Env, _user: Address) -> i128 {
+        0
+    }
+}
 
 fn setup_env() -> (
     Env,
@@ -22,8 +32,10 @@ fn setup_env() -> (
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let pool_id = env.register(MockLendingPool, ());
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle);
+    client.initialize(&admin, &pool_id, &oracle, &liquidation_engine);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
