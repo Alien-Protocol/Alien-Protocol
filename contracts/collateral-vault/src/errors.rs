@@ -21,4 +21,6 @@ pub enum VaultError {
     MigrationAlreadyApplied = 15,
     MigrationSkipped = 16,
     MigrationOutOfOrder = 17,
+    InvalidAmount = 18,
+    InsufficientCollateral = 19,
 }
