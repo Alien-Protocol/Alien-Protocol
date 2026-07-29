@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
 use errors::VaultError;
 use types::Position;
@@ -42,6 +42,9 @@ impl VaultContract {
         // Explicitly set Paused to false
         storage::set_paused(&env, false);
 
+        storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
+        storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
+
         // Emit structured contract event
         events::Initialized {
             admin,
@@ -50,100 +53,60 @@ impl VaultContract {
         .publish(&env);
     }
 
+    pub fn get_contract_version(env: Env) -> u32 {
+        upgrade::get_contract_version(&env)
+    }
+
+    pub fn get_storage_schema_version(env: Env) -> u32 {
+        upgrade::get_storage_schema_version(&env)
+    }
+
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        upgrade::upgrade(env, wasm_hash)
+    }
+
+    pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
+        upgrade::migrate(env, target_storage_schema_version)
+    }
+
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
-        let current_admin = storage::get_admin(&env).ok_or(VaultError::InvalidInputs)?;
-        current_admin.require_auth();
-
-        if current_admin == new_admin {
-            return Err(VaultError::AlreadyAdmin);
-        }
-
-        storage::set_admin(&env, &new_admin);
-
-        events::AdminChanged {
-            old_admin: current_admin,
-            new_admin,
-        }
-        .publish(&env);
-
-        Ok(())
+        admin::set_admin(env, new_admin)
     }
 
     pub fn set_lending_pool(env: Env, lending_pool: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        storage::set_lending_pool(&env, &lending_pool);
-
-        events::LendingPoolUpdated { lending_pool }.publish(&env);
+        admin::set_lending_pool(env, lending_pool)
     }
 
     pub fn set_oracle(env: Env, oracle: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        storage::set_oracle(&env, &oracle);
-    }
-
-    pub fn pause(env: Env) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        if storage::is_paused(&env) {
-            soroban_sdk::panic_with_error!(&env, VaultError::AlreadyPaused);
-        }
-
-        storage::set_paused(&env, true);
-
-        events::Paused { by: admin }.publish(&env);
-    }
-
-    pub fn unpause(env: Env) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        if !storage::is_paused(&env) {
-            soroban_sdk::panic_with_error!(&env, VaultError::NotPaused);
-        }
-
-        storage::set_paused(&env, false);
-
-        events::Unpaused { by: admin }.publish(&env);
-    }
-
-    pub fn add_supported_asset(env: Env, asset: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        if storage::is_supported_asset(&env, &asset) {
-            soroban_sdk::panic_with_error!(&env, VaultError::AlreadySupported);
-        }
-
-        storage::add_supported_asset(&env, &asset);
-
-        events::AssetAdded { asset }.publish(&env);
-    }
-
-    pub fn remove_supported_asset(env: Env, asset: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
-
-        if !storage::is_supported_asset(&env, &asset) {
-            soroban_sdk::panic_with_error!(&env, VaultError::AssetNotFound);
-        }
-
-        storage::remove_supported_asset(&env, &asset);
-
-        events::AssetRemoved { asset }.publish(&env);
+        admin::set_oracle(env, oracle)
     }
 
     pub fn set_liquidation_engine(env: Env, engine: Address) {
-        let admin = storage::get_admin(&env).expect("not initialized");
-        admin.require_auth();
+        admin::set_liquidation_engine(env, engine)
+    }
 
-        storage::set_liquidation_engine(&env, &engine);
+    pub fn set_pool(env: Env, pool: Address) {
+        admin::set_pool(env, pool)
+    }
 
-        events::LiquidationEngineSet { engine }.publish(&env);
+    pub fn pause(env: Env) {
+        admin::pause(env)
+    }
+
+    pub fn unpause(env: Env) {
+        admin::unpause(env)
+    }
+
+    pub fn add_supported_asset(env: Env, asset: Address) {
+        assets::add_supported_asset(env, asset)
+    }
+
+    pub fn remove_supported_asset(env: Env, asset: Address) {
+        assets::remove_supported_asset(env, asset)
+    }
+
+    pub fn is_supported_asset(env: Env, asset: Address) -> bool {
+        assets::is_supported_asset(env, asset)
     }
 
     pub fn set_pool(env: Env, pool: Address) {
@@ -386,9 +349,12 @@ impl VaultContract {
     }
 }
 
+mod admin;
+mod assets;
 mod errors;
 mod events;
 mod storage;
 #[cfg(test)]
 mod tests;
 mod types;
+mod upgrade;
