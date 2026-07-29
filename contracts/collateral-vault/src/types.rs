@@ -1,66 +1,61 @@
-use soroban_sdk::{contracttype, Address, Vec};
+//! Collateral-vault types.
+//!
+//! Cross-contract DTOs ([`PriceData`], [`CollateralAsset`], [`Position`]) are
+//! re-exported from `shared::types` — they have a single authoritative
+//! definition there.
+//!
+//! [`DataKey`] is vault-internal storage and must **not** be moved to `shared`;
+//! changing its discriminants would silently corrupt persistent ledger state on
+//! already-deployed contracts.
 
-/// Represents a single collateral asset held by a user.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct CollateralAsset {
-    pub asset: Address,
-    pub amount: i128,
-}
+use soroban_sdk::{contracttype, Address};
 
-/// Represents a user's collateral position across all assets.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct Position {
-    /// The owner of this position.
-    pub user: Address,
-    /// All collateral assets held by this user.
-    pub collateral: Vec<CollateralAsset>,
-}
+// ── Cross-contract DTOs (canonical definitions live in `shared`) ─────────────
 
-/// Storage keys for persistent contract state.
-/// Core keys required for Issue #471 initialization:
-/// - Admin: Contract administrator address
-/// - Paused: Contract pause state
-/// - LendingPool: Lending pool address
-/// - SupportedAsset(Address): Tracks supported collateral assets
-/// - Position(Address, Address): Stores balances (user, asset)
-/// - PositionIndex: Index of all users with active positions
+/// Re-exported canonical price DTO.  See [`shared::types::PriceData`].
+/// Used by test modules that construct mock oracle contracts returning this type.
+#[allow(unused_imports)]
+pub use shared::types::PriceData;
+
+/// Re-exported canonical collateral-asset record.  See [`shared::types::CollateralAsset`].
+pub use shared::types::CollateralAsset;
+
+/// Re-exported canonical user position.  See [`shared::types::Position`].
+pub use shared::types::Position;
+
+// ── Vault-internal storage keys ──────────────────────────────────────────────
+
+/// Storage keys for persistent vault state.
+///
+/// Discriminants are stable: changing them would corrupt existing ledger data.
+/// Add new variants at the end only.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum DataKey {
-    /// Admin address key
+    /// Contract administrator address.
     Admin,
-    /// Paused state key
+    /// Whether the vault is currently paused.
     Paused,
-    /// Lending pool address key (Issue #471)
+    /// Address of the configured lending-pool contract (legacy key).
     LendingPool,
-    /// Supported asset key: stores whether a specific asset is supported
+    /// Whether a specific asset is on the supported-asset allowlist.
     SupportedAsset(Address),
-    /// List of all supported assets
+    /// Ordered list of all supported asset addresses.
     SupportedAssets,
-    /// Position key: stores balance for a user's position in an asset
-    Position(Address, Address), // (user, asset)
-    /// Position index key: tracks all users with active positions
+    /// Per-user, per-asset balance: `(user, asset) → i128`.
+    Position(Address, Address),
+    /// Ordered index of all users that have an active position.
     PositionIndex,
-    /// Tracks which assets a user has ever deposited into
+    /// Assets a user has ever deposited (used to rebuild their `Position`).
     UserAssets(Address),
-    /// Oracle adapter address
+    /// Address of the configured oracle-adapter contract.
     Oracle,
-    /// Liquidation engine address
+    /// Address of the configured liquidation-engine contract.
     LiquidationEngine,
-    /// Lending pool address (alternative key)
+    /// Address of the configured lending-pool contract (primary key).
     Pool,
-    /// Contract version key
+    /// Monotonically increasing contract bytecode version.
     ContractVersion,
-    /// Storage schema version key
+    /// Monotonically increasing storage-schema version.
     StorageSchemaVersion,
-}
-
-/// Price data from the oracle.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct PriceData {
-    pub price: i128,
-    pub timestamp: u64,
 }

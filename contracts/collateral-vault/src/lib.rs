@@ -1,52 +1,45 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
+use clients::{LendingPoolClient, OracleAdapterClient};
 use errors::VaultError;
 use types::Position;
 
-#[soroban_sdk::contractclient(name = "OracleClient")]
-pub trait Oracle {
-    fn get_price(env: Env, asset: Address) -> Option<types::PriceData>;
-    fn get_price_or_fail(env: Env, asset: Address) -> types::PriceData;
-}
-
-#[soroban_sdk::contractclient(name = "LendingPoolClient")]
-pub trait LendingPool {
-    fn get_user_debt(env: Env, user: Address) -> i128;
-    fn is_liquidatable(user: &Address) -> bool;
-}
-
-/// Oracle prices are encoded with 7 decimal places (e.g. $1.00 = 10_000_000).
+/// Oracle prices are encoded with 7 decimal places (e.g. USD 1.00 = 10_000_000).
 /// Dividing `amount * price` by this constant yields the USD-denominated value.
 const PRICE_PRECISION: i128 = 10_000_000;
-
-/// Maximum age (in seconds) an oracle price may have before it is considered stale.
 
 #[contract]
 pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
+    /// Initialise the vault.  Must be called exactly once after deployment.
+    ///
+    /// * `admin`        — the initial administrator address.
+    /// * `lending_pool` — address of the oracle-adapter contract (legacy
+    ///                    parameter name kept for backward compatibility with
+    ///                    existing test harnesses; use `set_oracle` to update).
     pub fn initialize(env: Env, admin: Address, lending_pool: Address) {
-        // Strict initialization guard: panic if already initialized
+        // Strict initialization guard: panic if already initialized.
         if storage::has_admin(&env) {
             panic!("already initialized");
         }
 
         admin.require_auth();
 
-        // Commit admin and configured contract addresses to persistent storage
+        // Commit admin and configured contract addresses to persistent storage.
         storage::set_admin(&env, &admin);
         storage::set_lending_pool(&env, &lending_pool);
         storage::set_oracle(&env, &lending_pool);
 
-        // Explicitly set Paused to false
+        // Explicitly set Paused to false.
         storage::set_paused(&env, false);
 
         storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
         storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
 
-        // Emit structured contract event
+        // Emit structured contract event.
         events::Initialized {
             admin,
             lending_pool,
@@ -54,62 +47,81 @@ impl VaultContract {
         .publish(&env);
     }
 
+    /// Returns the current contract bytecode version.
     pub fn get_contract_version(env: Env) -> u32 {
         upgrade::get_contract_version(&env)
     }
 
+    /// Returns the current storage-schema version.
     pub fn get_storage_schema_version(env: Env) -> u32 {
         upgrade::get_storage_schema_version(&env)
     }
 
+    /// Upgrade the contract bytecode.  Caller must be the admin.
     pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
         upgrade::upgrade(env, wasm_hash)
     }
 
+    /// Apply incremental storage migrations up to `target_storage_schema_version`.
     pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
         upgrade::migrate(env, target_storage_schema_version)
     }
 
+    /// Replace the admin address.  Caller must be the current admin.
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
         admin::set_admin(env, new_admin)
     }
 
+    /// Update the configured lending-pool address.  Caller must be the admin.
     pub fn set_lending_pool(env: Env, lending_pool: Address) {
         admin::set_lending_pool(env, lending_pool)
     }
 
+    /// Update the configured oracle-adapter address.  Caller must be the admin.
     pub fn set_oracle(env: Env, oracle: Address) {
         admin::set_oracle(env, oracle)
     }
 
+    /// Update the configured liquidation-engine address.  Caller must be the admin.
     pub fn set_liquidation_engine(env: Env, engine: Address) {
         admin::set_liquidation_engine(env, engine)
     }
 
+    /// Update the configured lending-pool (pool) address.  Caller must be the admin.
     pub fn set_pool(env: Env, pool: Address) {
         admin::set_pool(env, pool)
     }
 
+    /// Pause all state-mutating vault operations.  Caller must be the admin.
     pub fn pause(env: Env) {
         admin::pause(env)
     }
 
+    /// Resume vault operations.  Caller must be the admin.
     pub fn unpause(env: Env) {
         admin::unpause(env)
     }
 
+    /// Add `asset` to the supported-asset allowlist.  Caller must be the admin.
     pub fn add_supported_asset(env: Env, asset: Address) {
         assets::add_supported_asset(env, asset)
     }
 
+    /// Remove `asset` from the supported-asset allowlist.  Caller must be the admin.
     pub fn remove_supported_asset(env: Env, asset: Address) {
         assets::remove_supported_asset(env, asset)
     }
 
+    /// Returns `true` when `asset` is on the supported-asset allowlist.
     pub fn is_supported_asset(env: Env, asset: Address) -> bool {
         assets::is_supported_asset(env, asset)
     }
 
+    /// Check whether a liquidation engine is authorised to liquidate `user`.
+    ///
+    /// Delegates the health check to the configured `LendingPoolClient`.
+    /// The `is_liquidatable` call uses the canonical interface signature:
+    /// `fn is_liquidatable(env: Env, user: Address) -> bool`.
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
         let stored_engine =
             storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
@@ -126,21 +138,29 @@ impl VaultContract {
 
         let pool_address = storage::get_pool(&env).expect("Lending pool not set");
         let pool_client = LendingPoolClient::new(&env, &pool_address);
+        // Canonical signature: fn is_liquidatable(env: Env, user: Address) -> bool
         pool_client.is_liquidatable(&user)
     }
 
+    /// Returns the admin address if the contract has been initialized.
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
     }
 
+    /// Returns the deposited balance of `asset` for `user`.
     pub fn get_position_balance(env: Env, user: Address, asset: Address) -> i128 {
         storage::get_position_balance(&env, &user, &asset)
     }
 
+    /// Returns the ordered list of all users that have an active position.
     pub fn get_position_index(env: Env) -> Vec<Address> {
         storage::get_position_index(&env)
     }
 
+    /// Deposit `amount` of `asset` into the vault on behalf of `user`.
+    ///
+    /// Requires `user` auth.  The vault must not be paused and `asset` must be
+    /// on the supported-asset allowlist.
     pub fn deposit(env: Env, user: Address, asset: Address, amount: i128) {
         user.require_auth();
 
@@ -163,9 +183,9 @@ impl VaultContract {
         let new_balance = balance + amount;
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
-        // Track this asset for the user (used to build Position)
+        // Track this asset for the user (used to build Position).
         storage::add_user_asset(&env, &user, &asset);
-        // Add user to the global position index if not already present
+        // Add user to the global position index if not already present.
         storage::add_to_position_index(&env, &user);
 
         events::Deposited {
@@ -176,6 +196,9 @@ impl VaultContract {
         .publish(&env);
     }
 
+    /// Withdraw `amount` of `asset` from the vault for `user`.
+    ///
+    /// Requires `user` auth.  Enforces minimum collateral ratio (110 %).
     pub fn withdraw(env: Env, user: Address, asset: Address, amount: i128) {
         user.require_auth();
 
@@ -200,7 +223,7 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
-        // Safety check: collateral ratio
+        // Safety check: collateral ratio.
         if !Self::is_withdrawal_safe(env.clone(), user.clone(), asset.clone(), amount) {
             soroban_sdk::panic_with_error!(&env, VaultError::BelowMinCollateralRatio);
         }
@@ -208,12 +231,12 @@ impl VaultContract {
         let new_balance = balance - amount;
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
-        // If this asset balance reached zero, remove asset from user's assets list
+        // If this asset balance reached zero, remove asset from user's assets list.
         if new_balance == 0 {
             storage::remove_user_asset(&env, &user, &asset);
         }
 
-        // If the user has no remaining balance across any asset, remove from index
+        // If the user has no remaining balance across any asset, remove from index.
         if storage::get_position(&env, &user).is_none() {
             storage::remove_from_position_index(&env, &user);
         }
@@ -229,10 +252,15 @@ impl VaultContract {
         .publish(&env);
     }
 
+    /// Returns a snapshot of all active user positions.
     pub fn get_all_positions(env: Env) -> Vec<Position> {
         storage::get_all_positions(&env)
     }
 
+    /// Seize `amount` of `asset` from `user`'s position and transfer it to
+    /// `liquidation_engine`.
+    ///
+    /// Callable only by the registered liquidation engine.
     pub fn seize_collateral(
         env: Env,
         liquidation_engine: Address,
@@ -252,7 +280,7 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
-        // Verify user has an active position
+        // Verify user has an active position.
         let index = storage::get_position_index(&env);
         if !index.contains(&user) {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
@@ -266,12 +294,12 @@ impl VaultContract {
         let new_balance = balance - amount;
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
-        // If this asset balance reached zero, remove asset from user's assets list
+        // If this asset balance reached zero, remove asset from user's assets list.
         if new_balance == 0 {
             storage::remove_user_asset(&env, &user, &asset);
         }
 
-        // If the user has no remaining balance across any asset, remove from index
+        // If the user has no remaining balance across any asset, remove from index.
         if storage::get_position(&env, &user).is_none() {
             storage::remove_from_position_index(&env, &user);
         }
@@ -292,6 +320,8 @@ impl VaultContract {
         .publish(&env);
     }
 
+    /// Returns `true` when withdrawing `amount` of `asset` for `user` would
+    /// keep their collateral ratio at or above the 110 % minimum.
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
         let debt = if let Some(pool_addr) = storage::get_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
@@ -307,7 +337,7 @@ impl VaultContract {
         let total_value = Self::get_collateral_value(env.clone(), user.clone());
 
         let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
+        let oracle_client = OracleAdapterClient::new(&env, &oracle_address);
         let price_data = oracle_client.get_price(&asset).expect("price not found");
 
         // Apply the same PRICE_PRECISION scaling used by get_collateral_value so
@@ -323,10 +353,13 @@ impl VaultContract {
 
         let remaining_value = total_value - withdrawn_value;
 
-        // Minimum collateral ratio: 110% (1.1)
+        // Minimum collateral ratio: 110 % (1.1).
         remaining_value >= (debt * 110) / 100
     }
 
+    /// Returns the full collateral position for `user`.
+    ///
+    /// Panics with `VaultError::NoPosition` if the user has no open position.
     pub fn get_position(env: Env, user: Address) -> Position {
         match storage::get_position(&env, &user) {
             Some(position) => position,
@@ -334,11 +367,13 @@ impl VaultContract {
         }
     }
 
+    /// Returns the total USD-denominated collateral value for `user`, scaled by
+    /// `PRICE_PRECISION` (10^7).
     pub fn get_collateral_value(env: Env, user: Address) -> i128 {
         let position = Self::get_position(env.clone(), user);
 
         let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
+        let oracle_client = OracleAdapterClient::new(&env, &oracle_address);
 
         let mut total_value: i128 = 0;
 
@@ -364,6 +399,7 @@ impl VaultContract {
 
 mod admin;
 mod assets;
+mod clients;
 mod errors;
 mod events;
 mod storage;

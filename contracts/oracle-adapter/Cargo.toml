@@ -11,6 +11,7 @@ doctest = false
 [dependencies]
 soroban-sdk = { workspace = true, features = ["alloc"] }
 redstone = { git = "https://github.com/redstone-finance/rust-sdk", tag = "3.1.0-pre1", default-features = false, features = ["soroban"] }
+shared = { path = "../shared" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

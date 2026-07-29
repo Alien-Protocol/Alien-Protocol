@@ -250,6 +250,8 @@ dependencies = [
 name = "collateral-vault"
 version = "0.0.0"
 dependencies = [
+ "lending-pool",
+ "oracle-adapter",
  "shared",
  "soroban-sdk",
 ]
@@ -855,6 +857,7 @@ dependencies = [
 name = "lending-pool"
 version = "0.0.0"
 dependencies = [
+ "shared",
  "soroban-sdk",
 ]
 
@@ -956,6 +959,7 @@ name = "oracle-adapter"
 version = "0.0.0"
 dependencies = [
  "redstone",
+ "shared",
  "soroban-sdk",
 ]
 
