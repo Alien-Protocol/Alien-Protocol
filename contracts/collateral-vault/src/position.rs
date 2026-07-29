@@ -1,4 +1,4 @@
-//! Position domain — deposit, withdraw, and shared debit/cleanup helpers.
+﻿//! Position domain — deposit, withdraw, and shared debit/cleanup helpers.
 //!
 //! `debit_position` is the single implementation of "subtract amount from a
 //! user's balance and clean up empty asset / user-index entries". Both

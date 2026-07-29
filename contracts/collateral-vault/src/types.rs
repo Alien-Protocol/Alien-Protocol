@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Vec};
+﻿use soroban_sdk::{contracttype, Address, Vec};
 
 /// Represents a single collateral asset held by a user.
 #[contracttype]

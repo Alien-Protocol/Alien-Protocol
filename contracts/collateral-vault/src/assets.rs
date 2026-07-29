@@ -1,13 +1,11 @@
-//! Asset lifecycle domain.
-//!
-//! Manages the set of collateral assets the vault accepts.
-//! Liquidation engine address management lives in admin.rs (set_liquidation_engine).
+﻿//! Asset lifecycle domain.
 
 use crate::{errors::VaultError, events, storage};
 use soroban_sdk::{Address, Env};
 
 pub fn add_supported_asset(env: Env, asset: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
     admin.require_auth();
 
     if storage::is_supported_asset(&env, &asset) {
@@ -19,7 +17,8 @@ pub fn add_supported_asset(env: Env, asset: Address) {
 }
 
 pub fn remove_supported_asset(env: Env, asset: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
     admin.require_auth();
 
     if !storage::is_supported_asset(&env, &asset) {

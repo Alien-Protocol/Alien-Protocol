@@ -1,4 +1,4 @@
-//! Liquidation domain.
+﻿//! Liquidation domain.
 //!
 //! Both `seize_collateral` and `authorize_liquidation` delegate balance
 //! mutation to `position::debit_position` — the single source of truth
@@ -23,8 +23,8 @@ pub fn seize_collateral(
 ) {
     liquidation_engine.require_auth();
 
-    let registered_engine =
-        storage::get_liquidation_engine(env).expect("liquidation engine not authorized");
+    let registered_engine = storage::get_liquidation_engine(env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::Unauthorized));
     if liquidation_engine != registered_engine {
         soroban_sdk::panic_with_error!(env, VaultError::Unauthorized);
     }
@@ -32,7 +32,6 @@ pub fn seize_collateral(
     require_not_paused(env);
     require_position(env, &user);
 
-    // debit_position handles balance check, asset cleanup, and user-index cleanup
     debit_position(env, &user, &asset, amount);
 
     let token_client = token::Client::new(env, &asset);
@@ -54,7 +53,8 @@ pub fn seize_collateral(
 /// Returns `true` when the registered lending pool reports that `user` is
 /// liquidatable. Panics if the caller is not the registered engine.
 pub fn authorize_liquidation(env: &Env, liquidation_engine: Address, user: Address) -> bool {
-    let stored_engine = storage::get_liquidation_engine(env).expect("Liquidation engine not set");
+    let stored_engine = storage::get_liquidation_engine(env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::Unauthorized));
     if liquidation_engine != stored_engine {
         soroban_sdk::panic_with_error!(env, VaultError::Unauthorized);
     }
@@ -62,7 +62,8 @@ pub fn authorize_liquidation(env: &Env, liquidation_engine: Address, user: Addre
     liquidation_engine.require_auth();
     require_position(env, &user);
 
-    let pool_address = storage::get_pool(env).expect("Lending pool not set");
+    let pool_address = storage::get_pool(env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::NotInitialized));
     let pool_client = LendingPoolClient::new(env, &pool_address);
     pool_client.is_liquidatable(&user)
 }

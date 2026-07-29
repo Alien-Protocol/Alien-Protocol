@@ -1,4 +1,4 @@
-//! External contract client trait declarations.
+﻿//! External contract client trait declarations.
 //!
 //! Keeping these here prevents lib.rs from mixing ABI surface with
 //! dependency declarations, and lets every domain module import the

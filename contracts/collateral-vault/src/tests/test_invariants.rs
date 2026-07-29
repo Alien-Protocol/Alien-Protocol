@@ -1,4 +1,4 @@
-//! Invariant tests for the collateral-vault.
+﻿//! Invariant tests for the collateral-vault.
 //!
 //! These tests exercise the correctness of the slot-based indices under
 //! multi-asset, multi-user, and randomized-sequence scenarios:

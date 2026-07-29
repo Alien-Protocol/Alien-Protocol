@@ -1,11 +1,11 @@
-//! Configuration and administration domain.
+﻿//! Configuration and administration domain.
 
 use crate::{errors::VaultError, events, storage};
 use soroban_sdk::{Address, Env};
 
 pub fn initialize(env: &Env, admin: Address, lending_pool: Address) {
     if storage::has_admin(env) {
-        panic!("already initialized");
+        soroban_sdk::panic_with_error!(env, VaultError::NotInitialized);
     }
 
     admin.require_auth();
@@ -44,7 +44,8 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
 }
 
 pub fn set_lending_pool(env: Env, lending_pool: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
     admin.require_auth();
 
     let old_pool = storage::get_lending_pool(&env);
@@ -58,7 +59,8 @@ pub fn set_lending_pool(env: Env, lending_pool: Address) {
 }
 
 pub fn set_oracle(env: Env, oracle: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
     admin.require_auth();
 
     let old_oracle = storage::get_oracle(&env);
@@ -72,7 +74,8 @@ pub fn set_oracle(env: Env, oracle: Address) {
 }
 
 pub fn set_liquidation_engine(env: Env, engine: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
     admin.require_auth();
 
     let old_engine = storage::get_liquidation_engine(&env);
@@ -86,7 +89,8 @@ pub fn set_liquidation_engine(env: Env, engine: Address) {
 }
 
 pub fn set_pool(env: Env, pool: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
     admin.require_auth();
 
     let old_pool = storage::get_pool(&env);
@@ -100,7 +104,8 @@ pub fn set_pool(env: Env, pool: Address) {
 }
 
 pub fn pause(env: Env) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
     admin.require_auth();
 
     if storage::is_paused(&env) {
@@ -112,7 +117,8 @@ pub fn pause(env: Env) {
 }
 
 pub fn unpause(env: Env) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env)
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
     admin.require_auth();
 
     if !storage::is_paused(&env) {

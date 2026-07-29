@@ -1,4 +1,4 @@
-//! Pagination tests for the collateral-vault.
+﻿//! Pagination tests for the collateral-vault.
 //!
 //! Covers:
 //! - Cursor/limit correctness for `get_positions_page`

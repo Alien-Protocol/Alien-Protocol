@@ -1,4 +1,4 @@
-//! Risk and valuation domain.
+﻿//! Risk and valuation domain.
 //!
 //! All collateral-ratio maths lives here. Nothing in this module writes
 //! to storage — every function is a pure read (plus external oracle/pool calls).
@@ -19,7 +19,9 @@ const MIN_COLLATERAL_RATIO_PCT: i128 = 110;
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub(crate) fn oracle_client(env: &Env) -> OracleClient<'_> {
-    let addr = storage::get_oracle(env).unwrap_or_else(|| panic!("oracle not configured"));
+    let addr = storage::get_oracle(env).unwrap_or_else(|| {
+        soroban_sdk::panic_with_error!(env, crate::errors::VaultError::NotInitialized)
+    });
     OracleClient::new(env, &addr)
 }
 
@@ -41,12 +43,12 @@ pub(crate) fn collateral_value(env: &Env, position: &Position) -> i128 {
         let item_value = item
             .amount
             .checked_mul(price_data.price)
-            .unwrap_or_else(|| panic!("overflow in value calculation"))
+            .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, crate::errors::VaultError::InvalidInputs))
             / PRICE_PRECISION;
 
         total = total
             .checked_add(item_value)
-            .unwrap_or_else(|| panic!("overflow in total value calculation"));
+            .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, crate::errors::VaultError::InvalidInputs));
     }
 
     total
@@ -80,7 +82,7 @@ pub fn is_withdrawal_safe(env: &Env, user: &Address, asset: &Address, amount: i1
 
     let withdrawn_value = amount
         .checked_mul(price_data.price)
-        .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
+        .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, crate::errors::VaultError::InvalidInputs))
         / PRICE_PRECISION;
 
     if total_value < withdrawn_value {

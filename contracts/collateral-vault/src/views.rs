@@ -1,4 +1,4 @@
-//! Read-only, paginated view functions.
+﻿//! Read-only, paginated view functions.
 //!
 //! No on-chain write touches these paths.  Every call is bounded by `limit`
 //! (capped at [`MAX_PAGE_LIMIT`]) so the ledger footprint, return-value size,
