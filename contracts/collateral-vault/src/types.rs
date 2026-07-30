@@ -44,13 +44,13 @@ pub struct Position {
 }
 
 /// Storage keys for persistent contract state.
-/// Core keys required for Issue #471 initialization:
-/// - Admin: Contract administrator address
-/// - Paused: Contract pause state
-/// - LendingPool: Lending pool address
-/// - SupportedAsset(Address): Tracks supported collateral assets
-/// - Position(Address, Address): Stores balances (user, asset)
-/// - PositionIndex: Index of all users with active positions
+///
+/// Each external dependency has exactly one canonical key:
+/// - `Admin` — contract administrator
+/// - `LendingPool` — lending pool / debt source
+/// - `Oracle` — price oracle adapter
+/// - `LiquidationEngine` — authorized liquidation engine
+/// - `Paused` — circuit-breaker flag
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum DataKey {
@@ -58,7 +58,7 @@ pub enum DataKey {
     Admin,
     /// Paused state key
     Paused,
-    /// Lending pool address key (Issue #471)
+    /// Canonical lending pool address
     LendingPool,
     /// Supported asset key: stores whether a specific asset is supported
     SupportedAsset(Address),
@@ -78,6 +78,10 @@ pub enum DataKey {
     LiquidationEngine,
     /// Lending pool address (alternative key)
     Pool,
+    /// Contract version key
+    ContractVersion,
+    /// Storage schema version key
+    StorageSchemaVersion,
 }
 
 /// Price data from the oracle.

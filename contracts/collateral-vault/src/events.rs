@@ -1,10 +1,11 @@
 use soroban_sdk::{contractevent, Address, BytesN};
-
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Initialized {
     pub admin: Address,
     pub lending_pool: Address,
+    pub oracle: Address,
+    pub liquidation_engine: Address,
 }
 
 #[contractevent]
@@ -96,14 +97,17 @@ pub struct OracleUpdated {
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
-pub struct PoolUpdated {
-    pub old_pool: Option<Address>,
-    pub new_pool: Address,
+pub struct ContractUpgraded {
+    pub actor: Address,
+    pub old_contract_version: u32,
+    pub new_contract_version: u32,
+    pub wasm_hash: BytesN<32>,
 }
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
-pub struct ContractUpgraded {
-    pub old_hash: Option<BytesN<32>>,
-    pub new_hash: BytesN<32>,
+pub struct StorageMigrated {
+    pub actor: Address,
+    pub old_storage_schema_version: u32,
+    pub new_storage_schema_version: u32,
 }

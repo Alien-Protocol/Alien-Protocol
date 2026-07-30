@@ -110,6 +110,21 @@ fn test_pull_model_invalid_payload() {
 }
 
 #[test]
+fn test_pull_model_expired_payload() {
+    let (env, client, admin) = setup_env();
+    setup_redstone_config(&env, &client, &admin);
+
+    // Set ledger timestamp older than allowed by RedStone 15-minute delay window
+    set_ledger_time(&env, 1744828599);
+
+    let payload = hex_to_bytes(&env, PAYLOAD_3SIG_HEX);
+    let feed_ids = Vec::from_array(&env, [Symbol::new(&env, "BTC")]);
+
+    let result = client.try_get_prices(&feed_ids, &payload);
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_push_model_success() {
     let (env, client, admin) = setup_env();
     setup_redstone_config(&env, &client, &admin);
