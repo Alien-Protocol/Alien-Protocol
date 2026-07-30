@@ -1,3 +1,4 @@
+﻿#![allow(dead_code)]
 use crate::{errors::VaultError, events, storage};
 use soroban_sdk::{Address, Env};
 

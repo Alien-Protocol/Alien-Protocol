@@ -1,5 +1,5 @@
-#![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env};
+﻿#![no_std]
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
 use errors::VaultError;
 use types::{AssetsPage, Position, PositionsPage};
@@ -25,43 +25,31 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    // ── Initialization & admin ────────────────────────────────────────────────
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // Initialization & admin
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        lending_pool: Address,
-        oracle: Address,
-        liquidation_engine: Address,
-    ) -> Result<(), VaultError> {
+    pub fn initialize(env: Env, admin: Address, lending_pool: Address) {
         if storage::has_admin(&env) {
-            return Err(VaultError::AlreadyInitialized);
-        }
-
-        if lending_pool == oracle {
-            return Err(VaultError::InvalidAddress);
+            panic!("already initialized");
         }
 
         admin.require_auth();
 
         storage::set_admin(&env, &admin);
         storage::set_lending_pool(&env, &lending_pool);
-        storage::set_oracle(&env, &oracle);
-        storage::set_liquidation_engine(&env, &liquidation_engine);
+        storage::set_oracle(&env, &lending_pool);
         storage::set_paused(&env, false);
 
         storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
         storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
 
+        // Emit structured contract event
         events::Initialized {
             admin,
             lending_pool,
-            oracle,
-            liquidation_engine,
         }
         .publish(&env);
-
-        Ok(())
     }
 
     pub fn get_contract_version(env: Env) -> u32 {
@@ -85,48 +73,20 @@ impl VaultContract {
     }
 
     pub fn set_lending_pool(env: Env, lending_pool: Address) {
-        let admin = storage::get_admin(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
-
-        if let Some(oracle) = storage::get_oracle(&env) {
-            if lending_pool == oracle {
-                soroban_sdk::panic_with_error!(&env, VaultError::InvalidAddress);
-            }
-        }
-
-        let old_pool = storage::get_lending_pool(&env);
         storage::set_lending_pool(&env, &lending_pool);
-        events::LendingPoolUpdated {
-            old_pool,
-            new_pool: lending_pool,
-        }
-        .publish(&env);
+        events::LendingPoolUpdated { lending_pool }.publish(&env);
     }
 
     pub fn set_oracle(env: Env, oracle: Address) {
-        let admin = storage::get_admin(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
-
-        if let Some(pool) = storage::get_lending_pool(&env) {
-            if oracle == pool {
-                soroban_sdk::panic_with_error!(&env, VaultError::InvalidAddress);
-            }
-        }
-
-        let old_oracle = storage::get_oracle(&env);
         storage::set_oracle(&env, &oracle);
-        events::OracleUpdated {
-            old_oracle,
-            new_oracle: oracle,
-        }
-        .publish(&env);
     }
 
     pub fn pause(env: Env) {
-        let admin = storage::get_admin(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
 
         if storage::is_paused(&env) {
@@ -138,8 +98,7 @@ impl VaultContract {
     }
 
     pub fn unpause(env: Env) {
-        let admin = storage::get_admin(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
 
         if !storage::is_paused(&env) {
@@ -150,11 +109,12 @@ impl VaultContract {
         events::Unpaused { by: admin }.publish(&env);
     }
 
-    // ── Asset management ──────────────────────────────────────────────────────
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // Asset management
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     pub fn add_supported_asset(env: Env, asset: Address) {
-        let admin = storage::get_admin(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
 
         if storage::is_supported_asset(&env, &asset) {
@@ -166,8 +126,7 @@ impl VaultContract {
     }
 
     pub fn remove_supported_asset(env: Env, asset: Address) {
-        let admin = storage::get_admin(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
 
         if !storage::is_supported_asset(&env, &asset) {
@@ -179,24 +138,25 @@ impl VaultContract {
     }
 
     pub fn set_liquidation_engine(env: Env, engine: Address) {
-        let admin = storage::get_admin(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let admin = storage::get_admin(&env).expect("not initialized");
         admin.require_auth();
-
-        let old_engine = storage::get_liquidation_engine(&env);
         storage::set_liquidation_engine(&env, &engine);
-        events::LiquidationEngineUpdated {
-            old_engine,
-            new_engine: engine,
-        }
-        .publish(&env);
+        events::LiquidationEngineSet { engine }.publish(&env);
+    }
+
+    pub fn set_pool(env: Env, pool: Address) {
+        let admin = storage::get_admin(&env).expect("not initialized");
+        admin.require_auth();
+        storage::set_pool(&env, &pool);
     }
 
     pub fn is_supported_asset(env: Env, asset: Address) -> bool {
         storage::is_supported_asset(&env, &asset)
     }
 
-    // ── Core write operations ─────────────────────────────────────────────────
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // Core write operations (cost is O(assets held by user), never O(all users))
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     pub fn deposit(env: Env, user: Address, asset: Address, amount: i128) {
         user.require_auth();
@@ -220,6 +180,7 @@ impl VaultContract {
             .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs));
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
+        // O(1): only writes if not already present
         storage::add_user_asset(&env, &user, &asset);
         storage::add_to_position_index(&env, &user);
 
@@ -260,9 +221,11 @@ impl VaultContract {
         storage::set_position_balance(&env, &user, &asset, new_balance);
 
         if new_balance == 0 {
+            // O(1) swap-and-pop removal
             storage::remove_user_asset(&env, &user, &asset);
         }
 
+        // O(1): check user's asset count to decide if they fully exited
         if storage::user_asset_count(&env, &user) == 0 {
             storage::remove_from_position_index(&env, &user);
         }
@@ -287,8 +250,8 @@ impl VaultContract {
     ) {
         liquidation_engine.require_auth();
 
-        let registered_engine = storage::get_liquidation_engine(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized));
+        let registered_engine =
+            storage::get_liquidation_engine(&env).expect("liquidation engine not authorized");
         if liquidation_engine != registered_engine {
             soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
         }
@@ -297,6 +260,7 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
+        // O(1) membership check ΓÇö no Vec scan
         if !storage::user_in_position_index(&env, &user) {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
@@ -334,8 +298,8 @@ impl VaultContract {
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
-        let stored_engine = storage::get_liquidation_engine(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized));
+        let stored_engine =
+            storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
         if liquidation_engine != stored_engine {
             soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
         }
@@ -346,34 +310,25 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
-        let pool_address = storage::get_lending_pool(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let pool_address = storage::get_pool(&env).expect("Lending pool not set");
         let pool_client = LendingPoolClient::new(&env, &pool_address);
         pool_client.is_liquidatable(&user)
     }
 
-    // ── Read-only helpers ─────────────────────────────────────────────────────
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // Read-only helpers (per-user, O(assets held by user))
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
-    }
-
-    pub fn get_lending_pool(env: Env) -> Option<Address> {
-        storage::get_lending_pool(&env)
-    }
-
-    pub fn get_oracle(env: Env) -> Option<Address> {
-        storage::get_oracle(&env)
-    }
-
-    pub fn get_liquidation_engine(env: Env) -> Option<Address> {
-        storage::get_liquidation_engine(&env)
     }
 
     pub fn get_position_balance(env: Env, user: Address, asset: Address) -> i128 {
         storage::get_position_balance(&env, &user, &asset)
     }
 
+    /// Returns the total number of users currently in the position index.
+    /// Useful for off-chain tooling; does not iterate.
     pub fn get_position_count(env: Env) -> u32 {
         storage::position_count(&env)
     }
@@ -388,8 +343,7 @@ impl VaultContract {
     pub fn get_collateral_value(env: Env, user: Address) -> i128 {
         let position = Self::get_position(env.clone(), user);
 
-        let oracle_address = storage::get_oracle(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
         let oracle_client = OracleClient::new(&env, &oracle_address);
 
         let mut total_value: i128 = 0;
@@ -400,25 +354,21 @@ impl VaultContract {
             let item_value = item
                 .amount
                 .checked_mul(price_data.price)
-                .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs))
+                .unwrap_or_else(|| panic!("overflow in value calculation"))
                 / PRICE_PRECISION;
 
             total_value = total_value
                 .checked_add(item_value)
-                .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs));
+                .unwrap_or_else(|| panic!("overflow in total value calculation"));
         }
 
         total_value
     }
 
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
-        let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
+        let debt = if let Some(pool_addr) = storage::get_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
-            pool_client
-                .try_get_user_debt(&user)
-                .ok()
-                .and_then(|r| r.ok())
-                .unwrap_or(0)
+            pool_client.get_user_debt(&user)
         } else {
             0
         };
@@ -429,16 +379,13 @@ impl VaultContract {
 
         let total_value = Self::get_collateral_value(env.clone(), user.clone());
 
-        let oracle_address = storage::get_oracle(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
         let oracle_client = OracleClient::new(&env, &oracle_address);
-        let price_data = oracle_client
-            .get_price(&asset)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
+        let price_data = oracle_client.get_price(&asset).expect("price not found");
 
         let withdrawn_value = amount
             .checked_mul(price_data.price)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs))
+            .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
             / PRICE_PRECISION;
 
         if total_value < withdrawn_value {
@@ -449,24 +396,24 @@ impl VaultContract {
         remaining_value >= (debt * 110) / 100
     }
 
-    pub fn get_position_index(env: Env) -> soroban_sdk::Vec<Address> {
-        storage::get_position_index(&env)
-    }
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // Paginated enumeration views
+    // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
-    pub fn get_all_positions(env: Env) -> soroban_sdk::Vec<Position> {
-        storage::get_all_positions(&env)
-    }
-
-    // ── Paginated enumeration views ───────────────────────────────────────────
-
+    /// Return a bounded page of active positions.
+    ///
+    /// * `cursor` ΓÇô start offset (pass `0` for first page).
+    /// * `limit`  ΓÇô items per page; must be `1..=50`.
     pub fn get_positions_page(env: Env, cursor: u32, limit: u32) -> PositionsPage {
         views::get_positions_page(&env, cursor, limit)
     }
 
+    /// Return a bounded page of supported asset addresses.
     pub fn get_supported_assets_page(env: Env, cursor: u32, limit: u32) -> AssetsPage {
         views::get_supported_assets_page(&env, cursor, limit)
     }
 
+    /// Return a bounded page of asset addresses held by `user`.
     pub fn get_user_assets_page(env: Env, user: Address, cursor: u32, limit: u32) -> AssetsPage {
         views::get_user_assets_page(&env, &user, cursor, limit)
     }
@@ -482,3 +429,24 @@ mod tests;
 mod types;
 mod upgrade;
 mod views;
+
+// ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Legacy compatibility shim ΓÇö test/testutils builds only.
+// ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+#[cfg(any(test, feature = "testutils"))]
+impl VaultContract {
+    /// Returns all users currently in the position index as a `Vec<Address>`.
+    ///
+    /// O(n) ΓÇö compiled only for test/testutils builds.
+    /// Production code should use `get_positions_page` instead.
+    pub fn get_position_index(env: Env) -> Vec<Address> {
+        let count = storage::position_count(&env);
+        let mut result: Vec<Address> = Vec::new(&env);
+        for slot in 0..count {
+            if let Some(user) = storage::get_position_at(&env, slot) {
+                result.push_back(user);
+            }
+        }
+        result
+    }
+}

@@ -31,6 +31,10 @@ pub fn set_paused(env: &Env, paused: bool) {
     env.storage().persistent().set(&DataKey::Paused, &paused);
 }
 
+pub fn get_lending_pool(env: &Env) -> Option<Address> {
+    env.storage().persistent().get(&DataKey::LendingPool)
+}
+
 pub fn set_lending_pool(env: &Env, lending_pool: &Address) {
     env.storage()
         .persistent()
@@ -53,14 +57,6 @@ pub fn set_liquidation_engine(env: &Env, engine: &Address) {
     env.storage()
         .persistent()
         .set(&DataKey::LiquidationEngine, engine);
-}
-
-pub fn get_pool(env: &Env) -> Option<Address> {
-    env.storage().persistent().get(&DataKey::Pool)
-}
-
-pub fn set_pool(env: &Env, pool: &Address) {
-    env.storage().persistent().set(&DataKey::Pool, pool);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -257,10 +253,9 @@ pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
         env.storage()
             .persistent()
             .set(&DataKey::UserAssetAt(user.clone(), slot), &last_asset);
-        env.storage().persistent().set(
-            &DataKey::UserAssetSlot(user.clone(), last_asset),
-            &slot,
-        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserAssetSlot(user.clone(), last_asset), &slot);
     }
 
     env.storage()
@@ -286,9 +281,7 @@ pub fn position_count(env: &Env) -> u32 {
 }
 
 pub fn get_position_at(env: &Env, slot: u32) -> Option<Address> {
-    env.storage()
-        .persistent()
-        .get(&DataKey::PositionAt(slot))
+    env.storage().persistent().get(&DataKey::PositionAt(slot))
 }
 
 /// Returns `true` if the user has a slot in the position index.

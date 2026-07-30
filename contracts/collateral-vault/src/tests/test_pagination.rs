@@ -34,7 +34,9 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let oracle = Address::generate(&env);
-    client.initialize(&admin, &oracle);
+    let lending_pool = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
     let user = Address::generate(&env);
 
@@ -182,14 +184,14 @@ fn test_positions_page_limit_fifty_accepted() {
 fn test_positions_page_limit_zero_returns_page_limit_exceeded() {
     let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
     let result = client.try_get_positions_page(&0, &0);
-    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded.into())));
 }
 
 #[test]
 fn test_positions_page_limit_fifty_one_returns_page_limit_exceeded() {
     let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
     let result = client.try_get_positions_page(&0, &51);
-    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded.into())));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -259,14 +261,14 @@ fn test_supported_assets_page_limit_fifty_accepted() {
 fn test_supported_assets_page_limit_zero_returns_page_limit_exceeded() {
     let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
     let result = client.try_get_supported_assets_page(&0, &0);
-    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded.into())));
 }
 
 #[test]
 fn test_supported_assets_page_limit_fifty_one_returns_page_limit_exceeded() {
     let (_env, client, _admin, _user, _token_id, _sac) = setup_env();
     let result = client.try_get_supported_assets_page(&0, &51);
-    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded.into())));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -349,12 +351,12 @@ fn test_user_assets_page_limit_fifty_accepted() {
 fn test_user_assets_page_limit_zero_returns_page_limit_exceeded() {
     let (_env, client, _admin, user, _token_id, _sac) = setup_env();
     let result = client.try_get_user_assets_page(&user, &0, &0);
-    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded.into())));
 }
 
 #[test]
 fn test_user_assets_page_limit_fifty_one_returns_page_limit_exceeded() {
     let (_env, client, _admin, user, _token_id, _sac) = setup_env();
     let result = client.try_get_user_assets_page(&user, &0, &51);
-    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded)));
+    assert_eq!(result, Err(Ok(VaultError::PageLimitExceeded.into())));
 }

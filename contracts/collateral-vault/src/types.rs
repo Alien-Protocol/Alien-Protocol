@@ -12,9 +12,7 @@ pub struct CollateralAsset {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Position {
-    /// The owner of this position.
     pub user: Address,
-    /// All collateral assets held by this user.
     pub collateral: Vec<CollateralAsset>,
 }
 
@@ -22,10 +20,8 @@ pub struct Position {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PositionsPage {
-    /// The positions in this page.
     pub positions: Vec<Position>,
-    /// The slot offset to pass as `cursor` on the next call.
-    /// Equal to `u32::MAX` when this is the last page (no more items).
+    /// `u32::MAX` when there are no more pages.
     pub next_cursor: u32,
 }
 
@@ -33,10 +29,8 @@ pub struct PositionsPage {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssetsPage {
-    /// Asset addresses in this page.
     pub assets: Vec<Address>,
-    /// The slot offset to pass as `cursor` on the next call.
-    /// Equal to `u32::MAX` when this is the last page (no more items).
+    /// `u32::MAX` when there are no more pages.
     pub next_cursor: u32,
 }
 
@@ -48,62 +42,41 @@ pub const MAX_PAGE_LIMIT: u32 = 50;
 
 /// Storage keys for persistent contract state.
 ///
-/// Indexed collections use a slot-based layout for O(1) add/remove:
-/// - `*Count` stores the current length (u32)
-/// - `*At(slot)` stores the item at that slot
-/// - `*Slot(item)` stores the slot index for an item (reverse lookup)
-///
-/// This avoids rewriting a monolithic `Vec<T>` on every mutation.
+/// Slot-based collections use O(1) add/remove via swap-and-pop:
+/// - `*Count` — current length
+/// - `*At(slot)` — item at slot
+/// - `*Slot(item)` — reverse lookup (item → slot)
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum DataKey {
-    /// Admin address key
+    // ── Admin / config ────────────────────────────────────────────────────────
     Admin,
-    /// Paused state key
     Paused,
-    /// Lending pool address key
     LendingPool,
+    Oracle,
+    LiquidationEngine,
 
-    // ── Supported-asset index ────────────────────────────────────────────────
-    /// Whether a specific asset address is supported (bool sentinel)
+    // ── Supported-asset slot index ────────────────────────────────────────────
     SupportedAsset(Address),
-    /// Number of entries in the supported-asset index
     SupportedAssetCount,
-    /// Supported asset at slot `n`
     SupportedAssetAt(u32),
-    /// Slot of a supported asset (reverse lookup)
     SupportedAssetSlot(Address),
 
-    // ── Per-(user,asset) balance ─────────────────────────────────────────────
-    /// Balance for (user, asset)
+    // ── Per-(user,asset) balance ──────────────────────────────────────────────
     Position(Address, Address),
 
-    // ── Per-user asset index ─────────────────────────────────────────────────
-    /// Number of assets tracked for a user
+    // ── Per-user asset slot index ─────────────────────────────────────────────
     UserAssetCount(Address),
-    /// Asset at slot `n` for user
     UserAssetAt(Address, u32),
-    /// Slot of an asset in a user's index (reverse lookup)
     UserAssetSlot(Address, Address),
 
-    // ── Global user / position index ─────────────────────────────────────────
-    /// Number of users in the position index
+    // ── Global user/position slot index ──────────────────────────────────────
     PositionCount,
-    /// User address at slot `n` in the position index
     PositionAt(u32),
-    /// Slot of a user in the position index (reverse lookup)
     PositionSlot(Address),
 
-    // ── Other contract addresses ─────────────────────────────────────────────
-    /// Oracle adapter address
-    Oracle,
-    /// Liquidation engine address
-    LiquidationEngine,
-    /// Lending pool address (alternative key)
-    Pool,
-    /// Contract version key
+    // ── Contract / storage versioning ────────────────────────────────────────
     ContractVersion,
-    /// Storage schema version key
     StorageSchemaVersion,
 }
 

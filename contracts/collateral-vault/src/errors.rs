@@ -17,10 +17,12 @@ pub enum VaultError {
     AlreadyAdmin = 11,
     AlreadyPaused = 12,
     NotPaused = 13,
+    AlreadyInitialized = 14,
+    InvalidAddress = 15,
+    UpgradeUnauthorized = 16,
+    MigrationAlreadyApplied = 17,
+    MigrationSkipped = 18,
+    MigrationOutOfOrder = 19,
     /// `limit` was 0 or exceeded [`crate::types::MAX_PAGE_LIMIT`].
-    PageLimitExceeded = 14,
-    UpgradeUnauthorized = 15,
-    MigrationAlreadyApplied = 16,
-    MigrationSkipped = 17,
-    MigrationOutOfOrder = 18,
+    PageLimitExceeded = 20,
 }
