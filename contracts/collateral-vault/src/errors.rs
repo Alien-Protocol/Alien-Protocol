@@ -17,4 +17,10 @@ pub enum VaultError {
     AlreadyAdmin = 11,
     AlreadyPaused = 12,
     NotPaused = 13,
+    AlreadyInitialized = 14,
+    InvalidAddress = 15,
+    UpgradeUnauthorized = 16,
+    MigrationAlreadyApplied = 17,
+    MigrationSkipped = 18,
+    MigrationOutOfOrder = 19,
 }

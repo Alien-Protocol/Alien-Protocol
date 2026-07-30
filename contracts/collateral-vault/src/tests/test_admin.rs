@@ -10,6 +10,9 @@ fn setup_env() -> (
     Address,
     Address,
     Address,
+    Address,
+    Address,
+    Address,
     token::Client<'static>,
     token::StellarAssetClient<'static>,
 ) {
@@ -22,8 +25,10 @@ fn setup_env() -> (
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
@@ -38,15 +43,169 @@ fn setup_env() -> (
         client,
         admin,
         user,
+        oracle,
+        lending_pool,
+        liquidation_engine,
         token_contract_id,
         token_client,
         token_admin_client,
     )
 }
 
+// ── Initialization tests ───────────────────────────────────────────────
+
+#[test]
+fn test_initialize_success() {
+    let (
+        _env,
+        client,
+        admin,
+        _user,
+        oracle,
+        lending_pool,
+        liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    assert_eq!(client.get_admin(), Some(admin));
+    assert_eq!(client.get_lending_pool(), Some(lending_pool));
+    assert_eq!(client.get_oracle(), Some(oracle));
+    assert_eq!(client.get_liquidation_engine(), Some(liquidation_engine));
+}
+
+#[test]
+fn test_initialize_duplicate_fails() {
+    let (
+        env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    let admin2 = Address::generate(&env);
+    let pool2 = Address::generate(&env);
+    let oracle2 = Address::generate(&env);
+    let engine2 = Address::generate(&env);
+
+    let result = client.try_initialize(&admin2, &pool2, &oracle2, &engine2);
+    assert_eq!(result, Err(Ok(VaultError::AlreadyInitialized)));
+}
+
+#[test]
+fn test_initialize_pool_equals_oracle_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let same_address = Address::generate(&env);
+    let engine = Address::generate(&env);
+
+    // lending_pool == oracle should be rejected
+    let result = client.try_initialize(&admin, &same_address, &same_address, &engine);
+    assert_eq!(result, Err(Ok(VaultError::InvalidAddress)));
+}
+
+#[test]
+fn test_initialize_sets_paused_false() {
+    let (
+        _env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    let res = client.try_unpause();
+    assert_eq!(
+        res,
+        Err(Ok(soroban_sdk::Error::from_contract_error(
+            VaultError::NotPaused as u32
+        )))
+    );
+}
+
+#[test]
+fn test_set_lending_pool_oracle_collision_fails() {
+    let (
+        _env,
+        client,
+        _admin,
+        _user,
+        oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    // Setting lending_pool equal to current oracle should fail
+    let res = client.try_set_lending_pool(&oracle);
+    assert_eq!(
+        res,
+        Err(Ok(soroban_sdk::Error::from_contract_error(
+            VaultError::InvalidAddress as u32
+        )))
+    );
+}
+
+#[test]
+fn test_set_oracle_lending_pool_collision_fails() {
+    let (
+        _env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    // Setting oracle equal to current lending_pool should fail
+    let res = client.try_set_oracle(&lending_pool);
+    assert_eq!(
+        res,
+        Err(Ok(soroban_sdk::Error::from_contract_error(
+            VaultError::InvalidAddress as u32
+        )))
+    );
+}
+
+// ── Admin transfer tests ───────────────────────────────────────────────
+
 #[test]
 fn test_set_admin_success() {
-    let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let (
+        env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     let new_admin = Address::generate(&env);
     client.set_admin(&new_admin);
@@ -56,7 +215,18 @@ fn test_set_admin_success() {
 
 #[test]
 fn test_set_admin_non_admin_fails() {
-    let (env, client, admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let (
+        env,
+        client,
+        admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     let new_admin = Address::generate(&env);
     client.set_admin(&new_admin);
@@ -70,7 +240,18 @@ fn test_set_admin_non_admin_fails() {
 
 #[test]
 fn test_set_admin_emits_event() {
-    let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let (
+        env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     let new_admin = Address::generate(&env);
     client.set_admin(&new_admin);
@@ -88,7 +269,18 @@ fn test_set_admin_emits_event() {
 
 #[test]
 fn test_old_admin_cannot_act_after_transfer() {
-    let (env, client, admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let (
+        env,
+        client,
+        admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     let new_admin = Address::generate(&env);
     client.set_admin(&new_admin);
@@ -104,9 +296,22 @@ fn test_old_admin_cannot_act_after_transfer() {
     assert_ne!(*auth_addr, admin);
 }
 
+// ── Pause / unpause tests ──────────────────────────────────────────────
+
 #[test]
-fn test_pause_operation_success() {
-    let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+fn test_pause_success() {
+    let (
+        _env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
     let paused = env.as_contract(&client.address, || {
@@ -117,7 +322,18 @@ fn test_pause_operation_success() {
 
 #[test]
 fn test_pause_blocks_deposit() {
-    let (env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        token_id,
+        _token_client,
+        token_admin,
+    ) = setup_env();
 
     token_admin.mint(&user, &1000);
     client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
@@ -128,7 +344,18 @@ fn test_pause_blocks_deposit() {
 
 #[test]
 fn test_pause_blocks_withdraw() {
-    let (env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        token_id,
+        _token_client,
+        token_admin,
+    ) = setup_env();
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
@@ -141,7 +368,18 @@ fn test_pause_blocks_withdraw() {
 
 #[test]
 fn test_double_pause_fails() {
-    let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "first"));
     let res = client.try_pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "second"));
@@ -150,7 +388,18 @@ fn test_double_pause_fails() {
 
 #[test]
 fn test_unpause_success() {
-    let (env, client, _admin, user, token_id, token_client, token_admin) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        token_id,
+        token_client,
+        token_admin,
+    ) = setup_env();
 
     token_admin.mint(&user, &1000);
     client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
@@ -163,7 +412,18 @@ fn test_unpause_success() {
 
 #[test]
 fn test_unpause_when_not_paused_fails() {
-    let (_env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     let res = client.try_unpause_operation(&PauseFlag::Deposit);
     assert!(res.is_err());
@@ -171,7 +431,18 @@ fn test_unpause_when_not_paused_fails() {
 
 #[test]
 fn test_unpause_emits_event() {
-    let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let (
+        env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
     client.unpause_operation(&PauseFlag::Deposit);
@@ -187,9 +458,22 @@ fn test_unpause_emits_event() {
     );
 }
 
+// ── Asset management tests ─────────────────────────────────────────────
+
 #[test]
 fn test_remove_supported_asset_success() {
-    let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     assert!(client.is_supported_asset(&token_id));
     client.remove_supported_asset(&token_id);
@@ -198,7 +482,18 @@ fn test_remove_supported_asset_success() {
 
 #[test]
 fn test_remove_supported_asset_non_existent_fails() {
-    let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let (
+        env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     let fake_asset = Address::generate(&env);
     let res = client.try_remove_supported_asset(&fake_asset);
@@ -207,7 +502,18 @@ fn test_remove_supported_asset_non_existent_fails() {
 
 #[test]
 fn test_remove_supported_asset_blocks_deposit() {
-    let (_env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        token_id,
+        _token_client,
+        token_admin,
+    ) = setup_env();
 
     token_admin.mint(&user, &1000);
     client.remove_supported_asset(&token_id);
@@ -218,7 +524,18 @@ fn test_remove_supported_asset_blocks_deposit() {
 
 #[test]
 fn test_remove_supported_asset_keeps_existing_positions() {
-    let (_env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        token_id,
+        _token_client,
+        token_admin,
+    ) = setup_env();
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
@@ -233,7 +550,18 @@ fn test_remove_supported_asset_keeps_existing_positions() {
 
 #[test]
 fn test_remove_supported_asset_emits_event() {
-    let (env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
+    let (
+        env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     client.remove_supported_asset(&token_id);
 
@@ -250,7 +578,18 @@ fn test_remove_supported_asset_emits_event() {
 
 #[test]
 fn test_set_admin_same_address() {
-    let (_env, client, admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+    let (
+        _env,
+        client,
+        admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
 
     let result = client.try_set_admin(&admin);
     assert_eq!(result, Err(Ok(VaultError::AlreadyAdmin)));

@@ -56,14 +56,21 @@ pub fn pause_flag_symbol(env: &soroban_sdk::Env, flag: &PauseFlag) -> soroban_sd
 }
 
 /// Storage keys for persistent contract state.
+///
+/// Each external dependency has exactly one canonical key:
+/// - `Admin` — contract administrator
+/// - `LendingPool` — lending pool / debt source
+/// - `Oracle` — price oracle adapter
+/// - `LiquidationEngine` — authorized liquidation engine
+/// - `Paused` — circuit-breaker flag
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum DataKey {
     /// Admin address key
     Admin,
-    /// Bitmask of paused operations (replaces single Paused boolean)
-    PauseMask,
-    /// Lending pool address key
+    /// Paused state key
+    Paused,
+    /// Canonical lending pool address
     LendingPool,
     /// Supported asset key: stores whether a specific asset is supported
     SupportedAsset(Address),
@@ -81,6 +88,10 @@ pub enum DataKey {
     LiquidationEngine,
     /// Lending pool address (alternative key)
     Pool,
+    /// Contract version key
+    ContractVersion,
+    /// Storage schema version key
+    StorageSchemaVersion,
 }
 
 /// Price data from the oracle.

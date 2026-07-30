@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
 use errors::VaultError;
 use types::{PauseFlag, Position};
@@ -27,28 +27,68 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    pub fn initialize(env: Env, admin: Address, lending_pool: Address) {
-        // Strict initialization guard: panic if already initialized
+    /// Atomically initialize the vault with all required external dependencies.
+    ///
+    /// Accepts distinct addresses for the admin, lending pool, oracle adapter,
+    /// and liquidation engine. Rejects duplicate initialization and prevents
+    /// the lending-pool address from being stored as the oracle accidentally.
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        lending_pool: Address,
+        oracle: Address,
+        liquidation_engine: Address,
+    ) -> Result<(), VaultError> {
+        // Strict initialization guard: reject if already initialized
         if storage::has_admin(&env) {
-            panic!("already initialized");
+            return Err(VaultError::AlreadyInitialized);
+        }
+
+        // Prevent accidental role-address collision
+        if lending_pool == oracle {
+            return Err(VaultError::InvalidAddress);
         }
 
         admin.require_auth();
 
-        // Commit admin and configured contract addresses to persistent storage
+        // Commit admin and all configured contract addresses to persistent storage
         storage::set_admin(&env, &admin);
         storage::set_lending_pool(&env, &lending_pool);
-        storage::set_oracle(&env, &lending_pool);
+        storage::set_oracle(&env, &oracle);
+        storage::set_liquidation_engine(&env, &liquidation_engine);
 
         // Initialize pause mask to 0 (no operations paused)
         storage::set_pause_mask(&env, 0);
+
+        storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
+        storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
 
         // Emit structured contract event
         events::Initialized {
             admin,
             lending_pool,
+            oracle,
+            liquidation_engine,
         }
         .publish(&env);
+
+        Ok(())
+    }
+
+    pub fn get_contract_version(env: Env) -> u32 {
+        upgrade::get_contract_version(&env)
+    }
+
+    pub fn get_storage_schema_version(env: Env) -> u32 {
+        upgrade::get_storage_schema_version(&env)
+    }
+
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        upgrade::upgrade(env, wasm_hash)
+    }
+
+    pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
+        upgrade::migrate(env, target_storage_schema_version)
     }
 
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
@@ -67,20 +107,12 @@ impl VaultContract {
         admin::set_liquidation_engine(env, engine)
     }
 
-    pub fn set_pool(env: Env, pool: Address) {
-        admin::set_pool(env, pool)
-    }
-
-    pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
-        admin::pause_operation(env, operation, reason)
+    pub fn pause(env: Env) {
+        admin::pause(env)
     }
 
     pub fn unpause_operation(env: Env, operation: PauseFlag) {
         admin::unpause_operation(env, operation)
-    }
-
-    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
-        admin::upgrade(env, new_wasm_hash)
     }
 
     pub fn add_supported_asset(env: Env, asset: Address) {
@@ -109,13 +141,25 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
-        let pool_address = storage::get_pool(&env).expect("Lending pool not set");
+        let pool_address = storage::get_lending_pool(&env).expect("Lending pool not set");
         let pool_client = LendingPoolClient::new(&env, &pool_address);
         pool_client.is_liquidatable(&user)
     }
 
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
+    }
+
+    pub fn get_lending_pool(env: Env) -> Option<Address> {
+        storage::get_lending_pool(&env)
+    }
+
+    pub fn get_oracle(env: Env) -> Option<Address> {
+        storage::get_oracle(&env)
+    }
+
+    pub fn get_liquidation_engine(env: Env) -> Option<Address> {
+        storage::get_liquidation_engine(&env)
     }
 
     pub fn get_position_balance(env: Env, user: Address, asset: Address) -> i128 {
@@ -278,7 +322,7 @@ impl VaultContract {
     }
 
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
-        let debt = if let Some(pool_addr) = storage::get_pool(&env) {
+        let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
             pool_client.get_user_debt(&user)
         } else {
@@ -355,3 +399,4 @@ mod storage;
 #[cfg(test)]
 mod tests;
 mod types;
+mod upgrade;
