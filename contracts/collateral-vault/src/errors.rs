@@ -23,6 +23,8 @@ pub enum VaultError {
     MigrationAlreadyApplied = 17,
     MigrationSkipped = 18,
     MigrationOutOfOrder = 19,
+    InvalidAmount = 20,
+    InsufficientCollateral = 21,
     /// `limit` was 0 or exceeded [`crate::types::MAX_PAGE_LIMIT`].
-    PageLimitExceeded = 20,
+    PageLimitExceeded = 22,
 }
