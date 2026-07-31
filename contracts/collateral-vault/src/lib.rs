@@ -208,9 +208,8 @@ impl VaultContract {
     pub fn withdraw(env: Env, user: Address, asset: Address, amount: i128) {
         user.require_auth();
 
-        if amount <= 0 {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
+        position::validate_positive_amount(amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
 
         if storage::is_paused(&env) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
@@ -224,28 +223,13 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
-        let balance = storage::get_position_balance(&env, &user, &asset);
-        if amount > balance {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
-
-        // Safety check: collateral ratio
+        // Safety check: collateral ratio (must happen before the debit)
         if !Self::is_withdrawal_safe(env.clone(), user.clone(), asset.clone(), amount) {
             soroban_sdk::panic_with_error!(&env, VaultError::BelowMinCollateralRatio);
         }
 
-        let new_balance = balance - amount;
-        storage::set_position_balance(&env, &user, &asset, new_balance);
-
-        // If this asset balance reached zero, remove asset from user's assets list
-        if new_balance == 0 {
-            storage::remove_user_asset(&env, &user, &asset);
-        }
-
-        // If the user has no remaining balance across any asset, remove from index
-        if storage::get_position(&env, &user).is_none() {
-            storage::remove_from_position_index(&env, &user);
-        }
+        position::checked_debit(&env, &user, &asset, amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
 
         let token_client = token::Client::new(&env, &asset);
         token_client.transfer(&env.current_contract_address(), &user, &amount);
@@ -268,57 +252,8 @@ impl VaultContract {
         user: Address,
         asset: Address,
         amount: i128,
-    ) {
-        liquidation_engine.require_auth();
-
-        let registered_engine =
-            storage::get_liquidation_engine(&env).expect("liquidation engine not authorized");
-        if liquidation_engine != registered_engine {
-            soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
-        }
-
-        if storage::is_paused(&env) {
-            soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
-        }
-
-        // Verify user has an active position
-        let index = storage::get_position_index(&env);
-        if !index.contains(&user) {
-            soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
-        }
-
-        let balance = storage::get_position_balance(&env, &user, &asset);
-        if balance < amount {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
-
-        let new_balance = balance - amount;
-        storage::set_position_balance(&env, &user, &asset, new_balance);
-
-        // If this asset balance reached zero, remove asset from user's assets list
-        if new_balance == 0 {
-            storage::remove_user_asset(&env, &user, &asset);
-        }
-
-        // If the user has no remaining balance across any asset, remove from index
-        if storage::get_position(&env, &user).is_none() {
-            storage::remove_from_position_index(&env, &user);
-        }
-
-        let token_client = token::Client::new(&env, &asset);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &liquidation_engine,
-            &amount,
-        );
-
-        events::CollateralSeized {
-            user,
-            asset,
-            amount,
-            liquidation_engine,
-        }
-        .publish(&env);
+    ) -> Result<(), VaultError> {
+        liquidation::execute_seize(&env, liquidation_engine, user, asset, amount)
     }
 
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
@@ -395,6 +330,8 @@ mod admin;
 mod assets;
 mod errors;
 mod events;
+mod liquidation;
+mod position;
 mod storage;
 #[cfg(test)]
 mod tests;
