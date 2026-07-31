@@ -23,6 +23,10 @@ pub fn seize_collateral(
 ) {
     liquidation_engine.require_auth();
 
+    if amount <= 0 {
+        soroban_sdk::panic_with_error!(env, VaultError::InvalidInputs);
+    }
+
     let registered_engine = storage::get_liquidation_engine(env)
         .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, VaultError::Unauthorized));
     if liquidation_engine != registered_engine {
