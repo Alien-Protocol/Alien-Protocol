@@ -79,8 +79,12 @@ fn setup_env() -> (
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
-    client.initialize(&admin, &oracle_id);
-    client.set_oracle(&oracle_id);
+    let pool_id = env.register(MockLendingPool, ());
+    let pool_client = MockLendingPoolClient::new(&env, &pool_id);
+
+    let liquidation_engine = Address::generate(&env);
+
+    client.initialize(&admin, &pool_id, &oracle_id, &liquidation_engine);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
@@ -89,10 +93,6 @@ fn setup_env() -> (
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
     client.add_supported_asset(&token_id);
-
-    let pool_id = env.register(MockLendingPool, ());
-    let pool_client = MockLendingPoolClient::new(&env, &pool_id);
-    client.set_pool(&pool_id);
 
     // Default price: 1 token = 100USD (7 decimals)
     oracle_client.set_price(&token_id, &1_000_000_000, &1000);

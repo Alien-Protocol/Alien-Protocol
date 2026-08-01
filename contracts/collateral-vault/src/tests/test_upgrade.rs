@@ -29,8 +29,10 @@ fn setup_env() -> (
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
@@ -94,17 +96,25 @@ fn test_upgrade_rejects_unauthorized_address() {
     let admin = Address::generate(&env);
     let oracle = Address::generate(&env);
     let attacker = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
 
     env.mock_auths(&[MockAuth {
         address: &admin,
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "initialize",
-            args: (admin.clone(), oracle.clone()).into_val(&env),
+            args: (
+                admin.clone(),
+                lending_pool.clone(),
+                oracle.clone(),
+                liquidation_engine.clone(),
+            )
+                .into_val(&env),
             sub_invokes: &[],
         },
     }]);
-    client.initialize(&admin, &oracle);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
     let wasm_hash = BytesN::from_array(&env, &[9u8; 32]);
 

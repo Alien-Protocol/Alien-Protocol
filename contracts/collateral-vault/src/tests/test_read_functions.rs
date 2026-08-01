@@ -6,6 +6,16 @@ use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
 const ORACLE_STALE_THRESHOLD: u64 = 300;
 
+#[contract]
+pub struct MockLendingPoolContract;
+
+#[contractimpl]
+impl MockLendingPoolContract {
+    pub fn get_user_debt(_env: Env, _user: Address) -> i128 {
+        0
+    }
+}
+
 // Mock Oracle Contract to inject prices for testing get_collateral_value
 #[contract]
 pub struct MockOracleContract;
@@ -67,9 +77,10 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
+    let pool_id = env.register(MockLendingPoolContract, ());
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle_id);
-    client.set_oracle(&oracle_id);
+    client.initialize(&admin, &pool_id, &oracle_id, &liquidation_engine);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);

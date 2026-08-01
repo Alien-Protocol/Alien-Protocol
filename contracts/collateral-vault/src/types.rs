@@ -29,6 +29,14 @@ pub use shared::types::Position;
 ///
 /// Discriminants are stable: changing them would corrupt existing ledger data.
 /// Add new variants at the end only.
+/// Storage keys for persistent contract state.
+///
+/// Each external dependency has exactly one canonical key:
+/// - `Admin` — contract administrator
+/// - `LendingPool` — lending pool / debt source
+/// - `Oracle` — price oracle adapter
+/// - `LiquidationEngine` — authorized liquidation engine
+/// - `Paused` — circuit-breaker flag
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum DataKey {
@@ -37,6 +45,7 @@ pub enum DataKey {
     /// Whether the vault is currently paused.
     Paused,
     /// Address of the configured lending-pool contract (legacy key).
+    /// Canonical lending pool address
     LendingPool,
     /// Whether a specific asset is on the supported-asset allowlist.
     SupportedAsset(Address),
