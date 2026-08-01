@@ -1,65 +1,57 @@
+use soroban_sdk::{Address, Env};
 
-//! Internal accounting state and custody reconciliation for the collateral vault.
+use crate::errors::VaultError;
+use crate::storage;
 
-use soroban_sdk::{contracttype, Address, Env};
-use shared::VaultError;
-use crate::token::SafeTokenClient;
-
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub enum DataKey {
-    TotalCollateral(Address),
-    UserPosition(Address, Address),
-    ReentrancyLock,
+/// Validates that `amount` is strictly positive.
+///
+/// Returns `Err(InvalidAmount)` for zero, negative, or i128::MIN values.
+pub fn validate_positive_amount(amount: i128) -> Result<(), VaultError> {
+    if amount <= 0 {
+        return Err(VaultError::InvalidAmount);
+    }
+    Ok(())
 }
 
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct CustodyReport {
-    pub recorded_liability: i128,
-    pub actual_balance: i128,
-    pub has_deficit: bool,
-}
+/// Shared checked debit that validates the amount, checks sufficient balance,
+/// performs the subtraction, updates storage, and cleans up index/asset tracking.
+///
+/// Returns the new balance after the debit.
+///
+/// # Errors
+/// - `InvalidAmount` if `amount <= 0`
+/// - `InsufficientCollateral` if `balance < amount`
+/// - `NoPosition` if the user has no position in the index
+pub fn checked_debit(
+    env: &Env,
+    user: &Address,
+    asset: &Address,
+    amount: i128,
+) -> Result<i128, VaultError> {
+    validate_positive_amount(amount)?;
 
-/// Helper to manage total internal liabilities for a token asset.
-pub struct Liabilities;
-
-impl Liabilities {
-    pub fn get(env: &Env, token: &Address) -> i128 {
-        env.storage()
-            .instance()
-            .get(&DataKey::TotalCollateral(token.clone()))
-            .unwrap_or(0)
+    let index = storage::get_position_index(env);
+    if !index.contains(user) {
+        return Err(VaultError::NoPosition);
     }
 
-    pub fn add(env: &Env, token: &Address, amount: i128) -> Result<i128, VaultError> {
-        let current = Self::get(env, token);
-        let new_total = current.checked_add(amount).ok_or(VaultError::MathOverflow)?;
-        env.storage()
-            .instance()
-            .set(&DataKey::TotalCollateral(token.clone()), &new_total);
-        Ok(new_total)
+    let balance = storage::get_position_balance(env, user, asset);
+    if balance < amount {
+        return Err(VaultError::InsufficientCollateral);
     }
 
-    pub fn sub(env: &Env, token: &Address, amount: i128) -> Result<i128, VaultError> {
-        let current = Self::get(env, token);
-        let new_total = current.checked_sub(amount).ok_or(VaultError::MathOverflow)?;
-        env.storage()
-            .instance()
-            .set(&DataKey::TotalCollateral(token.clone()), &new_total);
-        Ok(new_total)
-    }
-}
+    let new_balance = balance
+        .checked_sub(amount)
+        .ok_or(VaultError::InsufficientCollateral)?;
+    storage::set_position_balance(env, user, asset, new_balance);
 
-/// Reconciles vault custody balance against recorded internal liabilities.
-pub fn reconcile_custody(env: &Env, token: &Address) -> CustodyReport {
-    let client = SafeTokenClient::new(env, token);
-    let actual_balance = client.balance(&env.current_contract_address());
-    let recorded_liability = Liabilities::get(env, token);
-
-    CustodyReport {
-        recorded_liability,
-        actual_balance,
-        has_deficit: actual_balance < recorded_liability,
+    if new_balance == 0 {
+        storage::remove_user_asset(env, user, asset);
     }
+
+    if storage::get_position(env, user).is_none() {
+        storage::remove_from_position_index(env, user);
+    }
+
+    Ok(new_balance)
 }
