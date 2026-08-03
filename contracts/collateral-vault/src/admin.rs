@@ -1,5 +1,5 @@
-use crate::{errors::VaultError, events, storage};
-use soroban_sdk::{Address, Env};
+use crate::{errors::VaultError, events, storage, types::PauseFlag};
+use soroban_sdk::{Address, Env, Symbol};
 
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
     let current_admin = storage::get_admin(&env).ok_or(VaultError::InvalidInputs)?;
@@ -75,7 +75,7 @@ pub fn set_liquidation_engine(env: Env, engine: Address) {
     .publish(&env);
 }
 
-pub fn pause(env: Env) {
+pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
     let admin = storage::get_admin(&env).expect("not initialized");
     admin.require_auth();
 

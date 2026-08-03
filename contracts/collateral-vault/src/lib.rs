@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol, Vec};
 
 use errors::VaultError;
 use types::{PauseFlag, Position};
@@ -107,8 +107,8 @@ impl VaultContract {
         admin::set_liquidation_engine(env, engine)
     }
 
-    pub fn pause(env: Env) {
-        admin::pause(env)
+    pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
+        admin::pause_operation(env, operation, reason)
     }
 
     pub fn unpause_operation(env: Env, operation: PauseFlag) {

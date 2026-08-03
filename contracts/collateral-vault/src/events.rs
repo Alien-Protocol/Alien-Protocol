@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, BytesN};
+use soroban_sdk::{contractevent, Address, BytesN, Symbol};
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Initialized {

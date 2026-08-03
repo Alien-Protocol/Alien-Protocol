@@ -75,8 +75,10 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
+    let lending_pool = env.register(MockLendingPool, ());
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle_id);
+    client.initialize(&admin, &lending_pool, &oracle_id, &liquidation_engine);
     client.set_oracle(&oracle_id);
 
     let token_admin = Address::generate(&env);

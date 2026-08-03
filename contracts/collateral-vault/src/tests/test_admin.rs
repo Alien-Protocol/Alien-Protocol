@@ -131,7 +131,7 @@ fn test_initialize_sets_paused_false() {
         _token_admin,
     ) = setup_env();
 
-    let res = client.try_unpause();
+    let res = client.try_unpause_operation(&PauseFlag::Deposit);
     assert_eq!(
         res,
         Err(Ok(soroban_sdk::Error::from_contract_error(
@@ -301,7 +301,7 @@ fn test_old_admin_cannot_act_after_transfer() {
 #[test]
 fn test_pause_success() {
     let (
-        _env,
+        env,
         client,
         _admin,
         _user,
@@ -323,7 +323,7 @@ fn test_pause_success() {
 #[test]
 fn test_pause_blocks_deposit() {
     let (
-        _env,
+        env,
         client,
         _admin,
         user,
@@ -345,7 +345,7 @@ fn test_pause_blocks_deposit() {
 #[test]
 fn test_pause_blocks_withdraw() {
     let (
-        _env,
+        env,
         client,
         _admin,
         user,
@@ -369,7 +369,7 @@ fn test_pause_blocks_withdraw() {
 #[test]
 fn test_double_pause_fails() {
     let (
-        _env,
+        env,
         client,
         _admin,
         _user,
@@ -389,7 +389,7 @@ fn test_double_pause_fails() {
 #[test]
 fn test_unpause_success() {
     let (
-        _env,
+        env,
         client,
         _admin,
         user,
