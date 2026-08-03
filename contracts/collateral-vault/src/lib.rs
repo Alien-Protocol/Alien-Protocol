@@ -125,6 +125,15 @@ impl VaultContract {
         assets::is_supported_asset(env, asset)
     }
 
+    pub fn set_asset_config(
+        env: Env,
+        asset: Address,
+        token_decimals: u32,
+        oracle_price_decimals: u32,
+    ) -> Result<(), VaultError> {
+        assets::set_asset_config(env, asset, token_decimals, oracle_price_decimals)
+    }
+
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
         let stored_engine =
             storage::get_liquidation_engine(&env).expect("Liquidation engine not set");

@@ -23,4 +23,6 @@ pub enum VaultError {
     MigrationAlreadyApplied = 17,
     MigrationSkipped = 18,
     MigrationOutOfOrder = 19,
+    InvalidAssetConfig = 20,
+    ImmutableMetadata = 21,
 }
