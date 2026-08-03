@@ -25,4 +25,6 @@ pub enum VaultError {
     MigrationOutOfOrder = 19,
     InvalidAmount = 20,
     InsufficientCollateral = 21,
+    InvalidAssetConfig = 22,
+    ImmutableMetadata = 23,
 }
