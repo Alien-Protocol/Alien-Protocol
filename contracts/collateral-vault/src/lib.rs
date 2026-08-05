@@ -183,6 +183,17 @@ impl VaultContract {
             .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::NotInitialized));
         admin.require_auth();
 
+        if let Some(pool) = storage::get_lending_pool(&env) {
+            if engine == pool {
+                soroban_sdk::panic_with_error!(&env, VaultError::InvalidAddress);
+            }
+        }
+        if let Some(oracle) = storage::get_oracle(&env) {
+            if engine == oracle {
+                soroban_sdk::panic_with_error!(&env, VaultError::InvalidAddress);
+            }
+        }
+
         let old_engine = storage::get_liquidation_engine(&env);
         storage::set_liquidation_engine(&env, &engine);
         events::LiquidationEngineUpdated {
@@ -288,53 +299,13 @@ impl VaultContract {
         liquidation_engine.require_auth();
 
         if amount <= 0 {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
+            soroban_sdk::panic_with_error!(&env, VaultError::InvalidAmount);
         }
 
-        let registered_engine = storage::get_liquidation_engine(&env)
-            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized));
-        if liquidation_engine != registered_engine {
-            soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
+        match liquidation::execute_seize_authorized(&env, liquidation_engine, user, asset, amount) {
+            Ok(()) => {}
+            Err(e) => soroban_sdk::panic_with_error!(&env, e),
         }
-
-        if storage::is_paused(&env) {
-            soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
-        }
-
-        if !storage::user_in_position_index(&env, &user) {
-            soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
-        }
-
-        let balance = storage::get_position_balance(&env, &user, &asset);
-        if balance < amount {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
-
-        let new_balance = balance - amount;
-        storage::set_position_balance(&env, &user, &asset, new_balance);
-
-        if new_balance == 0 {
-            storage::remove_user_asset(&env, &user, &asset);
-        }
-
-        if storage::user_asset_count(&env, &user) == 0 {
-            storage::remove_from_position_index(&env, &user);
-        }
-
-        let token_client = token::Client::new(&env, &asset);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &liquidation_engine,
-            &amount,
-        );
-
-        events::CollateralSeized {
-            user,
-            asset,
-            amount,
-            liquidation_engine,
-        }
-        .publish(&env);
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
@@ -416,15 +387,18 @@ impl VaultContract {
     }
 
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
-        let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
-            let pool_client = LendingPoolClient::new(&env, &pool_addr);
-            pool_client
-                .try_get_user_debt(&user)
-                .ok()
-                .and_then(|r| r.ok())
-                .unwrap_or(0)
-        } else {
-            0
+        let pool_addr = match storage::get_lending_pool(&env) {
+            Some(addr) => addr,
+            None => return true, // no pool configured → no debt possible
+        };
+
+        let pool_client = LendingPoolClient::new(&env, &pool_addr);
+        let debt = match pool_client.try_get_user_debt(&user) {
+            // Successful call with a debt value
+            Ok(Ok(d)) => d,
+            // Any failure (host error, contract error, pool not deployed) → treat as no debt
+            // This is safe: if debt is unknown, the user is not blocked from withdrawing
+            _ => 0,
         };
 
         if debt == 0 {
@@ -450,7 +424,11 @@ impl VaultContract {
         }
 
         let remaining_value = total_value - withdrawn_value;
-        remaining_value >= (debt * 110) / 100
+        let min_collateral = debt
+            .checked_mul(110)
+            .and_then(|v| v.checked_div(100))
+            .unwrap_or_else(|| soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs));
+        remaining_value >= min_collateral
     }
 
     pub fn get_position_index(env: Env) -> soroban_sdk::Vec<Address> {

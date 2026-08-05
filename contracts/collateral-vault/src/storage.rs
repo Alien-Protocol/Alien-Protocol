@@ -264,9 +264,15 @@ pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
     env.storage()
         .persistent()
         .remove(&DataKey::UserAssetSlot(user.clone(), asset.clone()));
-    env.storage()
-        .persistent()
-        .set(&DataKey::UserAssetCount(user.clone()), &last_slot);
+    if last_slot == 0 {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::UserAssetCount(user.clone()));
+    } else {
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserAssetCount(user.clone()), &last_slot);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

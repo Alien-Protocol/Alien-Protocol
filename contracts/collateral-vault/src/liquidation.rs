@@ -1,4 +1,3 @@
-﻿#![allow(dead_code)]
 use soroban_sdk::{token, Address, Env};
 
 use crate::errors::VaultError;
@@ -6,20 +5,19 @@ use crate::events;
 use crate::position::checked_debit;
 use crate::storage;
 
-/// Execute a collateral seizure by the authorized liquidation engine.
+/// Execute a collateral seizure. Caller (`lib.rs`) is responsible for calling
+/// `liquidation_engine.require_auth()` before this function.
 ///
-/// Validates authorization, pause state, and delegates to `checked_debit`
-/// for amount/balance validation and storage updates. On success, transfers
+/// Validates engine registration, pause state, and delegates amount/balance
+/// validation and storage updates to `checked_debit`. On success, transfers
 /// tokens to the liquidation engine and emits `CollateralSeized`.
-pub fn execute_seize(
+pub fn execute_seize_authorized(
     env: &Env,
     liquidation_engine: Address,
     user: Address,
     asset: Address,
     amount: i128,
 ) -> Result<(), VaultError> {
-    liquidation_engine.require_auth();
-
     let registered_engine = storage::get_liquidation_engine(env).ok_or(VaultError::Unauthorized)?;
     if liquidation_engine != registered_engine {
         return Err(VaultError::Unauthorized);
