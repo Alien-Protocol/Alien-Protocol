@@ -1,4 +1,4 @@
-use crate::types::{AssetConfig, CollateralAsset, DataKey, Position};
+use crate::types::{AssetConfig, CollateralAsset, DataKey, PauseFlag, Position};
 use soroban_sdk::{Address, Env, Vec};
 
 /// Check if the contract has been initialized (deployment/initialization shield)
