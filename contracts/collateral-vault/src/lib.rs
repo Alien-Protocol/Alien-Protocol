@@ -4,6 +4,8 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol, V
 use errors::VaultError;
 use types::{PauseFlag, Position};
 
+mod risk;
+
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
     fn get_price(env: Env, asset: Address) -> Option<types::PriceData>;
@@ -15,10 +17,6 @@ pub trait LendingPool {
     fn get_user_debt(env: Env, user: Address) -> i128;
     fn is_liquidatable(user: &Address) -> bool;
 }
-
-/// Oracle prices are encoded with 7 decimal places (e.g. $1.00 = 10_000_000).
-/// Dividing `amount * price` by this constant yields the USD-denominated value.
-const PRICE_PRECISION: i128 = 10_000_000;
 
 /// Maximum age (in seconds) an oracle price may have before it is considered stale.
 
@@ -125,6 +123,15 @@ impl VaultContract {
 
     pub fn is_supported_asset(env: Env, asset: Address) -> bool {
         assets::is_supported_asset(env, asset)
+    }
+
+    pub fn set_asset_config(
+        env: Env,
+        asset: Address,
+        token_decimals: u32,
+        oracle_price_decimals: u32,
+    ) -> Result<(), VaultError> {
+        assets::set_asset_config(env, asset, token_decimals, oracle_price_decimals)
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
@@ -274,12 +281,13 @@ impl VaultContract {
         let oracle_client = OracleClient::new(&env, &oracle_address);
         let price_data = oracle_client.get_price(&asset).expect("price not found");
 
-        // Apply the same PRICE_PRECISION scaling used by get_collateral_value so
-        // that withdrawn_value is denominated in USD and comparable to total_value.
-        let withdrawn_value = amount
-            .checked_mul(price_data.price)
-            .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
-            / PRICE_PRECISION;
+        let config = risk::validate_and_load_asset_config(&env, &asset);
+        let withdrawn_value = risk::collateral_value(
+            amount,
+            price_data.price,
+            config.token_decimals,
+            config.oracle_price_decimals,
+        );
 
         if total_value < withdrawn_value {
             return false;
@@ -288,7 +296,8 @@ impl VaultContract {
         let remaining_value = total_value - withdrawn_value;
 
         // Minimum collateral ratio: 110% (1.1)
-        remaining_value >= (debt * 110) / 100
+        let required_collateral = risk::required_collateral_for_debt(debt, 11_000);
+        risk::compare_collateral_with_debt(remaining_value, required_collateral)
     }
 
     pub fn get_position(env: Env, user: Address) -> Position {
@@ -299,30 +308,7 @@ impl VaultContract {
     }
 
     pub fn get_collateral_value(env: Env, user: Address) -> i128 {
-        let position = Self::get_position(env.clone(), user);
-
-        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
-
-        let mut total_value: i128 = 0;
-
-        for item in position.collateral.iter() {
-            let price_data = oracle_client.get_price_or_fail(&item.asset);
-
-            // Compute USD value: amount * price / PRICE_PRECISION.
-            // checked_mul guards against overflow before the safe integer division.
-            let item_value = item
-                .amount
-                .checked_mul(price_data.price)
-                .unwrap_or_else(|| panic!("overflow in value calculation"))
-                / PRICE_PRECISION;
-
-            total_value = total_value
-                .checked_add(item_value)
-                .unwrap_or_else(|| panic!("overflow in total value calculation"));
-        }
-
-        total_value
+        risk::normalized_collateral_value(&env, &user)
     }
 }
 
