@@ -136,6 +136,7 @@ Format and lint the workspace:
 
 ```bash
 cargo fmt --all --check
+cargo build -p collateral-vault --target wasm32v1-none --release
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo check --workspace
 ```

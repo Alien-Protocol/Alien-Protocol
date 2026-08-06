@@ -1,8 +1,10 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol, Vec};
 
 use errors::VaultError;
-use types::Position;
+use types::{PauseFlag, Position};
+
+mod risk;
 
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
@@ -16,10 +18,6 @@ pub trait LendingPool {
     fn is_liquidatable(user: &Address) -> bool;
 }
 
-/// Oracle prices are encoded with 7 decimal places (e.g. $1.00 = 10_000_000).
-/// Dividing `amount * price` by this constant yields the USD-denominated value.
-const PRICE_PRECISION: i128 = 10_000_000;
-
 /// Maximum age (in seconds) an oracle price may have before it is considered stale.
 
 #[contract]
@@ -27,28 +25,68 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    pub fn initialize(env: Env, admin: Address, lending_pool: Address) {
-        // Strict initialization guard: panic if already initialized
+    /// Atomically initialize the vault with all required external dependencies.
+    ///
+    /// Accepts distinct addresses for the admin, lending pool, oracle adapter,
+    /// and liquidation engine. Rejects duplicate initialization and prevents
+    /// the lending-pool address from being stored as the oracle accidentally.
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        lending_pool: Address,
+        oracle: Address,
+        liquidation_engine: Address,
+    ) -> Result<(), VaultError> {
+        // Strict initialization guard: reject if already initialized
         if storage::has_admin(&env) {
-            panic!("already initialized");
+            return Err(VaultError::AlreadyInitialized);
+        }
+
+        // Prevent accidental role-address collision
+        if lending_pool == oracle {
+            return Err(VaultError::InvalidAddress);
         }
 
         admin.require_auth();
 
-        // Commit admin and configured contract addresses to persistent storage
+        // Commit admin and all configured contract addresses to persistent storage
         storage::set_admin(&env, &admin);
         storage::set_lending_pool(&env, &lending_pool);
-        storage::set_oracle(&env, &lending_pool);
+        storage::set_oracle(&env, &oracle);
+        storage::set_liquidation_engine(&env, &liquidation_engine);
 
-        // Explicitly set Paused to false
-        storage::set_paused(&env, false);
+        // Initialize pause mask to 0 (no operations paused)
+        storage::set_pause_mask(&env, 0);
+
+        storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
+        storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
 
         // Emit structured contract event
         events::Initialized {
             admin,
             lending_pool,
+            oracle,
+            liquidation_engine,
         }
         .publish(&env);
+
+        Ok(())
+    }
+
+    pub fn get_contract_version(env: Env) -> u32 {
+        upgrade::get_contract_version(&env)
+    }
+
+    pub fn get_storage_schema_version(env: Env) -> u32 {
+        upgrade::get_storage_schema_version(&env)
+    }
+
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        upgrade::upgrade(env, wasm_hash)
+    }
+
+    pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
+        upgrade::migrate(env, target_storage_schema_version)
     }
 
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
@@ -67,20 +105,12 @@ impl VaultContract {
         admin::set_liquidation_engine(env, engine)
     }
 
-    pub fn set_pool(env: Env, pool: Address) {
-        admin::set_pool(env, pool)
+    pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
+        admin::pause_operation(env, operation, reason)
     }
 
-    pub fn pause(env: Env) {
-        admin::pause(env)
-    }
-
-    pub fn unpause(env: Env) {
-        admin::unpause(env)
-    }
-
-    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) {
-        admin::upgrade(env, new_wasm_hash)
+    pub fn unpause_operation(env: Env, operation: PauseFlag) {
+        admin::unpause_operation(env, operation)
     }
 
     pub fn add_supported_asset(env: Env, asset: Address) {
@@ -93,6 +123,15 @@ impl VaultContract {
 
     pub fn is_supported_asset(env: Env, asset: Address) -> bool {
         assets::is_supported_asset(env, asset)
+    }
+
+    pub fn set_asset_config(
+        env: Env,
+        asset: Address,
+        token_decimals: u32,
+        oracle_price_decimals: u32,
+    ) -> Result<(), VaultError> {
+        assets::set_asset_config(env, asset, token_decimals, oracle_price_decimals)
     }
 
     pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
@@ -109,13 +148,25 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
-        let pool_address = storage::get_pool(&env).expect("Lending pool not set");
+        let pool_address = storage::get_lending_pool(&env).expect("Lending pool not set");
         let pool_client = LendingPoolClient::new(&env, &pool_address);
         pool_client.is_liquidatable(&user)
     }
 
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
+    }
+
+    pub fn get_lending_pool(env: Env) -> Option<Address> {
+        storage::get_lending_pool(&env)
+    }
+
+    pub fn get_oracle(env: Env) -> Option<Address> {
+        storage::get_oracle(&env)
+    }
+
+    pub fn get_liquidation_engine(env: Env) -> Option<Address> {
+        storage::get_liquidation_engine(&env)
     }
 
     pub fn get_position_balance(env: Env, user: Address, asset: Address) -> i128 {
@@ -133,7 +184,7 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
-        if storage::is_paused(&env) {
+        if storage::is_operation_paused(&env, &PauseFlag::Deposit) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
@@ -164,11 +215,10 @@ impl VaultContract {
     pub fn withdraw(env: Env, user: Address, asset: Address, amount: i128) {
         user.require_auth();
 
-        if amount <= 0 {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
+        position::validate_positive_amount(amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
 
-        if storage::is_paused(&env) {
+        if storage::is_operation_paused(&env, &PauseFlag::Withdraw) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
@@ -180,28 +230,13 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
         }
 
-        let balance = storage::get_position_balance(&env, &user, &asset);
-        if amount > balance {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
-
-        // Safety check: collateral ratio
+        // Safety check: collateral ratio (must happen before the debit)
         if !Self::is_withdrawal_safe(env.clone(), user.clone(), asset.clone(), amount) {
             soroban_sdk::panic_with_error!(&env, VaultError::BelowMinCollateralRatio);
         }
 
-        let new_balance = balance - amount;
-        storage::set_position_balance(&env, &user, &asset, new_balance);
-
-        // If this asset balance reached zero, remove asset from user's assets list
-        if new_balance == 0 {
-            storage::remove_user_asset(&env, &user, &asset);
-        }
-
-        // If the user has no remaining balance across any asset, remove from index
-        if storage::get_position(&env, &user).is_none() {
-            storage::remove_from_position_index(&env, &user);
-        }
+        position::checked_debit(&env, &user, &asset, amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
 
         let token_client = token::Client::new(&env, &asset);
         token_client.transfer(&env.current_contract_address(), &user, &amount);
@@ -224,61 +259,12 @@ impl VaultContract {
         user: Address,
         asset: Address,
         amount: i128,
-    ) {
-        liquidation_engine.require_auth();
-
-        let registered_engine =
-            storage::get_liquidation_engine(&env).expect("liquidation engine not authorized");
-        if liquidation_engine != registered_engine {
-            soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
-        }
-
-        if storage::is_paused(&env) {
-            soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
-        }
-
-        // Verify user has an active position
-        let index = storage::get_position_index(&env);
-        if !index.contains(&user) {
-            soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
-        }
-
-        let balance = storage::get_position_balance(&env, &user, &asset);
-        if balance < amount {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
-
-        let new_balance = balance - amount;
-        storage::set_position_balance(&env, &user, &asset, new_balance);
-
-        // If this asset balance reached zero, remove asset from user's assets list
-        if new_balance == 0 {
-            storage::remove_user_asset(&env, &user, &asset);
-        }
-
-        // If the user has no remaining balance across any asset, remove from index
-        if storage::get_position(&env, &user).is_none() {
-            storage::remove_from_position_index(&env, &user);
-        }
-
-        let token_client = token::Client::new(&env, &asset);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &liquidation_engine,
-            &amount,
-        );
-
-        events::CollateralSeized {
-            user,
-            asset,
-            amount,
-            liquidation_engine,
-        }
-        .publish(&env);
+    ) -> Result<(), VaultError> {
+        liquidation::execute_seize(&env, liquidation_engine, user, asset, amount)
     }
 
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
-        let debt = if let Some(pool_addr) = storage::get_pool(&env) {
+        let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
             pool_client.get_user_debt(&user)
         } else {
@@ -295,12 +281,13 @@ impl VaultContract {
         let oracle_client = OracleClient::new(&env, &oracle_address);
         let price_data = oracle_client.get_price(&asset).expect("price not found");
 
-        // Apply the same PRICE_PRECISION scaling used by get_collateral_value so
-        // that withdrawn_value is denominated in USD and comparable to total_value.
-        let withdrawn_value = amount
-            .checked_mul(price_data.price)
-            .unwrap_or_else(|| panic!("overflow in withdrawn value calculation"))
-            / PRICE_PRECISION;
+        let config = risk::validate_and_load_asset_config(&env, &asset);
+        let withdrawn_value = risk::collateral_value(
+            amount,
+            price_data.price,
+            config.token_decimals,
+            config.oracle_price_decimals,
+        );
 
         if total_value < withdrawn_value {
             return false;
@@ -309,7 +296,8 @@ impl VaultContract {
         let remaining_value = total_value - withdrawn_value;
 
         // Minimum collateral ratio: 110% (1.1)
-        remaining_value >= (debt * 110) / 100
+        let required_collateral = risk::required_collateral_for_debt(debt, 11_000);
+        risk::compare_collateral_with_debt(remaining_value, required_collateral)
     }
 
     pub fn get_position(env: Env, user: Address) -> Position {
@@ -320,30 +308,7 @@ impl VaultContract {
     }
 
     pub fn get_collateral_value(env: Env, user: Address) -> i128 {
-        let position = Self::get_position(env.clone(), user);
-
-        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
-
-        let mut total_value: i128 = 0;
-
-        for item in position.collateral.iter() {
-            let price_data = oracle_client.get_price_or_fail(&item.asset);
-
-            // Compute USD value: amount * price / PRICE_PRECISION.
-            // checked_mul guards against overflow before the safe integer division.
-            let item_value = item
-                .amount
-                .checked_mul(price_data.price)
-                .unwrap_or_else(|| panic!("overflow in value calculation"))
-                / PRICE_PRECISION;
-
-            total_value = total_value
-                .checked_add(item_value)
-                .unwrap_or_else(|| panic!("overflow in total value calculation"));
-        }
-
-        total_value
+        risk::normalized_collateral_value(&env, &user)
     }
 }
 
@@ -352,7 +317,10 @@ mod assets;
 pub mod constants;
 mod errors;
 mod events;
+mod liquidation;
+mod position;
 mod storage;
 #[cfg(test)]
 mod tests;
 mod types;
+mod upgrade;

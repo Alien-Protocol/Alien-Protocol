@@ -2,7 +2,7 @@
 
 use super::super::*;
 use soroban_sdk::testutils::{Address as _, Events};
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{token, Address, Env, Symbol};
 
 fn setup_env() -> (
     Env,
@@ -23,8 +23,10 @@ fn setup_env() -> (
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle);
+    client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
@@ -105,10 +107,10 @@ fn test_deposit_unsupported_asset_fails() {
 
 #[test]
 fn test_deposit_when_paused_fails() {
-    let (_env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
+    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
 
     token_admin.mint(&user, &1000);
-    client.pause();
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
 
     let res = client.try_deposit(&user, &token_id, &500);
     assert!(res.is_err());

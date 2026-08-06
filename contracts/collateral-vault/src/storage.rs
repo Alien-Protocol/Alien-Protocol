@@ -17,6 +17,7 @@ use crate::constants::{
     TTL_TARGET_INSTANCE, TTL_TARGET_PERSISTENT, TTL_THRESHOLD_INSTANCE, TTL_THRESHOLD_PERSISTENT,
 };
 use crate::types::{CollateralAsset, DataKey, Position};
+use crate::types::{AssetConfig, CollateralAsset, DataKey, PauseFlag, Position};
 use soroban_sdk::{Address, Env, Vec};
 
 // ---------------------------------------------------------------------------
@@ -98,6 +99,27 @@ pub fn _get_lending_pool(env: &Env) -> Option<Address> {
         bump_instance(env);
     }
     val
+/// Returns the current pause bitmask. A set bit means the corresponding
+/// operation is paused. Default is 0 (nothing paused).
+pub fn get_pause_mask(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::PauseMask)
+        .unwrap_or(0)
+}
+
+/// Stores the full pause bitmask.
+pub fn set_pause_mask(env: &Env, mask: u32) {
+    env.storage().persistent().set(&DataKey::PauseMask, &mask);
+}
+
+/// Returns true if the given operation is currently paused.
+pub fn is_operation_paused(env: &Env, flag: &PauseFlag) -> bool {
+    get_pause_mask(env) & flag.bit() != 0
+}
+
+pub fn get_lending_pool(env: &Env) -> Option<Address> {
+    env.storage().persistent().get(&DataKey::LendingPool)
 }
 
 pub fn set_lending_pool(env: &Env, lending_pool: &Address) {
@@ -209,6 +231,9 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
     env.storage()
         .persistent()
         .remove(&DataKey::SupportedAsset(asset.clone()));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::AssetConfig(asset.clone()));
 
     // Update the assets list in instance storage
     let mut assets = get_supported_assets(env);
@@ -231,6 +256,49 @@ pub fn remove_supported_asset(env: &Env, asset: &Address) {
 // ---------------------------------------------------------------------------
 // Persistent storage: Position(user, asset) balance
 // ---------------------------------------------------------------------------
+pub fn get_asset_config(env: &Env, asset: &Address) -> Option<AssetConfig> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::AssetConfig(asset.clone()))
+}
+
+pub fn get_asset_config_or_default(env: &Env, asset: &Address) -> AssetConfig {
+    get_asset_config(env, asset).unwrap_or(AssetConfig::default())
+}
+
+pub fn set_asset_config(env: &Env, asset: &Address, config: &AssetConfig) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::AssetConfig(asset.clone()), config);
+}
+
+pub fn has_open_position(env: &Env, asset: &Address) -> bool {
+    let index = get_position_index(env);
+    for user in index.iter() {
+        if get_position_balance(env, &user, asset) > 0 {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn get_oracle(env: &Env) -> Option<Address> {
+    env.storage().persistent().get(&DataKey::Oracle)
+}
+
+pub fn set_oracle(env: &Env, oracle: &Address) {
+    env.storage().persistent().set(&DataKey::Oracle, oracle);
+}
+
+pub fn get_liquidation_engine(env: &Env) -> Option<Address> {
+    env.storage().persistent().get(&DataKey::LiquidationEngine)
+}
+
+pub fn set_liquidation_engine(env: &Env, engine: &Address) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::LiquidationEngine, engine);
+}
 
 pub fn get_position_balance(env: &Env, user: &Address, asset: &Address) -> i128 {
     let key = DataKey::Position(user.clone(), asset.clone());
@@ -380,4 +448,33 @@ pub fn get_all_positions(env: &Env) -> Vec<Position> {
         }
     }
     positions
+}
+
+pub const DEFAULT_CONTRACT_VERSION: u32 = 1;
+pub const DEFAULT_STORAGE_SCHEMA_VERSION: u32 = 1;
+
+pub fn get_contract_version(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ContractVersion)
+        .unwrap_or(DEFAULT_CONTRACT_VERSION)
+}
+
+pub fn set_contract_version(env: &Env, version: u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::ContractVersion, &version);
+}
+
+pub fn get_storage_schema_version(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::StorageSchemaVersion)
+        .unwrap_or(DEFAULT_STORAGE_SCHEMA_VERSION)
+}
+
+pub fn set_storage_schema_version(env: &Env, version: u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::StorageSchemaVersion, &version);
 }

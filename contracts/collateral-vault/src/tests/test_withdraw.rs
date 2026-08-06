@@ -2,7 +2,7 @@
 
 use super::super::*;
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
 
 const ORACLE_STALE_THRESHOLD: u64 = 300;
 
@@ -75,8 +75,12 @@ fn setup_env() -> (
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
-    client.initialize(&admin, &oracle_id);
-    client.set_oracle(&oracle_id);
+    let pool_id = env.register(MockLendingPool, ());
+    let pool_client = MockLendingPoolClient::new(&env, &pool_id);
+
+    let liquidation_engine = Address::generate(&env);
+
+    client.initialize(&admin, &pool_id, &oracle_id, &liquidation_engine);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
@@ -85,10 +89,6 @@ fn setup_env() -> (
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
     client.add_supported_asset(&token_id);
-
-    let pool_id = env.register(MockLendingPool, ());
-    let pool_client = MockLendingPoolClient::new(&env, &pool_id);
-    client.set_pool(&pool_id);
 
     // Default price: 1 token = 100USD (7 decimals)
     oracle_client.set_price(&token_id, &1_000_000_000, &1000);
@@ -184,13 +184,13 @@ fn test_withdraw_no_position_fails() {
 
 #[test]
 fn test_withdraw_when_paused_fails() {
-    let (_env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
+    let (env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
         setup_env();
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    client.pause();
+    client.pause_operation(&PauseFlag::Withdraw, &Symbol::new(&env, "test"));
 
     let res = client.try_withdraw(&user, &token_id, &100);
     assert!(res.is_err());

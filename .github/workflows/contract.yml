@@ -23,6 +23,9 @@ jobs:
           components: rustfmt, clippy
           targets: wasm32v1-none
 
+      - name: Build collateral-vault WASM for upgrade tests
+        run: cargo build -p collateral-vault --target wasm32v1-none --release
+
       - name: Check formatting
         run: cargo fmt --all --check
 
@@ -66,6 +69,11 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Build collateral-vault WASM for upgrade tests
+        run: cargo build -p collateral-vault --target wasm32v1-none --release
 
       - name: Run Cargo tests
         run: cargo test --workspace --all-features --verbose

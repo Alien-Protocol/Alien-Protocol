@@ -6,6 +6,16 @@ use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
 const ORACLE_STALE_THRESHOLD: u64 = 300;
 
+#[contract]
+pub struct MockLendingPoolContract;
+
+#[contractimpl]
+impl MockLendingPoolContract {
+    pub fn get_user_debt(_env: Env, _user: Address) -> i128 {
+        0
+    }
+}
+
 // Mock Oracle Contract to inject prices for testing get_collateral_value
 #[contract]
 pub struct MockOracleContract;
@@ -63,9 +73,10 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
+    let pool_id = env.register(MockLendingPoolContract, ());
+    let liquidation_engine = Address::generate(&env);
 
-    client.initialize(&admin, &oracle_id);
-    client.set_oracle(&oracle_id);
+    client.initialize(&admin, &pool_id, &oracle_id, &liquidation_engine);
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin);
@@ -197,6 +208,64 @@ fn test_get_collateral_value_uses_latest_price() {
     // $12.00 price → 500 * 12_000_000 / 10_000_000 = $600
     oracle.set_price(&token_id, &12_000_000, &1000);
     assert_eq!(client.get_collateral_value(&user), 600);
+}
+
+#[test]
+fn test_get_collateral_value_normalizes_equivalent_balances_across_decimals() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, oracle) = setup_env();
+
+    client.set_asset_config(&token_id, &6, &7);
+    token_admin.mint(&user, &1_000_000);
+    client.deposit(&user, &token_id, &1_000_000);
+    oracle.set_price(&token_id, &10_000_000, &1000);
+    assert_eq!(client.get_collateral_value(&user), 10_000_000);
+
+    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, oracle) = setup_env();
+    client.set_asset_config(&token_id, &7, &7);
+    token_admin.mint(&user, &10_000_000);
+    client.deposit(&user, &token_id, &10_000_000);
+    oracle.set_price(&token_id, &10_000_000, &1000);
+    assert_eq!(client.get_collateral_value(&user), 10_000_000);
+
+    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, oracle) = setup_env();
+    client.set_asset_config(&token_id, &18, &7);
+    token_admin.mint(&user, &1_000_000_000_000_000_000_i128);
+    client.deposit(&user, &token_id, &1_000_000_000_000_000_000_i128);
+    oracle.set_price(&token_id, &10_000_000, &1000);
+    assert_eq!(client.get_collateral_value(&user), 10_000_000);
+}
+
+#[test]
+fn test_set_asset_config_rejects_invalid_decimals() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, _) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    let res = client.try_set_asset_config(&token_id, &0, &7);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_set_asset_config_rejects_invalid_oracle_precision() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, _) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    let res = client.try_set_asset_config(&token_id, &7, &19);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_set_asset_config_rejects_unsafe_metadata_change_when_positions_exist() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, _) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    let res = client.try_set_asset_config(&token_id, &6, &7);
+    assert!(res.is_err());
 }
 
 #[test]
