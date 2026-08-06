@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, BytesN};
+use soroban_sdk::{contractevent, Address, BytesN, Symbol};
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Initialized {
@@ -41,16 +41,21 @@ pub struct AdminChanged {
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
-pub struct Paused {
+pub struct OperationPaused {
     #[topic]
     pub by: Address,
+    #[topic]
+    pub operation: Symbol,
+    pub reason: Symbol,
 }
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
-pub struct Unpaused {
+pub struct OperationUnpaused {
     #[topic]
     pub by: Address,
+    #[topic]
+    pub operation: Symbol,
 }
 
 #[contractevent]

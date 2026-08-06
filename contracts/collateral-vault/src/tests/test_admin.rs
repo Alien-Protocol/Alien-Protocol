@@ -2,7 +2,7 @@
 
 use super::super::*;
 use soroban_sdk::testutils::{Address as _, Events};
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{token, Address, Env, Symbol};
 
 fn setup_env() -> (
     Env,
@@ -131,7 +131,7 @@ fn test_initialize_sets_paused_false() {
         _token_admin,
     ) = setup_env();
 
-    let res = client.try_unpause();
+    let res = client.try_unpause_operation(&PauseFlag::Deposit);
     assert_eq!(
         res,
         Err(Ok(soroban_sdk::Error::from_contract_error(
@@ -287,7 +287,7 @@ fn test_old_admin_cannot_act_after_transfer() {
 
     // Old admin tries to pause - but contract requires auth from the admin in storage, which is now new_admin.
     // Under mock_all_auths, require_auth verifies new_admin.
-    client.pause();
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
 
     let auths = env.auths();
     assert_eq!(auths.len(), 1);
@@ -301,7 +301,7 @@ fn test_old_admin_cannot_act_after_transfer() {
 #[test]
 fn test_pause_success() {
     let (
-        _env,
+        env,
         client,
         _admin,
         _user,
@@ -313,13 +313,17 @@ fn test_pause_success() {
         _token_admin,
     ) = setup_env();
 
-    client.pause();
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
+    let paused = env.as_contract(&client.address, || {
+        storage::is_operation_paused(&env, &PauseFlag::Deposit)
+    });
+    assert!(paused);
 }
 
 #[test]
 fn test_pause_blocks_deposit() {
     let (
-        _env,
+        env,
         client,
         _admin,
         user,
@@ -332,7 +336,7 @@ fn test_pause_blocks_deposit() {
     ) = setup_env();
 
     token_admin.mint(&user, &1000);
-    client.pause();
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
 
     let res = client.try_deposit(&user, &token_id, &500);
     assert!(res.is_err());
@@ -341,7 +345,7 @@ fn test_pause_blocks_deposit() {
 #[test]
 fn test_pause_blocks_withdraw() {
     let (
-        _env,
+        env,
         client,
         _admin,
         user,
@@ -356,7 +360,7 @@ fn test_pause_blocks_withdraw() {
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    client.pause();
+    client.pause_operation(&PauseFlag::Withdraw, &Symbol::new(&env, "test"));
 
     let res = client.try_withdraw(&user, &token_id, &100);
     assert!(res.is_err());
@@ -365,7 +369,7 @@ fn test_pause_blocks_withdraw() {
 #[test]
 fn test_double_pause_fails() {
     let (
-        _env,
+        env,
         client,
         _admin,
         _user,
@@ -377,15 +381,15 @@ fn test_double_pause_fails() {
         _token_admin,
     ) = setup_env();
 
-    client.pause();
-    let res = client.try_pause();
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "first"));
+    let res = client.try_pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "second"));
     assert!(res.is_err());
 }
 
 #[test]
 fn test_unpause_success() {
     let (
-        _env,
+        env,
         client,
         _admin,
         user,
@@ -398,8 +402,8 @@ fn test_unpause_success() {
     ) = setup_env();
 
     token_admin.mint(&user, &1000);
-    client.pause();
-    client.unpause();
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
+    client.unpause_operation(&PauseFlag::Deposit);
 
     // Deposit should work again
     client.deposit(&user, &token_id, &500);
@@ -421,7 +425,7 @@ fn test_unpause_when_not_paused_fails() {
         _token_admin,
     ) = setup_env();
 
-    let res = client.try_unpause();
+    let res = client.try_unpause_operation(&PauseFlag::Deposit);
     assert!(res.is_err());
 }
 
@@ -440,15 +444,18 @@ fn test_unpause_emits_event() {
         _token_admin,
     ) = setup_env();
 
-    client.pause();
-    client.unpause();
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
+    client.unpause_operation(&PauseFlag::Deposit);
 
     let last_event = env.events().all().last().unwrap();
     assert_eq!(last_event.0, client.address);
     use soroban_sdk::TryFromVal;
     let event_symbol =
         soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
-    assert_eq!(event_symbol, soroban_sdk::Symbol::new(&env, "unpaused"));
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "operation_unpaused")
+    );
 }
 
 // ── Asset management tests ─────────────────────────────────────────────

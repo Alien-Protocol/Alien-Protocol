@@ -2,7 +2,7 @@
 
 use super::super::*;
 use soroban_sdk::testutils::{Address as _, Events};
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{token, Address, Env, Symbol};
 
 fn setup_env() -> (
     Env,
@@ -107,10 +107,10 @@ fn test_deposit_unsupported_asset_fails() {
 
 #[test]
 fn test_deposit_when_paused_fails() {
-    let (_env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
+    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
 
     token_admin.mint(&user, &1000);
-    client.pause();
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "test"));
 
     let res = client.try_deposit(&user, &token_id, &500);
     assert!(res.is_err());

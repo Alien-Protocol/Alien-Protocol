@@ -4,6 +4,7 @@ use crate::errors::VaultError;
 use crate::events;
 use crate::position::checked_debit;
 use crate::storage;
+use crate::types::PauseFlag;
 
 /// Execute a collateral seizure by the authorized liquidation engine.
 ///
@@ -24,7 +25,7 @@ pub fn execute_seize(
         return Err(VaultError::Unauthorized);
     }
 
-    if storage::is_paused(env) {
+    if storage::is_operation_paused(env, &PauseFlag::Liquidation) {
         return Err(VaultError::VaultPaused);
     }
 

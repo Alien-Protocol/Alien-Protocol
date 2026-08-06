@@ -2,7 +2,7 @@
 
 use super::super::*;
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
 
 const ORACLE_STALE_THRESHOLD: u64 = 300;
 
@@ -184,13 +184,13 @@ fn test_withdraw_no_position_fails() {
 
 #[test]
 fn test_withdraw_when_paused_fails() {
-    let (_env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
+    let (env, client, _admin, user, _token_client, token_admin, _pool, _oracle, token_id) =
         setup_env();
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    client.pause();
+    client.pause_operation(&PauseFlag::Withdraw, &Symbol::new(&env, "test"));
 
     let res = client.try_withdraw(&user, &token_id, &100);
     assert!(res.is_err());

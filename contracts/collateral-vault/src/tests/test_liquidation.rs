@@ -2,7 +2,7 @@
 
 use super::super::*;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{token, Address, Env, Symbol};
 
 fn setup_env() -> (
     Env,
@@ -117,7 +117,7 @@ fn test_seize_collateral_paused_fails() {
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    client.pause();
+    client.pause_operation(&PauseFlag::Liquidation, &Symbol::new(&env, "test"));
 
     let res = client.try_seize_collateral(&engine, &user, &token_id, &200);
     assert!(res.is_err());

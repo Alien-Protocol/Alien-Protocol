@@ -1,8 +1,8 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol, Vec};
 
 use errors::VaultError;
-use types::Position;
+use types::{PauseFlag, Position};
 
 mod risk;
 
@@ -55,8 +55,8 @@ impl VaultContract {
         storage::set_oracle(&env, &oracle);
         storage::set_liquidation_engine(&env, &liquidation_engine);
 
-        // Explicitly set Paused to false
-        storage::set_paused(&env, false);
+        // Initialize pause mask to 0 (no operations paused)
+        storage::set_pause_mask(&env, 0);
 
         storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
         storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
@@ -105,12 +105,12 @@ impl VaultContract {
         admin::set_liquidation_engine(env, engine)
     }
 
-    pub fn pause(env: Env) {
-        admin::pause(env)
+    pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
+        admin::pause_operation(env, operation, reason)
     }
 
-    pub fn unpause(env: Env) {
-        admin::unpause(env)
+    pub fn unpause_operation(env: Env, operation: PauseFlag) {
+        admin::unpause_operation(env, operation)
     }
 
     pub fn add_supported_asset(env: Env, asset: Address) {
@@ -184,7 +184,7 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
         }
 
-        if storage::is_paused(&env) {
+        if storage::is_operation_paused(&env, &PauseFlag::Deposit) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
@@ -218,7 +218,7 @@ impl VaultContract {
         position::validate_positive_amount(amount)
             .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
 
-        if storage::is_paused(&env) {
+        if storage::is_operation_paused(&env, &PauseFlag::Withdraw) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
 
