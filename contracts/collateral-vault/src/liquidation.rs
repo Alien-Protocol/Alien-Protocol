@@ -6,11 +6,6 @@ use crate::position::checked_debit;
 use crate::storage;
 use crate::types::PauseFlag;
 
-/// Execute a collateral seizure by the authorized liquidation engine.
-///
-/// Validates authorization, pause state, and delegates to `checked_debit`
-/// for amount/balance validation and storage updates. On success, transfers
-/// tokens to the liquidation engine and emits `CollateralSeized`.
 pub fn execute_seize(
     env: &Env,
     liquidation_engine: Address,

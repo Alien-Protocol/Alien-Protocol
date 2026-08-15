@@ -48,18 +48,6 @@ fn setup_env() -> (
     )
 }
 
-// ---------------------------------------------------------------------------
-// Authorization & basic success
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_authorize_liquidation_success() {
-    let (env, client, _admin, _user, _oracle, _token_id, _token_client, _token_admin) = setup_env();
-    let engine = Address::generate(&env);
-
-    client.set_liquidation_engine(&engine);
-}
-
 #[test]
 fn test_seize_collateral_emits_event() {
     let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();

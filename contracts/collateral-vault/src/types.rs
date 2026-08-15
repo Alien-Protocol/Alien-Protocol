@@ -22,6 +22,10 @@ pub struct AssetConfig {
     pub token_decimals: u32,
     /// Number of decimal places encoded in the oracle price.
     pub oracle_price_decimals: u32,
+    /// Origination cap in bps. Borrow must keep debt at or below this LTV.
+    pub max_ltv_bps: u32,
+    /// Liquidation threshold in bps. Must stay strictly above `max_ltv_bps`.
+    pub liquidation_threshold_bps: u32,
 }
 
 impl AssetConfig {
@@ -29,6 +33,8 @@ impl AssetConfig {
         Self {
             token_decimals: DEFAULT_TOKEN_DECIMALS,
             oracle_price_decimals: DEFAULT_ORACLE_PRICE_DECIMALS,
+            max_ltv_bps: shared::DEFAULT_MAX_LTV_BPS,
+            liquidation_threshold_bps: shared::DEFAULT_LIQUIDATION_THRESHOLD_BPS,
         }
     }
 }

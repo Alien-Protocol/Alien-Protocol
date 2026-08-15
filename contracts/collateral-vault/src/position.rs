@@ -55,3 +55,14 @@ pub fn checked_debit(
 
     Ok(new_balance)
 }
+
+#[allow(dead_code)]
+pub fn checked_credit(
+    env: &Env,
+    user: &Address,
+    asset: &Address,
+    amount: i128,
+) -> Result<i128, VaultError> {
+    let _ = (env, user, asset, amount);
+    Err(VaultError::NotImplemented)
+}

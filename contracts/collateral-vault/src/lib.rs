@@ -15,21 +15,14 @@ pub trait Oracle {
 #[soroban_sdk::contractclient(name = "LendingPoolClient")]
 pub trait LendingPool {
     fn get_user_debt(env: Env, user: Address) -> i128;
-    fn is_liquidatable(user: &Address) -> bool;
+    fn is_liquidatable(env: Env, user: Address) -> bool;
 }
-
-/// Maximum age (in seconds) an oracle price may have before it is considered stale.
 
 #[contract]
 pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
-    /// Atomically initialize the vault with all required external dependencies.
-    ///
-    /// Accepts distinct addresses for the admin, lending pool, oracle adapter,
-    /// and liquidation engine. Rejects duplicate initialization and prevents
-    /// the lending-pool address from being stored as the oracle accidentally.
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -37,31 +30,24 @@ impl VaultContract {
         oracle: Address,
         liquidation_engine: Address,
     ) -> Result<(), VaultError> {
-        // Strict initialization guard: reject if already initialized
         if storage::has_admin(&env) {
             return Err(VaultError::AlreadyInitialized);
         }
 
-        // Prevent accidental role-address collision
         if lending_pool == oracle {
             return Err(VaultError::InvalidAddress);
         }
 
         admin.require_auth();
 
-        // Commit admin and all configured contract addresses to persistent storage
         storage::set_admin(&env, &admin);
         storage::set_lending_pool(&env, &lending_pool);
         storage::set_oracle(&env, &oracle);
         storage::set_liquidation_engine(&env, &liquidation_engine);
-
-        // Initialize pause mask to 0 (no operations paused)
         storage::set_pause_mask(&env, 0);
-
         storage::set_contract_version(&env, upgrade::CURRENT_CONTRACT_VERSION);
         storage::set_storage_schema_version(&env, upgrade::CURRENT_STORAGE_SCHEMA_VERSION);
 
-        // Emit structured contract event
         events::Initialized {
             admin,
             lending_pool,
@@ -117,7 +103,7 @@ impl VaultContract {
         assets::add_supported_asset(env, asset)
     }
 
-    pub fn remove_supported_asset(env: Env, asset: Address) {
+    pub fn remove_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
         assets::remove_supported_asset(env, asset)
     }
 
@@ -130,27 +116,34 @@ impl VaultContract {
         asset: Address,
         token_decimals: u32,
         oracle_price_decimals: u32,
+        max_ltv_bps: u32,
+        liquidation_threshold_bps: u32,
     ) -> Result<(), VaultError> {
-        assets::set_asset_config(env, asset, token_decimals, oracle_price_decimals)
+        assets::set_asset_config(
+            env,
+            asset,
+            token_decimals,
+            oracle_price_decimals,
+            max_ltv_bps,
+            liquidation_threshold_bps,
+        )
     }
 
-    pub fn authorize_liquidation(env: Env, liquidation_engine: Address, user: Address) -> bool {
-        let stored_engine =
-            storage::get_liquidation_engine(&env).expect("Liquidation engine not set");
-        if liquidation_engine != stored_engine {
-            soroban_sdk::panic_with_error!(&env, VaultError::Unauthorized);
+    pub fn get_asset_config(env: Env, asset: Address) -> Result<types::AssetConfig, VaultError> {
+        assets::get_asset_config(env, asset)
+    }
+
+    pub fn get_health_factor(env: Env, user: Address) -> i128 {
+        let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
+            let pool_client = LendingPoolClient::new(&env, &pool_addr);
+            pool_client.get_user_debt(&user)
+        } else {
+            0
+        };
+        match risk::health_factor_bps(&env, &user, debt) {
+            Ok(hf) => hf,
+            Err(e) => soroban_sdk::panic_with_error!(&env, e),
         }
-
-        liquidation_engine.require_auth();
-
-        let position = storage::get_position(&env, &user);
-        if position.is_none() {
-            soroban_sdk::panic_with_error!(&env, VaultError::NoPosition);
-        }
-
-        let pool_address = storage::get_lending_pool(&env).expect("Lending pool not set");
-        let pool_client = LendingPoolClient::new(&env, &pool_address);
-        pool_client.is_liquidatable(&user)
     }
 
     pub fn get_admin(env: Env) -> Option<Address> {

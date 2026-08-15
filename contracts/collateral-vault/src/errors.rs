@@ -27,4 +27,7 @@ pub enum VaultError {
     InsufficientCollateral = 21,
     InvalidAssetConfig = 22,
     ImmutableMetadata = 23,
+    NotImplemented = 24,
+    AssetHasOpenPositions = 25,
+    NotLiquidatable = 26,
 }

@@ -19,7 +19,7 @@ impl MockLendingPool {
         env.storage().persistent().set(&"debt", &debt);
     }
 
-    pub fn is_liquidatable(_user: &Address) -> bool {
+    pub fn is_liquidatable(_env: Env, _user: Address) -> bool {
         false
     }
 }

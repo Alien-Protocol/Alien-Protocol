@@ -136,3 +136,37 @@ pub fn normalized_collateral_value(env: &Env, user: &Address) -> i128 {
 
     rounded_quote_amount(total, RoundingMode::Floor)
 }
+
+#[allow(dead_code)]
+pub fn validate_asset_risk_config(
+    token_decimals: u32,
+    oracle_price_decimals: u32,
+    max_ltv_bps: u32,
+    liquidation_threshold_bps: u32,
+) -> Result<(), VaultError> {
+    let _ = (max_ltv_bps, liquidation_threshold_bps);
+    validate_asset_config(token_decimals, oracle_price_decimals)
+}
+
+#[allow(dead_code)]
+pub fn position_liquidation_threshold_bps(env: &Env, user: &Address) -> Result<u32, VaultError> {
+    let _ = (env, user);
+    Err(VaultError::NotImplemented)
+}
+
+pub fn health_factor_bps(env: &Env, user: &Address, debt: i128) -> Result<i128, VaultError> {
+    let _ = (env, user, debt);
+    Err(VaultError::NotImplemented)
+}
+
+#[allow(dead_code)]
+pub fn is_post_withdraw_healthy(
+    env: &Env,
+    user: &Address,
+    asset: &Address,
+    withdraw_amount: i128,
+    debt: i128,
+) -> Result<bool, VaultError> {
+    let _ = (env, user, asset, withdraw_amount, debt);
+    Err(VaultError::NotImplemented)
+}
