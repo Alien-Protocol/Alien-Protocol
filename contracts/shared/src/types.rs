@@ -1,5 +1,6 @@
 use soroban_sdk::contracttype;
 
+use crate::constant::{BPS_DENOMINATOR, SECONDS_PER_YEAR};
 use crate::errors::SharedError;
 
 #[contracttype]
@@ -21,8 +22,9 @@ pub struct Debt {
 
 impl Debt {
     pub fn total(&self) -> Result<i128, SharedError> {
-        let _ = self;
-        Err(SharedError::NotImplemented)
+        self.principal
+            .checked_add(self.accrued_interest)
+            .ok_or(SharedError::Overflow)
     }
 }
 
@@ -40,8 +42,18 @@ pub fn accrue_linear_interest(
     rate_bps: u32,
     elapsed_seconds: u64,
 ) -> Result<i128, SharedError> {
-    let _ = (principal, rate_bps, elapsed_seconds);
-    Err(SharedError::NotImplemented)
+    if principal < 0 {
+        return Err(SharedError::InvalidAmount);
+    }
+    let annual = principal
+        .checked_mul(rate_bps as i128)
+        .ok_or(SharedError::Overflow)?
+        / BPS_DENOMINATOR;
+    annual
+        .checked_mul(elapsed_seconds as i128)
+        .ok_or(SharedError::Overflow)?
+        .checked_div(SECONDS_PER_YEAR as i128)
+        .ok_or(SharedError::DivisionByZero)
 }
 
 pub fn health_factor_bps(
@@ -49,19 +61,41 @@ pub fn health_factor_bps(
     debt: i128,
     liquidation_threshold_bps: u32,
 ) -> Result<i128, SharedError> {
-    let _ = (collateral_value, debt, liquidation_threshold_bps);
-    Err(SharedError::NotImplemented)
+    if debt == 0 {
+        return Ok(i128::MAX);
+    }
+    if debt < 0 {
+        return Err(SharedError::InvalidAmount);
+    }
+    let numerator = collateral_value
+        .checked_mul(liquidation_threshold_bps as i128)
+        .ok_or(SharedError::Overflow)?;
+    Ok(numerator / debt)
 }
 
 pub fn borrow_limit_from_collateral(
     collateral_value: i128,
     max_ltv_bps: u32,
 ) -> Result<i128, SharedError> {
-    let _ = (collateral_value, max_ltv_bps);
-    Err(SharedError::NotImplemented)
+    if collateral_value < 0 {
+        return Err(SharedError::InvalidAmount);
+    }
+    collateral_value
+        .checked_mul(max_ltv_bps as i128)
+        .ok_or(SharedError::Overflow)?
+        .checked_div(BPS_DENOMINATOR)
+        .ok_or(SharedError::DivisionByZero)
 }
 
 pub fn ceil_div(numerator: i128, denominator: i128) -> Result<i128, SharedError> {
-    let _ = (numerator, denominator);
-    Err(SharedError::NotImplemented)
+    if denominator == 0 {
+        return Err(SharedError::DivisionByZero);
+    }
+    let quotient = numerator / denominator;
+    let remainder = numerator % denominator;
+    if remainder != 0 && ((remainder > 0) == (denominator > 0)) {
+        quotient.checked_add(1).ok_or(SharedError::Overflow)
+    } else {
+        Ok(quotient)
+    }
 }
