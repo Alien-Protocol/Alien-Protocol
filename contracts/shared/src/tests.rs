@@ -1,5 +1,7 @@
 use crate::errors::SharedError;
-use crate::types::{accrue_linear_interest, borrow_limit_from_collateral, ceil_div, health_factor_bps, Debt};
+use crate::types::{
+    accrue_linear_interest, borrow_limit_from_collateral, ceil_div, health_factor_bps, Debt,
+};
 
 #[test]
 fn test_accrue_linear_interest_one_year_eight_percent() {
@@ -45,7 +47,10 @@ fn test_health_factor_zero_debt_is_max() {
 
 #[test]
 fn test_borrow_limit_seventy_percent() {
-    assert_eq!(borrow_limit_from_collateral(10_000_000, 7_000).unwrap(), 7_000_000);
+    assert_eq!(
+        borrow_limit_from_collateral(10_000_000, 7_000).unwrap(),
+        7_000_000
+    );
 }
 
 #[test]
