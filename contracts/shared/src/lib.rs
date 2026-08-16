@@ -8,3 +8,6 @@ pub mod types;
 pub use constant::*;
 pub use errors::*;
 pub use types::*;
+
+#[cfg(test)]
+mod tests;
