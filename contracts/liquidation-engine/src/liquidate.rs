@@ -22,6 +22,13 @@ pub trait Vault {
 pub trait Pool {
     fn get_user_debt(env: Env, user: Address) -> i128;
     fn is_liquidatable(env: Env, user: Address) -> bool;
+    fn repay_for(
+        env: Env,
+        payer: Address,
+        user: Address,
+        asset: Address,
+        amount: i128,
+    );
 }
 
 pub fn liquidate(

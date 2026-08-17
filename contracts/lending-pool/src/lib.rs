@@ -118,6 +118,16 @@ impl PoolContract {
         repay::repay(env, user, asset, amount)
     }
 
+    pub fn repay_for(
+        env: Env,
+        payer: Address,
+        user: Address,
+        asset: Address,
+        amount: i128,
+    ) -> Result<(), PoolError> {
+        repay::repay_for(env, payer, user, asset, amount)
+    }
+
     pub fn is_liquidatable(env: Env, user: Address) -> bool {
         match repay::is_liquidatable(env.clone(), user) {
             Ok(flag) => flag,
