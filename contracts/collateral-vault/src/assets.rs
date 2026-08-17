@@ -34,12 +34,19 @@ pub fn set_asset_config(
         let existing = storage::get_asset_config(&env, &asset).unwrap_or(AssetConfig::default());
         if existing.token_decimals != token_decimals
             || existing.oracle_price_decimals != oracle_price_decimals
+            || existing.max_ltv_bps != max_ltv_bps
+            || existing.liquidation_threshold_bps != liquidation_threshold_bps
         {
             return Err(VaultError::ImmutableMetadata);
         }
     }
 
-    crate::risk::validate_asset_config(token_decimals, oracle_price_decimals)?;
+    crate::risk::validate_asset_risk_config(
+        token_decimals,
+        oracle_price_decimals,
+        max_ltv_bps,
+        liquidation_threshold_bps,
+    )?;
     storage::set_asset_config(
         &env,
         &asset,

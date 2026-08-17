@@ -269,6 +269,20 @@ fn test_set_asset_config_rejects_unsafe_metadata_change_when_positions_exist() {
 }
 
 #[test]
+fn test_set_asset_config_rejects_risk_param_change_when_positions_exist() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, _) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    let res = client.try_set_asset_config(&token_id, &7, &7, &6_000, &8_000);
+    assert!(
+        res.is_err(),
+        "LTV/LT must be immutable while a position is open"
+    );
+}
+
+#[test]
 fn test_get_position_after_full_withdraw_panics() {
     let (_env, client, _admin, user, token_id, _token_client, token_admin, _, _) = setup_env();
 

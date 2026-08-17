@@ -5,5 +5,6 @@ mod test_events;
 mod test_liquidation;
 mod test_pause;
 mod test_read_functions;
+mod test_risk;
 mod test_upgrade;
 mod test_withdraw;

@@ -93,13 +93,16 @@ pub fn required_collateral_for_debt(debt: i128, min_ratio_bps: i128) -> i128 {
     let numerator = normalized_debt
         .checked_mul(min_ratio_bps)
         .unwrap_or_else(|| panic!("overflow in collateral requirement"));
-    rounded_quote_amount(numerator / 10_000, RoundingMode::Ceiling)
+    // Pass the BPS-scaled numerator so Ceiling can divide with round-up.
+    // Flooring `numerator / 10_000` first would understate the requirement.
+    rounded_quote_amount(numerator, RoundingMode::Ceiling)
 }
 
 pub fn rounded_quote_amount(amount: i128, mode: RoundingMode) -> i128 {
     match mode {
         RoundingMode::Floor => amount,
-        RoundingMode::Ceiling => amount,
+        RoundingMode::Ceiling => shared::ceil_div(amount, shared::BPS_DENOMINATOR)
+            .unwrap_or_else(|_| panic!("overflow in ceiling rounding")),
     }
 }
 
@@ -137,26 +140,62 @@ pub fn normalized_collateral_value(env: &Env, user: &Address) -> i128 {
     rounded_quote_amount(total, RoundingMode::Floor)
 }
 
-#[allow(dead_code)]
 pub fn validate_asset_risk_config(
     token_decimals: u32,
     oracle_price_decimals: u32,
     max_ltv_bps: u32,
     liquidation_threshold_bps: u32,
 ) -> Result<(), VaultError> {
-    let _ = (max_ltv_bps, liquidation_threshold_bps);
-    validate_asset_config(token_decimals, oracle_price_decimals)
+    validate_asset_config(token_decimals, oracle_price_decimals)?;
+
+    if !(1..=10_000).contains(&max_ltv_bps) || !(1..=10_000).contains(&liquidation_threshold_bps) {
+        return Err(VaultError::InvalidAssetConfig);
+    }
+    if liquidation_threshold_bps <= max_ltv_bps {
+        return Err(VaultError::InvalidAssetConfig);
+    }
+
+    Ok(())
 }
 
-#[allow(dead_code)]
 pub fn position_liquidation_threshold_bps(env: &Env, user: &Address) -> Result<u32, VaultError> {
-    let _ = (env, user);
-    Err(VaultError::NotImplemented)
+    let position = storage::get_position(env, user).ok_or(VaultError::NoPosition)?;
+
+    // Conservative v1 choice: a multi-asset position is only as safe as its
+    // weakest collateral. Using the minimum liquidation threshold among the
+    // user's non-zero assets avoids treating higher-LT assets as if they can
+    // support lower-LT ones until a weighted LT is implemented.
+    let mut min_lt: Option<u32> = None;
+    for item in position.collateral.iter() {
+        if item.amount == 0 {
+            continue;
+        }
+        let config = asset_config_for(env, &item.asset);
+        min_lt = Some(match min_lt {
+            Some(current) => current.min(config.liquidation_threshold_bps),
+            None => config.liquidation_threshold_bps,
+        });
+    }
+
+    min_lt.ok_or(VaultError::NoPosition)
 }
 
 pub fn health_factor_bps(env: &Env, user: &Address, debt: i128) -> Result<i128, VaultError> {
-    let _ = (env, user, debt);
-    Err(VaultError::NotImplemented)
+    if storage::get_position(env, user).is_none() {
+        return Err(VaultError::NoPosition);
+    }
+
+    let collateral_value = normalized_collateral_value(env, user);
+    let liquidation_threshold_bps = position_liquidation_threshold_bps(env, user)?;
+    shared::health_factor_bps(collateral_value, debt, liquidation_threshold_bps).map_err(|err| {
+        match err {
+            shared::SharedError::InvalidAmount => VaultError::InvalidAmount,
+            shared::SharedError::Overflow => VaultError::InvalidInputs,
+            shared::SharedError::InvalidBps => VaultError::InvalidAssetConfig,
+            shared::SharedError::NotImplemented => VaultError::NotImplemented,
+            shared::SharedError::DivisionByZero => VaultError::InvalidInputs,
+        }
+    })
 }
 
 #[allow(dead_code)]

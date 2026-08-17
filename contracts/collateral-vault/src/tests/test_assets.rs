@@ -117,6 +117,25 @@ fn test_is_supported_asset_false() {
 }
 
 #[test]
+fn test_get_asset_config_defaults_and_persists_risk_params() {
+    let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
+
+    let default_cfg = client.get_asset_config(&token_id);
+    assert_eq!(default_cfg.max_ltv_bps, shared::DEFAULT_MAX_LTV_BPS);
+    assert_eq!(
+        default_cfg.liquidation_threshold_bps,
+        shared::DEFAULT_LIQUIDATION_THRESHOLD_BPS
+    );
+
+    client.set_asset_config(&token_id, &7, &7, &6_500, &8_500);
+    let cfg = client.get_asset_config(&token_id);
+    assert_eq!(cfg.token_decimals, 7);
+    assert_eq!(cfg.oracle_price_decimals, 7);
+    assert_eq!(cfg.max_ltv_bps, 6_500);
+    assert_eq!(cfg.liquidation_threshold_bps, 8_500);
+}
+
+#[test]
 fn test_get_all_positions_empty() {
     let (_env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
     let positions = client.get_all_positions();
