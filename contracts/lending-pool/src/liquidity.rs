@@ -16,19 +16,20 @@ pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
         return Err(PoolError::PoolPaused);
     }
 
-    let borrow_asset = storage::get_borrow_asset(&env)
-        .ok_or(PoolError::NotInitialized)?;
+    let borrow_asset = storage::get_borrow_asset(&env).ok_or(PoolError::NotInitialized)?;
 
     let token_client = token::Client::new(&env, &borrow_asset);
     token_client.transfer(&user, &env.current_contract_address(), &amount);
 
     let current_supply = storage::get_user_supply(&env, &user);
-    let new_supply = current_supply.checked_add(amount)
+    let new_supply = current_supply
+        .checked_add(amount)
         .ok_or(PoolError::Overflow)?;
     storage::set_user_supply(&env, &user, new_supply);
 
     let current_total = storage::get_total_supply(&env);
-    let new_total = current_total.checked_add(amount)
+    let new_total = current_total
+        .checked_add(amount)
         .ok_or(PoolError::Overflow)?;
     storage::set_total_supply(&env, new_total);
 
@@ -58,18 +59,17 @@ pub fn withdraw_liquidity(env: Env, user: Address, amount: i128) -> Result<(), P
         return Err(PoolError::InsufficientLiquidity);
     }
 
-    let borrow_asset = storage::get_borrow_asset(&env)
-        .ok_or(PoolError::NotInitialized)?;
+    let borrow_asset = storage::get_borrow_asset(&env).ok_or(PoolError::NotInitialized)?;
 
     let token_client = token::Client::new(&env, &borrow_asset);
     token_client.transfer(&env.current_contract_address(), &user, &amount);
 
-    let new_supply = user_supply.checked_sub(amount)
-        .ok_or(PoolError::Overflow)?;
+    let new_supply = user_supply.checked_sub(amount).ok_or(PoolError::Overflow)?;
     storage::set_user_supply(&env, &user, new_supply);
 
     let current_total = storage::get_total_supply(&env);
-    let new_total = current_total.checked_sub(amount)
+    let new_total = current_total
+        .checked_sub(amount)
         .ok_or(PoolError::Overflow)?;
     storage::set_total_supply(&env, new_total);
 
