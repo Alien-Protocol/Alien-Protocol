@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::liquidate::calculate_bonus;
     use crate::errors::EngineError;
+    use crate::liquidate::calculate_bonus;
     use soroban_sdk::Env;
 
     #[test]
@@ -81,10 +81,10 @@ mod tests {
 
         // Test a few more values to ensure consistency
         let test_cases: [(i128, i128); 4] = [
-            (10, 1),        // ceil(10 * 800 / 10000) = ceil(0.8) = 1
-            (125, 10),      // 125 * 800 / 10000 = 10
-            (1250, 100),    // 1250 * 800 / 10000 = 100
-            (12500, 1000),  // 12500 * 800 / 10000 = 1000
+            (10, 1),       // ceil(10 * 800 / 10000) = ceil(0.8) = 1
+            (125, 10),     // 125 * 800 / 10000 = 10
+            (1250, 100),   // 1250 * 800 / 10000 = 100
+            (12500, 1000), // 12500 * 800 / 10000 = 1000
         ];
 
         for (repaid, expected_bonus) in &test_cases {
@@ -94,9 +94,7 @@ mod tests {
             assert_eq!(
                 bonus, *expected_bonus,
                 "Mismatch for repaid={}: expected {}, got {}",
-                repaid,
-                expected_bonus,
-                bonus
+                repaid, expected_bonus, bonus
             );
         }
     }
@@ -193,6 +191,9 @@ mod tests {
         // = 46_688_000 / 4_244 = 10_998.69...
         let post_hf = (remaining_collateral * lt_bps) / remaining_debt;
         // Actual calculation: 46_688_000 / 4_244 = 11000 (with integer division)
-        assert_eq!(post_hf, 11000, "Post-HF should be >= TARGET_HF_BPS (11_000)");
+        assert_eq!(
+            post_hf, 11000,
+            "Post-HF should be >= TARGET_HF_BPS (11_000)"
+        );
     }
 }
