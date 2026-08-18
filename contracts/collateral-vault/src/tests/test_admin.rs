@@ -523,7 +523,7 @@ fn test_remove_supported_asset_blocks_deposit() {
 }
 
 #[test]
-fn test_remove_supported_asset_keeps_existing_positions() {
+fn test_remove_supported_asset_with_open_position_fails() {
     let (
         _env,
         client,
@@ -540,12 +540,8 @@ fn test_remove_supported_asset_keeps_existing_positions() {
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    client.remove_supported_asset(&token_id);
-
-    // Existing position is untouched
-    let position = client.get_position(&user);
-    assert_eq!(position.collateral.len(), 1);
-    assert_eq!(position.collateral.get(0).unwrap().amount, 500);
+    let res = client.try_remove_supported_asset(&token_id);
+    assert_eq!(res, Err(Ok(VaultError::AssetHasOpenPositions)));
 }
 
 #[test]
