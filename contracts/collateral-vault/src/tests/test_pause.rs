@@ -552,7 +552,14 @@ fn test_incomplete_config_after_unpause_blocks_withdraw() {
     // Unpause
     client.unpause_operation(&PauseFlag::Withdraw);
 
-    // Remove supported asset to simulate incomplete config
+    // Delist with open position fails
+    let res = client.try_remove_supported_asset(&token_id);
+    assert_eq!(res, Err(Ok(VaultError::AssetHasOpenPositions)));
+
+    // Full withdraw to reduce position balance to 0
+    client.withdraw(&user, &token_id, &500);
+
+    // Delist after full withdraw succeeds
     client.remove_supported_asset(&token_id);
 
     // Withdraw should fail due to unsupported asset
