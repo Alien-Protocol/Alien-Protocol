@@ -1,4 +1,4 @@
-use soroban_sdk::contracttype;
+use soroban_sdk::{contracttype, Address, Vec};
 
 use crate::constant::{BPS_DENOMINATOR, SECONDS_PER_YEAR};
 use crate::errors::SharedError;
@@ -35,6 +35,32 @@ pub struct AssetRiskConfig {
     pub oracle_price_decimals: u32,
     pub max_ltv_bps: u32,
     pub liquidation_threshold_bps: u32,
+}
+
+/// Protocol-wide configuration for a supported asset.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct AssetConfig {
+    pub token_decimals: u32,
+    pub oracle_price_decimals: u32,
+    pub max_ltv_bps: u32,
+    pub liquidation_threshold_bps: u32,
+}
+
+/// Represents a single collateral asset held by a user.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct CollateralAsset {
+    pub asset: Address,
+    pub amount: i128,
+}
+
+/// Represents a user's collateral position across all assets.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Position {
+    pub user: Address,
+    pub collateral: Vec<CollateralAsset>,
 }
 
 pub fn accrue_linear_interest(
