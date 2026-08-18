@@ -56,7 +56,7 @@ fn setup_env() -> (
 }
 
 #[test]
-#[ignore] 
+#[ignore] // TODO: Soroban test environment doesn't support WASM reference-types validation in soroban-env-host v23. This test requires an upgrade to a newer Soroban version or environment configuration.
 fn test_upgrade_and_migrate_preserve_state() {
     let (env, contract_id, client, admin, user, oracle, token_id, token_client, token_admin) =
         setup_env();
