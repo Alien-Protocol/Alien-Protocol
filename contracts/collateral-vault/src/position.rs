@@ -56,13 +56,29 @@ pub fn checked_debit(
     Ok(new_balance)
 }
 
-#[allow(dead_code)]
+/// Shared checked credit that validates the amount, performs the addition,
+/// updates storage, and adds the asset and user to storage tracking/index.
+///
+/// Returns the new balance after the credit.
+///
+/// # Errors
+/// - `InvalidAmount` if `amount <= 0` or on overflow
 pub fn checked_credit(
     env: &Env,
     user: &Address,
     asset: &Address,
     amount: i128,
 ) -> Result<i128, VaultError> {
-    let _ = (env, user, asset, amount);
-    Err(VaultError::NotImplemented)
+    validate_positive_amount(amount)?;
+
+    let balance = storage::get_position_balance(env, user, asset);
+    let new_balance = balance
+        .checked_add(amount)
+        .ok_or(VaultError::InvalidAmount)?;
+
+    storage::set_position_balance(env, user, asset, new_balance);
+    storage::add_user_asset(env, user, asset);
+    storage::add_to_position_index(env, user);
+
+    Ok(new_balance)
 }

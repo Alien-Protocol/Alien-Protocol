@@ -76,6 +76,10 @@ pub fn remove_supported_asset(env: Env, asset: Address) -> Result<(), VaultError
         return Err(VaultError::AssetNotFound);
     }
 
+    if storage::has_open_position(&env, &asset) {
+        return Err(VaultError::AssetHasOpenPositions);
+    }
+
     storage::remove_supported_asset(&env, &asset);
 
     events::AssetRemoved { asset }.publish(&env);

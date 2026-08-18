@@ -92,15 +92,28 @@ fn test_remove_asset_not_found_fails() {
 }
 
 #[test]
-fn test_remove_asset_does_not_clear_existing_positions() {
+fn test_remove_supported_asset_with_open_position_fails() {
     let (_env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    client.remove_supported_asset(&token_id);
+    let res = client.try_remove_supported_asset(&token_id);
+    assert_eq!(res, Err(Ok(VaultError::AssetHasOpenPositions)));
+}
 
-    assert_eq!(client.get_position_balance(&user, &token_id), 500);
+#[test]
+fn test_remove_supported_asset_after_full_withdraw_succeeds() {
+    let (_env, client, _admin, user, token_id, _token_client, token_admin) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    client.withdraw(&user, &token_id, &500);
+
+    let res = client.try_remove_supported_asset(&token_id);
+    assert!(res.is_ok());
+    assert!(!client.is_supported_asset(&token_id));
 }
 
 #[test]

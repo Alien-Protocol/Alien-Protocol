@@ -79,7 +79,12 @@ fn test_deposit_zero_amount_fails() {
 
     token_admin.mint(&user, &1000);
     let res = client.try_deposit(&user, &token_id, &0);
-    assert!(res.is_err());
+    assert_eq!(
+        res,
+        Err(Ok(soroban_sdk::Error::from_contract_error(
+            VaultError::InvalidAmount as u32
+        )))
+    );
 }
 
 #[test]
@@ -88,7 +93,57 @@ fn test_deposit_negative_amount_fails() {
 
     token_admin.mint(&user, &1000);
     let res = client.try_deposit(&user, &token_id, &-100);
-    assert!(res.is_err());
+    assert_eq!(
+        res,
+        Err(Ok(soroban_sdk::Error::from_contract_error(
+            VaultError::InvalidAmount as u32
+        )))
+    );
+}
+
+#[test]
+fn test_deposit_uses_checked_credit_and_updates_index() {
+    let (_env, client, _admin, user, _oracle, token_id, token_client, token_admin) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    assert_eq!(token_client.balance(&user), 500);
+    assert_eq!(token_client.balance(&client.address), 500);
+    assert_eq!(client.get_position_balance(&user, &token_id), 500);
+
+    let index = client.get_position_index();
+    assert_eq!(index.len(), 1);
+    assert_eq!(index.get(0).unwrap(), user);
+
+    let position = client.get_position(&user);
+    assert_eq!(position.collateral.len(), 1);
+    assert_eq!(position.collateral.get(0).unwrap().asset, token_id);
+    assert_eq!(position.collateral.get(0).unwrap().amount, 500);
+}
+
+#[test]
+fn test_deposit_second_asset_appends_to_position() {
+    let (env, client, _admin, user, _oracle, token_id1, _token_client1, token_admin1) = setup_env();
+
+    let token_admin2 = Address::generate(&env);
+    let token_contract2 = env.register_stellar_asset_contract_v2(token_admin2);
+    let token_id2 = token_contract2.address();
+    let token_admin_client2 = token::StellarAssetClient::new(&env, &token_id2);
+
+    client.add_supported_asset(&token_id2);
+
+    token_admin1.mint(&user, &1000);
+    token_admin_client2.mint(&user, &1000);
+
+    client.deposit(&user, &token_id1, &500);
+    client.deposit(&user, &token_id2, &300);
+
+    assert_eq!(client.get_position_balance(&user, &token_id1), 500);
+    assert_eq!(client.get_position_balance(&user, &token_id2), 300);
+
+    let position = client.get_position(&user);
+    assert_eq!(position.collateral.len(), 2);
 }
 
 #[test]

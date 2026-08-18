@@ -173,10 +173,6 @@ impl VaultContract {
     pub fn deposit(env: Env, user: Address, asset: Address, amount: i128) {
         user.require_auth();
 
-        if amount <= 0 {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidInputs);
-        }
-
         if storage::is_operation_paused(&env, &PauseFlag::Deposit) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
         }
@@ -185,17 +181,12 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::UnsupportedAsset);
         }
 
+        // Checks and state updates (effects via checked_credit) before token pull
+        position::checked_credit(&env, &user, &asset, amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
+
         let token_client = token::Client::new(&env, &asset);
         token_client.transfer(&user, env.current_contract_address(), &amount);
-
-        let balance = storage::get_position_balance(&env, &user, &asset);
-        let new_balance = balance + amount;
-        storage::set_position_balance(&env, &user, &asset, new_balance);
-
-        // Track this asset for the user (used to build Position)
-        storage::add_user_asset(&env, &user, &asset);
-        // Add user to the global position index if not already present
-        storage::add_to_position_index(&env, &user);
 
         events::Deposited {
             user,
