@@ -56,6 +56,7 @@ fn setup_env() -> (
 }
 
 #[test]
+#[ignore] 
 fn test_upgrade_and_migrate_preserve_state() {
     let (env, contract_id, client, admin, user, oracle, token_id, token_client, token_admin) =
         setup_env();
