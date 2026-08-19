@@ -4,6 +4,7 @@ use soroban_sdk::{contractevent, Address};
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Initialized {
+    #[topic]
     pub admin: Address,
     pub vault: Address,
     pub oracle: Address,
@@ -14,14 +15,18 @@ pub struct Initialized {
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct AdminChanged {
+    #[topic]
     pub old_admin: Address,
+    #[topic]
     pub new_admin: Address,
 }
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct OperationPaused {
+    #[topic]
     pub by: Address,
+    #[topic]
     pub operation: soroban_sdk::Symbol,
     pub reason: soroban_sdk::Symbol,
 }
@@ -29,7 +34,9 @@ pub struct OperationPaused {
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct OperationUnpaused {
+    #[topic]
     pub by: Address,
+    #[topic]
     pub operation: soroban_sdk::Symbol,
 }
 
