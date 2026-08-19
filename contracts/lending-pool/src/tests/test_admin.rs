@@ -70,7 +70,7 @@ fn test_initialize_duplicate_fails() {
 
 #[test]
 fn test_initialize_vault_equals_oracle_fails() {
-    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let (_env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
 
     let res = client.try_initialize(&admin, &vault, &vault, &token_id, &500);
     assert!(res.is_err());
