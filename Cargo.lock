@@ -250,6 +250,7 @@ dependencies = [
 name = "collateral-vault"
 version = "0.0.0"
 dependencies = [
+ "lending-pool",
  "shared",
  "soroban-sdk",
 ]

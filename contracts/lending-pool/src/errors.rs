@@ -26,3 +26,15 @@ pub enum PoolError {
     RepayPaused = 20,
     NotImplemented = 21,
 }
+
+impl From<shared::SharedError> for PoolError {
+    fn from(err: shared::SharedError) -> Self {
+        match err {
+            shared::SharedError::Overflow => PoolError::Overflow,
+            shared::SharedError::InvalidAmount => PoolError::InvalidAmount,
+            shared::SharedError::InvalidBps => PoolError::InvalidRate,
+            shared::SharedError::NotImplemented => PoolError::NotImplemented,
+            shared::SharedError::DivisionByZero => PoolError::Overflow,
+        }
+    }
+}
