@@ -259,29 +259,7 @@ impl VaultContract {
             return true;
         }
 
-        let total_value = Self::get_collateral_value(env.clone(), user.clone());
-
-        let oracle_address = storage::get_oracle(&env).expect("oracle not configured");
-        let oracle_client = OracleClient::new(&env, &oracle_address);
-        let price_data = oracle_client.get_price(&asset).expect("price not found");
-
-        let config = risk::validate_and_load_asset_config(&env, &asset);
-        let withdrawn_value = risk::collateral_value(
-            amount,
-            price_data.price,
-            config.token_decimals,
-            config.oracle_price_decimals,
-        );
-
-        if total_value < withdrawn_value {
-            return false;
-        }
-
-        let remaining_value = total_value - withdrawn_value;
-
-        // Minimum collateral ratio: 110% (1.1)
-        let required_collateral = risk::required_collateral_for_debt(debt, 11_000);
-        risk::compare_collateral_with_debt(remaining_value, required_collateral)
+        risk::is_post_withdraw_healthy(&env, &user, &asset, amount, debt).unwrap_or(false)
     }
 
     pub fn get_position(env: Env, user: Address) -> Position {

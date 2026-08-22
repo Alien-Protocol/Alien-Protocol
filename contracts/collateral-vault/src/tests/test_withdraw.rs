@@ -215,26 +215,94 @@ fn test_withdraw_collateral_ratio_check() {
         setup_env();
 
     // Price: $1.00 encoded as 10_000_000 (7-decimal oracle format).
-    // 500 tokens → collateral_value = 500 * 10_000_000 / PRICE_PRECISION = $500 USD.
+    // 500 tokens -> collateral_value = $500 USD.
     oracle.set_price(&token_id, &10_000_000, &1000);
 
     token_admin.mint(&user, &1000);
     client.deposit(&user, &token_id, &500);
 
-    // Debt is denominated in USD (same unit as collateral_value after PRICE_PRECISION).
-    // debt = $400.  Minimum required collateral = 400 * 110 / 100 = $440.
-    // Withdrawing 101 → remaining = 500 − 101 = $399 < $440 → blocked.
+    // Debt = $400.
+    // Under 80% LT: required post-withdraw collateral = 400 * 10000 / 8000 = $500.
+    // Withdrawing 1 -> remaining = 499 < 500 -> blocked.
     pool.set_user_debt(&400);
 
-    let res = client.try_withdraw(&user, &token_id, &101);
+    let res = client.try_withdraw(&user, &token_id, &1);
     assert!(
         res.is_err(),
-        "should block withdrawal that reduces ratio below 110%"
+        "should block withdrawal that reduces post-withdraw HF below 1.0"
     );
+}
 
-    // Withdrawing 50 → remaining = 500 − 50 = $450 ≥ $440 → allowed.
-    client.withdraw(&user, &token_id, &50);
-    assert_eq!(client.get_position_balance(&user, &token_id), 450);
+#[test]
+fn test_withdraw_blocked_when_post_hf_below_one() {
+    let (_env, client, _admin, user, _token_client, token_admin, pool, oracle, token_id) =
+        setup_env();
+
+    oracle.set_price(&token_id, &10_000_000, &1000);
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    // Debt: $400. Under 80% LT, post HF = 499 * 8000 / 400 = 9980 < 10000 BPS -> revert.
+    pool.set_user_debt(&400);
+
+    let res = client.try_withdraw(&user, &token_id, &1);
+    assert!(
+        res.is_err(),
+        "should block withdrawal when post HF is below 1.0"
+    );
+}
+
+#[test]
+fn test_withdraw_allowed_when_post_hf_stays_at_or_above_one() {
+    let (_env, client, _admin, user, token_client, token_admin, pool, oracle, token_id) =
+        setup_env();
+
+    oracle.set_price(&token_id, &10_000_000, &1000);
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &600);
+
+    // Debt: $400. Withdrawing 100 leaves 500. Post HF = 500 * 8000 / 400 = 10000 BPS -> allowed.
+    pool.set_user_debt(&400);
+
+    client.withdraw(&user, &token_id, &100);
+    assert_eq!(client.get_position_balance(&user, &token_id), 500);
+    assert_eq!(token_client.balance(&user), 500);
+}
+
+#[test]
+fn test_withdraw_full_amount_with_zero_debt_succeeds() {
+    let (_env, client, _admin, user, token_client, token_admin, pool, oracle, token_id) =
+        setup_env();
+
+    oracle.set_price(&token_id, &10_000_000, &1000);
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    pool.set_user_debt(&0);
+
+    client.withdraw(&user, &token_id, &500);
+    assert_eq!(client.get_position_balance(&user, &token_id), 0);
+    assert_eq!(token_client.balance(&user), 1000);
+    assert!(!client.get_position_index().contains(&user));
+}
+
+#[test]
+fn test_withdraw_uses_price_or_fail_stale_price_fails() {
+    let (_env, client, _admin, user, _token_client, token_admin, pool, oracle, token_id) =
+        setup_env();
+
+    // Timestamp 100 is stale when ledger timestamp is 1000 (age 900 > 300).
+    oracle.set_price(&token_id, &10_000_000, &100);
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+    pool.set_user_debt(&100);
+
+    let res = client.try_withdraw(&user, &token_id, &50);
+    assert!(res.is_err(), "stale price must cause withdraw to fail");
 }
 
 #[test]
