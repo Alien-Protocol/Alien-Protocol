@@ -14,10 +14,7 @@ impl MockVaultContract {
     }
 
     pub fn get_health_factor(env: Env, user: Address) -> i128 {
-        env.storage()
-            .persistent()
-            .get(&user)
-            .unwrap_or(15_000)
+        env.storage().persistent().get(&user).unwrap_or(15_000)
     }
 
     pub fn get_collateral_value(_env: Env, _user: Address) -> i128 {

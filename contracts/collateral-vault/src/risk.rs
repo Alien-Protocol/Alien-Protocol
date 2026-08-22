@@ -261,15 +261,16 @@ pub fn is_post_withdraw_healthy(
     };
 
     let post_collateral_value = rounded_quote_amount(total_value, RoundingMode::Floor);
-    let hf_bps = shared::health_factor_bps(post_collateral_value, debt, lt_bps).map_err(|err| {
-        match err {
-            shared::SharedError::InvalidAmount => VaultError::InvalidAmount,
-            shared::SharedError::Overflow => VaultError::InvalidInputs,
-            shared::SharedError::InvalidBps => VaultError::InvalidAssetConfig,
-            shared::SharedError::NotImplemented => VaultError::NotImplemented,
-            shared::SharedError::DivisionByZero => VaultError::InvalidInputs,
-        }
-    })?;
+    let hf_bps =
+        shared::health_factor_bps(post_collateral_value, debt, lt_bps).map_err(
+            |err| match err {
+                shared::SharedError::InvalidAmount => VaultError::InvalidAmount,
+                shared::SharedError::Overflow => VaultError::InvalidInputs,
+                shared::SharedError::InvalidBps => VaultError::InvalidAssetConfig,
+                shared::SharedError::NotImplemented => VaultError::NotImplemented,
+                shared::SharedError::DivisionByZero => VaultError::InvalidInputs,
+            },
+        )?;
 
     Ok(hf_bps >= 10_000)
 }
