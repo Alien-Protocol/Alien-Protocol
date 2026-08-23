@@ -83,11 +83,13 @@ pub fn collateral_value(
     )
 }
 
+#[allow(dead_code)]
 pub fn compare_collateral_with_debt(collateral_value: i128, debt: i128) -> bool {
     let normalized_debt = normalize_debt_amount(debt);
     rounded_quote_amount(collateral_value, RoundingMode::Floor) >= normalized_debt
 }
 
+#[allow(dead_code)]
 pub fn required_collateral_for_debt(debt: i128, min_ratio_bps: i128) -> i128 {
     let normalized_debt = normalize_debt_amount(debt);
     let numerator = normalized_debt
@@ -198,7 +200,6 @@ pub fn health_factor_bps(env: &Env, user: &Address, debt: i128) -> Result<i128, 
     })
 }
 
-#[allow(dead_code)]
 pub fn is_post_withdraw_healthy(
     env: &Env,
     user: &Address,
@@ -206,6 +207,70 @@ pub fn is_post_withdraw_healthy(
     withdraw_amount: i128,
     debt: i128,
 ) -> Result<bool, VaultError> {
-    let _ = (env, user, asset, withdraw_amount, debt);
-    Err(VaultError::NotImplemented)
+    if debt <= 0 {
+        return Ok(true);
+    }
+
+    if withdraw_amount <= 0 {
+        return Err(VaultError::InvalidAmount);
+    }
+
+    let position = storage::get_position(env, user).ok_or(VaultError::NoPosition)?;
+    let balance = storage::get_position_balance(env, user, asset);
+    if balance < withdraw_amount {
+        return Err(VaultError::InsufficientCollateral);
+    }
+
+    let mut total_value = 0_i128;
+    let mut min_lt: Option<u32> = None;
+    let oracle_address = storage::get_oracle(env).expect("oracle not configured");
+    let oracle_client = crate::OracleClient::new(env, &oracle_address);
+
+    for item in position.collateral.iter() {
+        let post_amount = if item.asset == *asset {
+            item.amount
+                .checked_sub(withdraw_amount)
+                .ok_or(VaultError::InsufficientCollateral)?
+        } else {
+            item.amount
+        };
+
+        if post_amount > 0 {
+            let config = validate_and_load_asset_config(env, &item.asset);
+            let price_data = oracle_client.get_price_or_fail(&item.asset);
+            let item_value = collateral_value(
+                post_amount,
+                price_data.price,
+                config.token_decimals,
+                config.oracle_price_decimals,
+            );
+            total_value = total_value
+                .checked_add(item_value)
+                .unwrap_or_else(|| panic!("overflow in total value calculation"));
+
+            min_lt = Some(match min_lt {
+                Some(current) => current.min(config.liquidation_threshold_bps),
+                None => config.liquidation_threshold_bps,
+            });
+        }
+    }
+
+    let lt_bps = match min_lt {
+        Some(lt) => lt,
+        None => return Ok(false),
+    };
+
+    let post_collateral_value = rounded_quote_amount(total_value, RoundingMode::Floor);
+    let hf_bps =
+        shared::health_factor_bps(post_collateral_value, debt, lt_bps).map_err(
+            |err| match err {
+                shared::SharedError::InvalidAmount => VaultError::InvalidAmount,
+                shared::SharedError::Overflow => VaultError::InvalidInputs,
+                shared::SharedError::InvalidBps => VaultError::InvalidAssetConfig,
+                shared::SharedError::NotImplemented => VaultError::NotImplemented,
+                shared::SharedError::DivisionByZero => VaultError::InvalidInputs,
+            },
+        )?;
+
+    Ok(hf_bps >= 10_000)
 }
