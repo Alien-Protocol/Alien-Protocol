@@ -8,11 +8,19 @@ use crate::events;
 use crate::storage;
 use crate::types::PauseFlag;
 
-/// Applies `amount` of `borrow_asset` to `user`'s debt, interest first, then
-/// principal. Pulls `min(amount, total_debt)` from `user`.
-pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<(), PoolError> {
-    user.require_auth();
+/// Interest first, then principal. Returns `(interest_paid, principal_paid)`.
+fn split_repay(payment: i128, accrued_interest: i128) -> (i128, i128) {
+    let interest_paid = payment.min(accrued_interest);
+    (interest_paid, payment - interest_paid)
+}
 
+fn apply_repay(
+    env: Env,
+    payer: Address,
+    user: Address,
+    asset: Address,
+    amount: i128,
+) -> Result<(), PoolError> {
     if amount <= 0 {
         return Err(PoolError::InvalidAmount);
     }
@@ -34,8 +42,7 @@ pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<()
     }
 
     let payment = amount.min(total_debt);
-    let interest_paid = payment.min(user_debt.accrued_interest);
-    let principal_paid = payment - interest_paid;
+    let (interest_paid, principal_paid) = split_repay(payment, user_debt.accrued_interest);
 
     let remaining = total_debt - payment;
     if remaining > 0 && remaining < shared::MIN_REMAINING_DEBT {
@@ -43,7 +50,7 @@ pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<()
     }
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    token_client.transfer(&user, env.current_contract_address(), &payment);
+    token_client.transfer(&payer, env.current_contract_address(), &payment);
 
     user_debt.accrued_interest = user_debt
         .accrued_interest
@@ -77,6 +84,15 @@ pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<()
     Ok(())
 }
 
+/// Applies `amount` of `borrow_asset` to `user`'s debt, interest first, then
+/// principal. Pulls `min(amount, total_debt)` from `user`.
+pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<(), PoolError> {
+    user.require_auth();
+    apply_repay(env, user.clone(), user, asset, amount)
+}
+
+/// Applies `amount` of `borrow_asset` to `user`'s debt, interest first, then
+/// principal. Pulls `min(amount, total_debt)` from `payer`.
 pub fn repay_for(
     env: Env,
     payer: Address,
@@ -84,8 +100,8 @@ pub fn repay_for(
     asset: Address,
     amount: i128,
 ) -> Result<(), PoolError> {
-    let _ = (env, payer, user, asset, amount);
-    Err(PoolError::NotImplemented)
+    payer.require_auth();
+    apply_repay(env, payer, user, asset, amount)
 }
 
 pub fn is_liquidatable(env: Env, user: Address) -> Result<bool, PoolError> {
