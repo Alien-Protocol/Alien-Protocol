@@ -32,15 +32,13 @@ pub fn initialize(
     storage::set_pool(&env, &pool);
     storage::set_oracle(&env, &oracle);
 
-    env.events().publish(
-        ("engine", "initialized"),
-        &Initialized {
-            admin,
-            vault,
-            pool,
-            oracle,
-        },
-    );
+    Initialized {
+        admin,
+        vault,
+        pool,
+        oracle,
+    }
+    .publish(&env);
 
     Ok(())
 }
@@ -52,23 +50,44 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
         return Err(EngineError::AlreadyAdmin);
     }
 
+    // Validate new_admin doesn't collide with vault, pool, or oracle
+    let vault = storage::get_vault(&env);
+    let pool = storage::get_pool(&env);
+    let oracle = storage::get_oracle(&env);
+
+    if (vault.is_some() && new_admin == vault.unwrap())
+        || (pool.is_some() && new_admin == pool.unwrap())
+        || (oracle.is_some() && new_admin == oracle.unwrap())
+    {
+        return Err(EngineError::InvalidAddress);
+    }
+
     current_admin.require_auth();
 
     storage::set_admin(&env, &new_admin);
 
-    env.events().publish(
-        ("engine", "admin_changed"),
-        &AdminChanged {
-            old_admin: current_admin,
-            new_admin,
-        },
-    );
+    AdminChanged {
+        old_admin: current_admin,
+        new_admin,
+    }
+    .publish(&env);
 
     Ok(())
 }
 
 pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
     let admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
+
+    // Validate vault doesn't collide with admin, pool, or oracle
+    let current_pool = storage::get_pool(&env);
+    let current_oracle = storage::get_oracle(&env);
+
+    if vault == admin
+        || (current_pool.is_some() && vault == current_pool.unwrap())
+        || (current_oracle.is_some() && vault == current_oracle.unwrap())
+    {
+        return Err(EngineError::InvalidAddress);
+    }
 
     admin.require_auth();
 
@@ -79,6 +98,17 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
 
 pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
     let admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
+
+    // Validate pool doesn't collide with admin, vault, or oracle
+    let current_vault = storage::get_vault(&env);
+    let current_oracle = storage::get_oracle(&env);
+
+    if pool == admin
+        || (current_vault.is_some() && pool == current_vault.unwrap())
+        || (current_oracle.is_some() && pool == current_oracle.unwrap())
+    {
+        return Err(EngineError::InvalidAddress);
+    }
 
     admin.require_auth();
 
