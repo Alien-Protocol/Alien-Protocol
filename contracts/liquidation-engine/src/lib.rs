@@ -31,6 +31,10 @@ impl LiquidationContract {
         admin::set_pool(env, pool)
     }
 
+    pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
+        admin::set_oracle(env, oracle)
+    }
+
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
     }

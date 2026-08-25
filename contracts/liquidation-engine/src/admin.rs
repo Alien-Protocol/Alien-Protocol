@@ -116,3 +116,24 @@ pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
 
     Ok(())
 }
+
+pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
+    let admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
+
+    // Validate oracle doesn't collide with admin, vault, or pool
+    let current_vault = storage::get_vault(&env);
+    let current_pool = storage::get_pool(&env);
+
+    if oracle == admin
+        || (current_vault.is_some() && oracle == current_vault.unwrap())
+        || (current_pool.is_some() && oracle == current_pool.unwrap())
+    {
+        return Err(EngineError::InvalidAddress);
+    }
+
+    admin.require_auth();
+
+    storage::set_oracle(&env, &oracle);
+
+    Ok(())
+}
