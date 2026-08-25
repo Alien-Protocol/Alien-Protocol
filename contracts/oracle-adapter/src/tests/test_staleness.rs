@@ -35,7 +35,9 @@ fn test_set_staleness_threshold_non_admin_fails() {
     let client = OracleContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
+    env.mock_all_auths();
     client.initialize(&admin, &300);
+    env.set_auths(&[]);
 
     let result = client.try_set_staleness_threshold(&500_u64);
     assert!(result.is_err());
