@@ -9,6 +9,8 @@ use soroban_sdk::{Address, Env, Error};
 fn setup_env() -> (Env, OracleContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
+    // Set timestamp >= price timestamps used in these tests (all ≤ 1_000).
+    env.ledger().set_timestamp(1_000);
 
     let contract_id = env.register(OracleContract, ());
     let client = OracleContractClient::new(&env, &contract_id);

@@ -86,6 +86,20 @@ impl OracleContract {
             soroban_sdk::panic_with_error!(&env, OracleError::InvalidTimestamp);
         }
 
+        // Reject timestamps that are not strictly newer than the last stored price.
+        // This prevents feeders from overwriting a fresh price with stale data.
+        if let Some(existing) = storage::get_price(&env, &asset) {
+            if timestamp <= existing.timestamp {
+                soroban_sdk::panic_with_error!(&env, OracleError::InvalidTimestamp);
+            }
+        }
+
+        // Reject timestamps that lie in the future relative to the current ledger.
+        // A price whose timestamp exceeds ledger time is fabricated data.
+        if timestamp > env.ledger().timestamp() {
+            soroban_sdk::panic_with_error!(&env, OracleError::InvalidTimestamp);
+        }
+
         let data = PriceData {
             price,
             timestamp,
