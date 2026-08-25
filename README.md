@@ -21,7 +21,7 @@
   <a href="https://github.com/Alien-Protocol/Alien-Protocol/issues">
     <img alt="Open issues" src="https://img.shields.io/github/issues/Alien-Protocol/Alien-Protocol?style=for-the-badge" />
   </a>
-  <a href="docs/LICENSE">
+  <a href="LICENSE">
     <img alt="MIT License" src="https://img.shields.io/badge/License-MIT-8B5CF6?style=for-the-badge" />
   </a>
 </p>
@@ -177,7 +177,8 @@ Alien-Protocol/
 │   └── shared/               # Shared protocol primitives
 ├── docs/
 │   ├── CONTRIBUTING.md       # Contribution workflow and conventions
-│   └── LICENSE
+│   └── arch.md               # Architecture documentation
+├── LICENSE
 ├── Cargo.toml                # Rust workspace configuration
 └── README.md
 ```
@@ -194,7 +195,7 @@ If you discover a security vulnerability, please avoid opening a public issue th
 
 ## 📄 License
 
-Alien Protocol is open-source software licensed under the [MIT License](docs/LICENSE).
+Alien Protocol is open-source software licensed under the [MIT License](LICENSE).
 
 ---
 
