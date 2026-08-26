@@ -277,3 +277,161 @@ fn test_getters_match_initialize_args() {
         assert_eq!(storage::get_oracle(&env), Some(oracle));
     });
 }
+
+#[test]
+fn test_set_oracle_success() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let new_oracle = Address::generate(&env);
+
+    // Initialize first
+    let result = env.as_contract(&contract_id, || {
+        admin::initialize(
+            env.clone(),
+            admin.clone(),
+            vault.clone(),
+            pool.clone(),
+            oracle.clone(),
+        )
+    });
+    assert_eq!(result, Ok(()));
+
+    // Set new oracle should succeed
+    let result = env.as_contract(&contract_id, || {
+        admin::set_oracle(env.clone(), new_oracle.clone())
+    });
+    assert_eq!(result, Ok(()));
+
+    // Verify get_oracle reflects the new address
+    env.as_contract(&contract_id, || {
+        assert_eq!(storage::get_oracle(&env), Some(new_oracle.clone()));
+
+        // Old oracle must not be returned
+        assert_ne!(storage::get_oracle(&env), Some(oracle));
+    });
+}
+
+#[test]
+fn test_set_oracle_collision_with_admin_fails() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+
+    let result = env.as_contract(&contract_id, || {
+        admin::initialize(
+            env.clone(),
+            admin.clone(),
+            vault.clone(),
+            pool.clone(),
+            oracle.clone(),
+        )
+    });
+    assert_eq!(result, Ok(()));
+
+    // oracle == admin must fail with InvalidAddress
+    let result = env.as_contract(&contract_id, || {
+        admin::set_oracle(env.clone(), admin.clone())
+    });
+    assert_eq!(result, Err(EngineError::InvalidAddress));
+}
+
+#[test]
+fn test_set_oracle_collision_with_vault_fails() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+
+    let result = env.as_contract(&contract_id, || {
+        admin::initialize(
+            env.clone(),
+            admin.clone(),
+            vault.clone(),
+            pool.clone(),
+            oracle.clone(),
+        )
+    });
+    assert_eq!(result, Ok(()));
+
+    // oracle == vault must fail with InvalidAddress
+    let result = env.as_contract(&contract_id, || {
+        admin::set_oracle(env.clone(), vault.clone())
+    });
+    assert_eq!(result, Err(EngineError::InvalidAddress));
+}
+
+#[test]
+fn test_set_oracle_collision_with_pool_fails() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+
+    let result = env.as_contract(&contract_id, || {
+        admin::initialize(
+            env.clone(),
+            admin.clone(),
+            vault.clone(),
+            pool.clone(),
+            oracle.clone(),
+        )
+    });
+    assert_eq!(result, Ok(()));
+
+    // oracle == pool must fail with InvalidAddress
+    let result = env.as_contract(&contract_id, || {
+        admin::set_oracle(env.clone(), pool.clone())
+    });
+    assert_eq!(result, Err(EngineError::InvalidAddress));
+}
+
+#[test]
+fn test_set_oracle_requires_admin_auth() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let new_oracle = Address::generate(&env);
+
+    let result = env.as_contract(&contract_id, || {
+        admin::initialize(
+            env.clone(),
+            admin.clone(),
+            vault.clone(),
+            pool.clone(),
+            oracle.clone(),
+        )
+    });
+    assert_eq!(result, Ok(()));
+
+    // require_auth() is satisfied under mock_all_auths; the call must succeed.
+    let result = env.as_contract(&contract_id, || {
+        admin::set_oracle(env.clone(), new_oracle.clone())
+    });
+    assert_eq!(result, Ok(()));
+    env.as_contract(&contract_id, || {
+        assert_eq!(storage::get_oracle(&env), Some(new_oracle));
+    });
+}
+
+#[test]
+fn test_set_oracle_distinct_reflects_getter() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, _pool, oracle) = create_test_addresses(&env);
+    let pool = Address::generate(&env);
+    let new_oracle = Address::generate(&env);
+
+    let result = env.as_contract(&contract_id, || {
+        admin::initialize(
+            env.clone(),
+            admin.clone(),
+            vault.clone(),
+            pool.clone(),
+            oracle.clone(),
+        )
+    });
+    assert_eq!(result, Ok(()));
+
+    // Setting a distinct oracle (not colliding with admin/vault/pool) must succeed
+    // and get_oracle must reflect exactly the new address.
+    let result = env.as_contract(&contract_id, || {
+        admin::set_oracle(env.clone(), new_oracle.clone())
+    });
+    assert_eq!(result, Ok(()));
+    env.as_contract(&contract_id, || {
+        assert_eq!(storage::get_oracle(&env), Some(new_oracle));
+    });
+}
