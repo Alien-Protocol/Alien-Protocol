@@ -26,7 +26,9 @@ fn setup_env_no_mock_auths() -> (Env, OracleContractClient<'static>, Address) {
     let client = OracleContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
+    env.mock_all_auths();
     client.initialize(&admin, &300);
+    env.set_auths(&[]);
 
     (env, client, admin)
 }

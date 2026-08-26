@@ -111,3 +111,14 @@ fn test_get_admin_before_init_returns_none() {
     let result = client.get_admin();
     assert!(result.is_none());
 }
+
+#[test]
+fn test_initialize_requires_admin_auth() {
+    let env = Env::default();
+    let contract_id = env.register(OracleContract, ());
+    let client = OracleContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    let result = client.try_initialize(&admin, &300);
+    assert!(result.is_err());
+}

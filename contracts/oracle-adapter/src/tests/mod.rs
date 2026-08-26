@@ -22,6 +22,7 @@ fn test_initialize_success() {
     let client = OracleContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
+    env.mock_all_auths();
     client.initialize(&admin, &300);
 
     env.mock_all_auths();
@@ -40,6 +41,7 @@ fn test_initialize_emits_event() {
     let client = OracleContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
+    env.mock_all_auths();
     client.initialize(&admin, &300);
 
     let last_event = env.events().all().last().unwrap();

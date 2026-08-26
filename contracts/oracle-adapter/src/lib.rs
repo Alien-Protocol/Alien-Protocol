@@ -20,6 +20,7 @@ impl OracleContract {
         if storage::is_initialized(&env) {
             soroban_sdk::panic_with_error!(&env, OracleError::AlreadyInitialized);
         }
+        admin.require_auth();
         storage::set_admin(&env, &admin);
         storage::set_staleness_threshold(&env, staleness_threshold);
         storage::set_paused(&env, false);
