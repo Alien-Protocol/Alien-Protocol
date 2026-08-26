@@ -1,10 +1,13 @@
 use super::*;
-use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::testutils::{Address as _, Events, Ledger as _};
 use soroban_sdk::{Address, Env, Symbol, TryFromVal};
 
 pub(crate) fn setup_env() -> (Env, OracleContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
+    // Set a high initial ledger timestamp so set_price calls with typical test
+    // timestamps (e.g. 1_000–100_000) are always <= ledger time.
+    env.ledger().set_timestamp(1_000_000_000);
 
     let contract_id = env.register(OracleContract, ());
     let client = OracleContractClient::new(&env, &contract_id);
