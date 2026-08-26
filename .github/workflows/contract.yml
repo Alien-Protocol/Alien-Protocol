@@ -19,9 +19,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-          targets: wasm32-unknown-unknown
 
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build -p collateral-vault --target wasm32-unknown-unknown --release
@@ -45,8 +42,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
 
       - name: Build Soroban contracts
         run: |
@@ -69,8 +64,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
 
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build -p collateral-vault --target wasm32-unknown-unknown --release
