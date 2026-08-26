@@ -28,15 +28,6 @@ impl Debt {
     }
 }
 
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct AssetRiskConfig {
-    pub token_decimals: u32,
-    pub oracle_price_decimals: u32,
-    pub max_ltv_bps: u32,
-    pub liquidation_threshold_bps: u32,
-}
-
 /// Protocol-wide configuration for a supported asset.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
