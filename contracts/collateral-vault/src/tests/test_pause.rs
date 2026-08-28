@@ -50,7 +50,11 @@ impl MockOracle {
     }
 
     pub fn set_price(env: Env, asset: Address, price: i128, timestamp: u64) {
-        let price_data = types::PriceData { price, timestamp };
+        let price_data = types::PriceData {
+            price,
+            timestamp,
+            write_timestamp: env.ledger().timestamp(),
+        };
         env.storage().persistent().set(&asset, &price_data);
     }
 }
