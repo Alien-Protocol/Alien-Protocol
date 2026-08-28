@@ -73,7 +73,45 @@ fn test_initialize_vault_equals_oracle_fails() {
     let (_env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
 
     let res = client.try_initialize(&admin, &vault, &vault, &token_id, &500);
-    assert!(res.is_err());
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+}
+
+#[test]
+fn test_set_vault_equals_oracle_fails() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let res = client.try_set_vault(&oracle);
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+}
+
+#[test]
+fn test_set_oracle_equals_vault_fails() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let res = client.try_set_oracle(&vault);
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+}
+
+#[test]
+fn test_rotating_to_distinct_address_succeeds() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let new_vault = Address::generate(&env);
+    client.set_vault(&new_vault);
+    assert_eq!(client.get_vault(), Some(new_vault));
+
+    let new_oracle = Address::generate(&env);
+    client.set_oracle(&new_oracle);
+    assert_eq!(client.get_oracle(), Some(new_oracle));
 }
 
 #[test]

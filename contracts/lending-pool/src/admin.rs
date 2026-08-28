@@ -69,6 +69,12 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), PoolError> {
     let admin = storage::get_admin(&env).ok_or(PoolError::NotInitialized)?;
     admin.require_auth();
 
+    if let Some(current_oracle) = storage::get_oracle(&env) {
+        if vault == current_oracle {
+            return Err(PoolError::InvalidAddress);
+        }
+    }
+
     storage::set_vault(&env, &vault);
     Ok(())
 }
@@ -76,6 +82,12 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), PoolError> {
 pub fn set_oracle(env: Env, oracle: Address) -> Result<(), PoolError> {
     let admin = storage::get_admin(&env).ok_or(PoolError::NotInitialized)?;
     admin.require_auth();
+
+    if let Some(current_vault) = storage::get_vault(&env) {
+        if oracle == current_vault {
+            return Err(PoolError::InvalidAddress);
+        }
+    }
 
     storage::set_oracle(&env, &oracle);
     Ok(())
