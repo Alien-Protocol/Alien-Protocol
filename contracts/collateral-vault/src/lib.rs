@@ -79,23 +79,27 @@ impl VaultContract {
         admin::set_admin(env, new_admin)
     }
 
-    pub fn set_lending_pool(env: Env, lending_pool: Address) {
+    pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultError> {
         admin::set_lending_pool(env, lending_pool)
     }
 
-    pub fn set_oracle(env: Env, oracle: Address) {
+    pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
         admin::set_oracle(env, oracle)
     }
 
-    pub fn set_liquidation_engine(env: Env, engine: Address) {
+    pub fn set_liquidation_engine(env: Env, engine: Address) -> Result<(), VaultError> {
         admin::set_liquidation_engine(env, engine)
     }
 
-    pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
+    pub fn pause_operation(
+        env: Env,
+        operation: PauseFlag,
+        reason: Symbol,
+    ) -> Result<(), VaultError> {
         admin::pause_operation(env, operation, reason)
     }
 
-    pub fn unpause_operation(env: Env, operation: PauseFlag) {
+    pub fn unpause_operation(env: Env, operation: PauseFlag) -> Result<(), VaultError> {
         admin::unpause_operation(env, operation)
     }
 

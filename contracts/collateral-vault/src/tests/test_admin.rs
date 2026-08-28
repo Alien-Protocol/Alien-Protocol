@@ -132,12 +132,7 @@ fn test_initialize_sets_paused_false() {
     ) = setup_env();
 
     let res = client.try_unpause_operation(&PauseFlag::Deposit);
-    assert_eq!(
-        res,
-        Err(Ok(soroban_sdk::Error::from_contract_error(
-            VaultError::NotPaused as u32
-        )))
-    );
+    assert_eq!(res, Err(Ok(VaultError::NotPaused)));
 }
 
 #[test]
@@ -157,12 +152,7 @@ fn test_set_lending_pool_oracle_collision_fails() {
 
     // Setting lending_pool equal to current oracle should fail
     let res = client.try_set_lending_pool(&oracle);
-    assert_eq!(
-        res,
-        Err(Ok(soroban_sdk::Error::from_contract_error(
-            VaultError::InvalidAddress as u32
-        )))
-    );
+    assert_eq!(res, Err(Ok(VaultError::InvalidAddress)));
 }
 
 #[test]
@@ -182,12 +172,7 @@ fn test_set_oracle_lending_pool_collision_fails() {
 
     // Setting oracle equal to current lending_pool should fail
     let res = client.try_set_oracle(&lending_pool);
-    assert_eq!(
-        res,
-        Err(Ok(soroban_sdk::Error::from_contract_error(
-            VaultError::InvalidAddress as u32
-        )))
-    );
+    assert_eq!(res, Err(Ok(VaultError::InvalidAddress)));
 }
 
 // ── Admin transfer tests ───────────────────────────────────────────────
@@ -589,4 +574,58 @@ fn test_set_admin_same_address() {
 
     let result = client.try_set_admin(&admin);
     assert_eq!(result, Err(Ok(VaultError::AlreadyAdmin)));
+}
+
+// ── Uninitialized admin calls return Err (not `expect` panic) ──────────
+
+#[test]
+fn test_uninitialized_admin_setters_return_err() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let some_addr = Address::generate(&env);
+
+    assert_eq!(
+        client.try_set_lending_pool(&some_addr),
+        Err(Ok(VaultError::NotInitialized))
+    );
+    assert_eq!(
+        client.try_set_oracle(&some_addr),
+        Err(Ok(VaultError::NotInitialized))
+    );
+    assert_eq!(
+        client.try_set_liquidation_engine(&some_addr),
+        Err(Ok(VaultError::NotInitialized))
+    );
+    assert_eq!(
+        client.try_pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "reason")),
+        Err(Ok(VaultError::NotInitialized))
+    );
+    assert_eq!(
+        client.try_unpause_operation(&PauseFlag::Deposit),
+        Err(Ok(VaultError::NotInitialized))
+    );
+
+    // Nothing should have been set: the admin is still uninitialized
+    assert_eq!(client.get_admin(), None);
+}
+
+#[test]
+fn test_uninitialized_set_admin_returns_err() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    // set_admin already behaves this way and the issue requires it remain unchanged.
+    // Calling it on an uninitialized contract should return InvalidInputs.
+    let some_addr = Address::generate(&env);
+    assert_eq!(
+        client.try_set_admin(&some_addr),
+        Err(Ok(VaultError::InvalidInputs))
+    );
 }
