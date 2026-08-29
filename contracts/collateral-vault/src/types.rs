@@ -130,10 +130,9 @@ pub enum DataKey {
     PauseMask,
 }
 
-/// Price data from the oracle.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct PriceData {
-    pub price: i128,
-    pub timestamp: u64,
-}
+/// Price data returned by the oracle adapter. This is deliberately the same
+/// three-field type exposed by `shared` (and the oracle adapter) so the vault
+/// can decode `get_price` / `get_price_or_fail` results from the real oracle
+/// contract. The vault does not persist `PriceData`; it only consumes it from
+/// the oracle client.
+pub use shared::PriceData;
