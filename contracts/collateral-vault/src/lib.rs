@@ -34,7 +34,13 @@ impl VaultContract {
             return Err(VaultError::AlreadyInitialized);
         }
 
-        if lending_pool == oracle {
+        if admin == lending_pool
+            || admin == oracle
+            || admin == liquidation_engine
+            || lending_pool == oracle
+            || lending_pool == liquidation_engine
+            || oracle == liquidation_engine
+        {
             return Err(VaultError::InvalidAddress);
         }
 
