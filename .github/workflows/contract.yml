@@ -21,7 +21,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build collateral-vault WASM for upgrade tests
-        run: cargo build -p collateral-vault --target wasm32-unknown-unknown --release
+        run: cargo build -p collateral-vault --target wasm32v1-none --release
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -33,7 +33,7 @@ jobs:
         run: cargo check --verbose
 
   build:
-    name: Build Contracts (wasm32-unknown-unknown)
+    name: Build Contracts (wasm32v1-none)
     runs-on: ubuntu-latest
     needs: checks
 
@@ -50,7 +50,7 @@ jobs:
             -p lending-pool \
             -p liquidation-engine \
             -p oracle-adapter \
-            --target wasm32-unknown-unknown \
+            --target wasm32v1-none \
             --release \
             --verbose
 
@@ -66,7 +66,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build collateral-vault WASM for upgrade tests
-        run: cargo build -p collateral-vault --target wasm32-unknown-unknown --release
+        run: cargo build -p collateral-vault --target wasm32v1-none --release
 
       - name: Run Cargo tests
         run: cargo test --workspace --all-features --verbose
