@@ -78,6 +78,9 @@ pub fn health_factor_bps(
     debt: i128,
     liquidation_threshold_bps: u32,
 ) -> Result<i128, SharedError> {
+    if collateral_value < 0 {
+        return Err(SharedError::InvalidAmount);
+    }
     if debt == 0 {
         return Ok(i128::MAX);
     }

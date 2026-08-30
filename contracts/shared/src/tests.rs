@@ -46,6 +46,22 @@ fn test_health_factor_zero_debt_is_max() {
 }
 
 #[test]
+fn test_health_factor_rejects_negative_debt() {
+    assert_eq!(
+        health_factor_bps(10_000, -1, 8_000),
+        Err(SharedError::InvalidAmount)
+    );
+}
+
+#[test]
+fn test_health_factor_rejects_negative_collateral() {
+    assert_eq!(
+        health_factor_bps(-1, 7_500, 8_000),
+        Err(SharedError::InvalidAmount)
+    );
+}
+
+#[test]
 fn test_borrow_limit_seventy_percent() {
     assert_eq!(
         borrow_limit_from_collateral(10_000_000, 7_000).unwrap(),
@@ -60,4 +76,9 @@ fn test_ceil_div_rounds_up() {
     assert_eq!(ceil_div(1, 3).unwrap(), 1);
     assert_eq!(ceil_div(0, 3).unwrap(), 0);
     assert_eq!(ceil_div(5, -2).unwrap(), -2);
+}
+
+#[test]
+fn test_ceil_div_rejects_zero_denominator() {
+    assert_eq!(ceil_div(1, 0), Err(SharedError::DivisionByZero));
 }
