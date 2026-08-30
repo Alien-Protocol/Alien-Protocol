@@ -191,7 +191,9 @@ A good first step is to browse the [open issues](https://github.com/Alien-Protoc
 
 ## 🔐 Security
 
-If you discover a security vulnerability, please avoid opening a public issue that exposes it. Contact the maintainers privately through the repository owner's GitHub profile until a dedicated security policy and reporting channel are published.
+If you discover a security vulnerability, do not open a public issue that
+exposes it. Follow the private reporting instructions in our
+[Security Policy](SECURITY.md).
 
 ## 📄 License
 
