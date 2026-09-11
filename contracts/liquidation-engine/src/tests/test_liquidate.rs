@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
 use super::super::*;
@@ -172,6 +172,7 @@ impl MockPoolContract {
 #[derive(Clone)]
 enum OracleKey {
     Price(Address),
+    StalenessThreshold,
 }
 
 #[contract]
@@ -185,15 +186,39 @@ impl MockOracleContract {
             .set(&OracleKey::Price(asset), &price);
     }
 
+    pub fn set_staleness_threshold(env: Env, threshold: u64) {
+        env.storage()
+            .persistent()
+            .set(&OracleKey::StalenessThreshold, &threshold);
+    }
+
     pub fn get_price(env: Env, asset: Address) -> Option<shared::types::PriceData> {
         env.storage().persistent().get(&OracleKey::Price(asset))
     }
 
     pub fn get_price_or_fail(env: Env, asset: Address) -> shared::types::PriceData {
-        env.storage()
+        let price_data: shared::types::PriceData = env
+            .storage()
             .persistent()
             .get(&OracleKey::Price(asset))
-            .expect("no price")
+            .expect("no price");
+
+        if let Some(threshold) = env
+            .storage()
+            .persistent()
+            .get::<_, u64>(&OracleKey::StalenessThreshold)
+        {
+            let ledger_time = env.ledger().timestamp();
+            let is_fresh = match ledger_time.checked_sub(price_data.timestamp) {
+                Some(delta) => delta <= threshold,
+                None => false,
+            };
+            if !is_fresh {
+                panic!("stale price");
+            }
+        }
+
+        price_data
     }
 }
 
@@ -489,4 +514,89 @@ fn test_liquidate_fails_if_vault_engine_mismatch() {
     let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
 
     assert_eq!(res, Err(Ok(EngineError::Unauthorized)));
+}
+
+// ---------------------------------------------------------------------------
+// liquidate: oracle staleness tests (#687)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_liquidate_fails_on_stale_oracle_price() {
+    let ctx = setup();
+
+    // Configure staleness threshold (300 seconds) on the mock oracle
+    ctx.oracle.set_staleness_threshold(&300);
+
+    // Set oracle price with timestamp 100
+    ctx.oracle.set_price(
+        &ctx.collateral_asset,
+        &shared::types::PriceData {
+            price: shared::PROTOCOL_QUOTE_PRECISION,
+            timestamp: 100,
+            write_timestamp: 100,
+        },
+    );
+
+    // Advance ledger timestamp beyond the threshold (500 - 100 = 400 > 300)
+    ctx.env.ledger().set_timestamp(500);
+
+    // Attempting to liquidate must fail closed because oracle price is stale
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+    assert!(
+        res.is_err(),
+        "liquidate must fail when oracle price is stale"
+    );
+}
+
+#[test]
+fn test_liquidate_stale_price_leaves_debt_unchanged() {
+    let ctx = setup();
+
+    let initial_debt = ctx.pool.get_user_debt(&ctx.user);
+    assert_eq!(
+        initial_debt, DEBT,
+        "precondition: initial debt matches DEBT"
+    );
+
+    let initial_liquidator_balance = ctx.borrow_token.balance(&ctx.liquidator);
+    let initial_vault_collateral = ctx.collateral_token.balance(&ctx.vault_addr);
+
+    // Configure staleness threshold (300 seconds) on the mock oracle
+    ctx.oracle.set_staleness_threshold(&300);
+
+    // Set oracle price timestamp older than threshold
+    ctx.oracle.set_price(
+        &ctx.collateral_asset,
+        &shared::types::PriceData {
+            price: shared::PROTOCOL_QUOTE_PRECISION,
+            timestamp: 100,
+            write_timestamp: 100,
+        },
+    );
+
+    // Advance ledger timestamp beyond the threshold (500 - 100 = 400 > 300)
+    ctx.env.ledger().set_timestamp(500);
+
+    // Attempt liquidation
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+    assert!(res.is_err(), "liquidate must fail on stale oracle price");
+
+    // Verify user debt is completely unchanged after failed call
+    let current_debt = ctx.pool.get_user_debt(&ctx.user);
+    assert_eq!(
+        current_debt, initial_debt,
+        "user debt must remain unchanged after liquidation failure on stale price"
+    );
+
+    // Verify liquidator and vault balances remain untouched
+    assert_eq!(
+        ctx.borrow_token.balance(&ctx.liquidator),
+        initial_liquidator_balance,
+        "liquidator borrow token balance must remain untouched after failure"
+    );
+    assert_eq!(
+        ctx.collateral_token.balance(&ctx.vault_addr),
+        initial_vault_collateral,
+        "vault collateral balance must remain untouched after failure"
+    );
 }
