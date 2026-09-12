@@ -6,7 +6,7 @@ use soroban_sdk::{token, Address, Bytes, BytesN, Env, IntoVal};
 
 const TEST_WASM: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../target/wasm32v1-none/release/collateral_vault.wasm"
+    "/../../target/wasm32-unknown-unknown/release/collateral_vault.wasm"
 ));
 
 fn setup_env() -> (
