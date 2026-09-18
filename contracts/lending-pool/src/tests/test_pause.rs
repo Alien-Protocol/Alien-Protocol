@@ -96,7 +96,10 @@ fn test_pool_is_operation_paused_matches_mask() {
 
     // Pause Repay & WithdrawLiquidity
     client.pause_operation(&PauseFlag::Repay, &Symbol::new(&env, "repay_gate"));
-    client.pause_operation(&PauseFlag::WithdrawLiquidity, &Symbol::new(&env, "withdraw_gate"));
+    client.pause_operation(
+        &PauseFlag::WithdrawLiquidity,
+        &Symbol::new(&env, "withdraw_gate"),
+    );
     assert!(client.is_operation_paused(&PauseFlag::Repay));
     assert!(client.is_operation_paused(&PauseFlag::WithdrawLiquidity));
 
