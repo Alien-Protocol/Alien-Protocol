@@ -35,11 +35,10 @@ pub trait Pool {
     fn get_borrow_asset(env: Env) -> Option<Address>;
 }
 
-/// Oracle client for the liquidation engine.
-///
-/// Declared locally (rather than reused from the vault or pool crates) because
-/// it must match `oracle-adapter`'s three-field `PriceData` (price, timestamp,
-/// write_timestamp), not the vault's two-field `PriceData`.
+/// Oracle client for the liquidation engine, matching `oracle-adapter`'s
+/// three-field `PriceData` (price, timestamp, write_timestamp). Both the vault
+/// and the engine now use this same shared `PriceData`, so cross-contract
+/// reads of `get_price`/`get_price_or_fail` decode consistently.
 #[soroban_sdk::contractclient(name = "OracleClient")]
 #[allow(dead_code)]
 pub trait Oracle {

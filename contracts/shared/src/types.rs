@@ -28,15 +28,6 @@ impl Debt {
     }
 }
 
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct AssetRiskConfig {
-    pub token_decimals: u32,
-    pub oracle_price_decimals: u32,
-    pub max_ltv_bps: u32,
-    pub liquidation_threshold_bps: u32,
-}
-
 /// Protocol-wide configuration for a supported asset.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
@@ -87,6 +78,9 @@ pub fn health_factor_bps(
     debt: i128,
     liquidation_threshold_bps: u32,
 ) -> Result<i128, SharedError> {
+    if collateral_value < 0 {
+        return Err(SharedError::InvalidAmount);
+    }
     if debt == 0 {
         return Ok(i128::MAX);
     }

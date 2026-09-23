@@ -20,13 +20,13 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
     Ok(())
 }
 
-pub fn set_lending_pool(env: Env, lending_pool: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if let Some(oracle) = storage::get_oracle(&env) {
         if lending_pool == oracle {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidAddress);
+            return Err(VaultError::InvalidAddress);
         }
     }
 
@@ -39,15 +39,17 @@ pub fn set_lending_pool(env: Env, lending_pool: Address) {
         new_pool: lending_pool,
     }
     .publish(&env);
+
+    Ok(())
 }
 
-pub fn set_oracle(env: Env, oracle: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if let Some(pool) = storage::get_lending_pool(&env) {
         if oracle == pool {
-            soroban_sdk::panic_with_error!(&env, VaultError::InvalidAddress);
+            return Err(VaultError::InvalidAddress);
         }
     }
 
@@ -59,10 +61,12 @@ pub fn set_oracle(env: Env, oracle: Address) {
         new_oracle: oracle,
     }
     .publish(&env);
+
+    Ok(())
 }
 
-pub fn set_liquidation_engine(env: Env, engine: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+pub fn set_liquidation_engine(env: Env, engine: Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     let old_engine = storage::get_liquidation_engine(&env);
@@ -73,14 +77,16 @@ pub fn set_liquidation_engine(env: Env, engine: Address) {
         new_engine: engine,
     }
     .publish(&env);
+
+    Ok(())
 }
 
-pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result<(), VaultError> {
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if storage::is_operation_paused(&env, &operation) {
-        soroban_sdk::panic_with_error!(&env, VaultError::AlreadyPaused);
+        return Err(VaultError::AlreadyPaused);
     }
 
     let mask = storage::get_pause_mask(&env);
@@ -93,16 +99,18 @@ pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) {
         reason,
     }
     .publish(&env);
+
+    Ok(())
 }
 
 /// Unpause a specific operation. Only callable by the admin (emergency role).
-/// Panics if the operation is not currently paused.
-pub fn unpause_operation(env: Env, operation: PauseFlag) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+/// Returns an error if the operation is not currently paused.
+pub fn unpause_operation(env: Env, operation: PauseFlag) -> Result<(), VaultError> {
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if !storage::is_operation_paused(&env, &operation) {
-        soroban_sdk::panic_with_error!(&env, VaultError::NotPaused);
+        return Err(VaultError::NotPaused);
     }
 
     let mask = storage::get_pause_mask(&env);
@@ -114,4 +122,6 @@ pub fn unpause_operation(env: Env, operation: PauseFlag) {
         operation: op_symbol,
     }
     .publish(&env);
+
+    Ok(())
 }

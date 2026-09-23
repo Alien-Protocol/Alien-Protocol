@@ -2,13 +2,16 @@
 
 extern crate std;
 
-use crate::{OracleContract, OracleContractClient, PriceData};
-use soroban_sdk::testutils::{Address as _, Events, MockAuth, MockAuthInvoke};
+use crate::{OracleContract, OracleContractClient, OracleError, PriceData};
+use soroban_sdk::testutils::{Address as _, Events, Ledger as _, MockAuth, MockAuthInvoke};
 use soroban_sdk::{Address, Env, Map, Symbol, TryFromVal, Val, Vec};
 
 fn setup_env_mock_all_auths() -> (Env, OracleContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
+    // Start ledger timestamp well above typical test timestamps (≤ 100_000)
+    // so the future-timestamp guard in set_price never rejects test data.
+    env.ledger().set_timestamp(1_000_000_000);
 
     let contract_id = env.register(OracleContract, ());
     let client = OracleContractClient::new(&env, &contract_id);
@@ -21,6 +24,8 @@ fn setup_env_mock_all_auths() -> (Env, OracleContractClient<'static>, Address) {
 
 fn setup_env_no_mock_auths() -> (Env, OracleContractClient<'static>, Address) {
     let env = Env::default();
+    // Start ledger timestamp well above typical test timestamps.
+    env.ledger().set_timestamp(1_000_000_000);
 
     let contract_id = env.register(OracleContract, ());
     let client = OracleContractClient::new(&env, &contract_id);
@@ -133,7 +138,8 @@ fn test_get_price_returns_correct_data() {
     let asset = Address::generate(&env);
 
     let price = 1_000_000_i128;
-    let timestamp = 1_234_567_890_u64;
+    // Keep timestamp <= ledger time (1_000_000_000 set in setup_env_mock_all_auths).
+    let timestamp = 999_999_999_u64;
 
     client.set_price(&admin, &asset, &price, &timestamp);
 
@@ -168,4 +174,96 @@ fn test_set_price_overwrites_existing() {
     let second = client.get_price(&asset).unwrap();
     assert_eq!(second.price, 222);
     assert_eq!(second.timestamp, 200);
+}
+
+// ── Issue #647: stale and future timestamp guards ────────────────────────────
+
+/// set_price must reject a timestamp older than the last stored price timestamp.
+/// Acceptance criterion: "Older timestamp for the same asset fails".
+#[test]
+fn test_set_price_older_timestamp_rejected() {
+    let (env, client, admin) = setup_env_mock_all_auths();
+    let asset = Address::generate(&env);
+
+    // First write at timestamp 5_000.
+    client.set_price(&admin, &asset, &100_i128, &5_000_u64);
+
+    // Second write with an older timestamp must fail with InvalidTimestamp.
+    let result = client.try_set_price(&admin, &asset, &200_i128, &4_999_u64);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::InvalidTimestamp as u32)
+    );
+}
+
+/// set_price must also reject a timestamp equal to the last stored price timestamp
+/// (requires *strictly* newer, not merely non-decreasing).
+#[test]
+fn test_set_price_equal_timestamp_rejected() {
+    let (env, client, admin) = setup_env_mock_all_auths();
+    let asset = Address::generate(&env);
+
+    client.set_price(&admin, &asset, &100_i128, &5_000_u64);
+
+    let result = client.try_set_price(&admin, &asset, &200_i128, &5_000_u64);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::InvalidTimestamp as u32)
+    );
+}
+
+/// set_price must reject a timestamp that exceeds the current ledger time.
+/// Acceptance criterion: "Timestamp after ledger time fails".
+#[test]
+fn test_set_price_future_timestamp_rejected() {
+    let (env, client, admin) = setup_env_mock_all_auths();
+    let asset = Address::generate(&env);
+
+    // Pin the ledger to a known time, then try to submit a price timestamped
+    // one second in the future.
+    let ledger_now: u64 = 50_000;
+    env.ledger().set_timestamp(ledger_now);
+
+    let result = client.try_set_price(&admin, &asset, &300_i128, &(ledger_now + 1));
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::InvalidTimestamp as u32)
+    );
+}
+
+/// A price timestamped exactly at ledger time is valid (boundary: timestamp == ledger).
+#[test]
+fn test_set_price_at_ledger_timestamp_succeeds() {
+    let (env, client, admin) = setup_env_mock_all_auths();
+    let asset = Address::generate(&env);
+
+    let ledger_now: u64 = 50_000;
+    env.ledger().set_timestamp(ledger_now);
+
+    // timestamp == ledger time must be accepted.
+    client.set_price(&admin, &asset, &300_i128, &ledger_now);
+    let stored = client.get_price(&asset).unwrap();
+    assert_eq!(stored.price, 300);
+    assert_eq!(stored.timestamp, ledger_now);
+}
+
+/// The very first set_price for a new asset succeeds even when no prior price
+/// exists (stale-check branch is not taken).
+/// Acceptance criterion: "First valid set_price still succeeds".
+#[test]
+fn test_set_price_first_write_succeeds() {
+    let (env, client, admin) = setup_env_mock_all_auths();
+    let asset = Address::generate(&env);
+
+    // No prior price — should succeed without hitting the stale guard.
+    client.set_price(&admin, &asset, &500_i128, &1_000_u64);
+    let stored = client.get_price(&asset).unwrap();
+    assert_eq!(stored.price, 500);
+    assert_eq!(stored.timestamp, 1_000);
 }

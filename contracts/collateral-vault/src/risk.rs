@@ -37,28 +37,32 @@ pub fn validate_asset_config(
     Ok(())
 }
 
-fn normalize_with_precision(amount: i128, decimals: u32, precision: i128) -> i128 {
+fn normalize_with_precision(
+    amount: i128,
+    decimals: u32,
+    precision: i128,
+) -> Result<i128, VaultError> {
     let scale = 10_i128
         .checked_pow(decimals.min(18))
-        .unwrap_or_else(|| panic!("overflow while computing scale"));
-    amount
+        .ok_or(VaultError::InvalidInputs)?;
+    let scaled = amount
         .checked_mul(precision)
-        .unwrap_or_else(|| panic!("overflow in normalization"))
-        / scale
+        .ok_or(VaultError::InvalidInputs)?;
+    Ok(scaled / scale)
 }
 
-pub fn normalize_token_amount(amount: i128, token_decimals: u32) -> i128 {
-    rounded_quote_amount(
-        normalize_with_precision(amount, token_decimals, TOKEN_AMOUNT_PRECISION),
+pub fn normalize_token_amount(amount: i128, token_decimals: u32) -> Result<i128, VaultError> {
+    Ok(rounded_quote_amount(
+        normalize_with_precision(amount, token_decimals, TOKEN_AMOUNT_PRECISION)?,
         RoundingMode::Floor,
-    )
+    ))
 }
 
-pub fn normalize_oracle_price(price: i128, oracle_price_decimals: u32) -> i128 {
-    rounded_quote_amount(
-        normalize_with_precision(price, oracle_price_decimals, ORACLE_PRICE_PRECISION),
+pub fn normalize_oracle_price(price: i128, oracle_price_decimals: u32) -> Result<i128, VaultError> {
+    Ok(rounded_quote_amount(
+        normalize_with_precision(price, oracle_price_decimals, ORACLE_PRICE_PRECISION)?,
         RoundingMode::Floor,
-    )
+    ))
 }
 
 pub fn normalize_debt_amount(amount: i128) -> i128 {
@@ -71,8 +75,10 @@ pub fn collateral_value(
     token_decimals: u32,
     oracle_price_decimals: u32,
 ) -> i128 {
-    let normalized_amount = normalize_token_amount(amount, token_decimals);
-    let normalized_price = normalize_oracle_price(price, oracle_price_decimals);
+    let normalized_amount = normalize_token_amount(amount, token_decimals)
+        .unwrap_or_else(|_| panic!("overflow in normalization"));
+    let normalized_price = normalize_oracle_price(price, oracle_price_decimals)
+        .unwrap_or_else(|_| panic!("overflow in normalization"));
 
     rounded_quote_amount(
         normalized_amount
