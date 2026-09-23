@@ -21,14 +21,15 @@ pub(crate) fn setup_env() -> (Env, OracleContractClient<'static>, Address) {
 #[test]
 fn test_initialize_success() {
     let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000_000_000);
+
     let contract_id = env.register(OracleContract, ());
     let client = OracleContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    env.mock_all_auths();
     client.initialize(&admin, &300);
 
-    env.mock_all_auths();
     let asset = Address::generate(&env);
     client.set_price(&admin, &asset, &100, &1000);
 
