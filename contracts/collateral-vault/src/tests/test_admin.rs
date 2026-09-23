@@ -100,10 +100,54 @@ fn test_initialize_duplicate_fails() {
 }
 
 #[test]
+fn test_initialize_admin_equals_lending_pool_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let same_address = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let engine = Address::generate(&env);
+
+    let result = client.try_initialize(&same_address, &same_address, &oracle, &engine);
+    assert_eq!(result, Err(Ok(VaultError::InvalidAddress)));
+}
+
+#[test]
+fn test_initialize_admin_equals_oracle_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let same_address = Address::generate(&env);
+    let pool = Address::generate(&env);
+    let engine = Address::generate(&env);
+
+    let result = client.try_initialize(&same_address, &pool, &same_address, &engine);
+    assert_eq!(result, Err(Ok(VaultError::InvalidAddress)));
+}
+
+#[test]
+fn test_initialize_admin_equals_liquidation_engine_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let same_address = Address::generate(&env);
+    let pool = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let result = client.try_initialize(&same_address, &pool, &oracle, &same_address);
+    assert_eq!(result, Err(Ok(VaultError::InvalidAddress)));
+}
+
+#[test]
 fn test_initialize_pool_equals_oracle_fails() {
     let env = Env::default();
     env.mock_all_auths();
-
     let contract_id = env.register(VaultContract, ());
     let client = VaultContractClient::new(&env, &contract_id);
 
@@ -111,8 +155,37 @@ fn test_initialize_pool_equals_oracle_fails() {
     let same_address = Address::generate(&env);
     let engine = Address::generate(&env);
 
-    // lending_pool == oracle should be rejected
     let result = client.try_initialize(&admin, &same_address, &same_address, &engine);
+    assert_eq!(result, Err(Ok(VaultError::InvalidAddress)));
+}
+
+#[test]
+fn test_initialize_pool_equals_liquidation_engine_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let same_address = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let result = client.try_initialize(&admin, &same_address, &oracle, &same_address);
+    assert_eq!(result, Err(Ok(VaultError::InvalidAddress)));
+}
+
+#[test]
+fn test_initialize_oracle_equals_liquidation_engine_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let pool = Address::generate(&env);
+    let same_address = Address::generate(&env);
+
+    let result = client.try_initialize(&admin, &pool, &same_address, &same_address);
     assert_eq!(result, Err(Ok(VaultError::InvalidAddress)));
 }
 

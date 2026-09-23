@@ -177,7 +177,8 @@ Alien-Protocol/
 │   └── shared/               # Shared protocol primitives
 ├── docs/
 │   ├── CONTRIBUTING.md       # Contribution workflow and conventions
-│   └── arch.md               # Architecture documentation
+│   ├── arch.md               # Architecture documentation
+│   └── TODO.md               # Open contract and project work
 ├── LICENSE
 ├── Cargo.toml                # Rust workspace configuration
 └── README.md

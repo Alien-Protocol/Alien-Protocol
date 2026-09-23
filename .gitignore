@@ -6,3 +6,4 @@ target
 **/__snapshots__/
 *.snap
 *.snapshot
+.cursor/
