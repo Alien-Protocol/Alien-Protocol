@@ -5,6 +5,7 @@ use crate::events;
 use crate::position::checked_debit;
 use crate::storage;
 use crate::types::PauseFlag;
+use crate::LendingPoolClient;
 
 pub fn execute_seize(
     env: &Env,
@@ -22,6 +23,15 @@ pub fn execute_seize(
 
     if storage::is_operation_paused(env, &PauseFlag::Liquidation) {
         return Err(VaultError::VaultPaused);
+    }
+
+    if let Some(pool_addr) = storage::get_lending_pool(env) {
+        let pool_client = LendingPoolClient::new(env, &pool_addr);
+        if !pool_client.is_liquidatable(&user) {
+            return Err(VaultError::NotLiquidatable);
+        }
+    } else {
+        return Err(VaultError::NotLiquidatable);
     }
 
     let _new_balance = checked_debit(env, &user, &asset, amount)?;
