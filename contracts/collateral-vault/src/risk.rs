@@ -102,7 +102,7 @@ pub fn required_collateral_for_debt(debt: i128, min_ratio_bps: i128) -> i128 {
         .checked_mul(min_ratio_bps)
         .unwrap_or_else(|| panic!("overflow in collateral requirement"));
     // Pass the BPS-scaled numerator so Ceiling can divide with round-up.
-    // Flooring `numerator / 10_000` first would understate the requirement.
+    // Flooring `numerator / shared::BPS_DENOMINATOR` first would understate the requirement.
     rounded_quote_amount(numerator, RoundingMode::Ceiling)
 }
 
@@ -156,7 +156,9 @@ pub fn validate_asset_risk_config(
 ) -> Result<(), VaultError> {
     validate_asset_config(token_decimals, oracle_price_decimals)?;
 
-    if !(1..=10_000).contains(&max_ltv_bps) || !(1..=10_000).contains(&liquidation_threshold_bps) {
+    if !(1..=shared::BPS_DENOMINATOR as u32).contains(&max_ltv_bps)
+        || !(1..=shared::BPS_DENOMINATOR as u32).contains(&liquidation_threshold_bps)
+    {
         return Err(VaultError::InvalidAssetConfig);
     }
     if liquidation_threshold_bps <= max_ltv_bps {
@@ -278,5 +280,5 @@ pub fn is_post_withdraw_healthy(
             },
         )?;
 
-    Ok(hf_bps >= 10_000)
+    Ok(hf_bps >= shared::BPS_DENOMINATOR)
 }
