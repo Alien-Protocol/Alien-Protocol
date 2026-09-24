@@ -1,8 +1,8 @@
 use crate::{errors::VaultError, events, storage, types::AssetConfig};
 use soroban_sdk::{Address, Env};
 
-pub fn add_supported_asset(env: Env, asset: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if storage::is_supported_asset(&env, &asset) {
@@ -13,6 +13,7 @@ pub fn add_supported_asset(env: Env, asset: Address) {
     storage::set_asset_config(&env, &asset, &AssetConfig::default());
 
     events::AssetAdded { asset }.publish(&env);
+    Ok(())
 }
 
 pub fn set_asset_config(
@@ -23,7 +24,7 @@ pub fn set_asset_config(
     max_ltv_bps: u32,
     liquidation_threshold_bps: u32,
 ) -> Result<(), VaultError> {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if !storage::is_supported_asset(&env, &asset) {
@@ -69,7 +70,7 @@ pub fn get_asset_config(env: Env, asset: Address) -> Result<AssetConfig, VaultEr
 }
 
 pub fn remove_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if !storage::is_supported_asset(&env, &asset) {
