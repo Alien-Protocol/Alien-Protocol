@@ -5,7 +5,6 @@ use super::helpers::ORACLE_STALE_THRESHOLD;
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
-
 #[contract]
 pub struct MockLendingPoolContract;
 
