@@ -107,8 +107,5 @@ fn test_failed_invocation_no_events() {
 
     // Failed invocation emits no events
     let events_after = env.events().all().len();
-    assert_eq!(
-        events_after, events_before,
-        "failed call added zero events"
-    );
+    assert_eq!(events_after, events_before, "failed call added zero events");
 }

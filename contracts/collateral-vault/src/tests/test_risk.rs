@@ -6,7 +6,6 @@ use crate::risk::{required_collateral_for_debt, rounded_quote_amount, RoundingMo
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
-
 #[contract]
 pub struct MockLendingPool;
 
