@@ -99,10 +99,16 @@ fn test_failed_invocation_no_events() {
     let liquidation_engine = Address::generate(&env);
     client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
+    let events_before = env.events().all().len();
+
     // try to initialize again which should fail
     let res = client.try_initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
     assert_eq!(res, Err(Ok(VaultError::AlreadyInitialized)));
 
     // Failed invocation emits no events
-    assert!(env.events().all().is_empty());
+    let events_after = env.events().all().len();
+    assert_eq!(
+        events_after, events_before,
+        "failed call added zero events"
+    );
 }
