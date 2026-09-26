@@ -26,7 +26,7 @@ pub fn set_asset_config(
     max_ltv_bps: u32,
     liquidation_threshold_bps: u32,
 ) -> Result<(), VaultError> {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if !storage::is_supported_asset(&env, &asset) {
@@ -74,7 +74,7 @@ pub fn get_asset_config(env: Env, asset: Address) -> Result<AssetConfig, VaultEr
 
 /// Removes an unused supported asset. Only the administrator may call it; returns asset-not-found or asset-has-open-positions errors.
 pub fn remove_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
-    let admin = storage::get_admin(&env).expect("not initialized");
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if !storage::is_supported_asset(&env, &asset) {
