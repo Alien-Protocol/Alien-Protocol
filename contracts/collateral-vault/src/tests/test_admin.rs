@@ -248,6 +248,174 @@ fn test_set_oracle_lending_pool_collision_fails() {
     assert_eq!(res, Err(Ok(VaultError::InvalidAddress)));
 }
 
+#[test]
+fn test_set_lending_pool_success() {
+    let (
+        env,
+        client,
+        admin,
+        _user,
+        _oracle,
+        lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    let new_pool = Address::generate(&env);
+    client.set_lending_pool(&new_pool);
+
+    // Setter must require admin authorization
+    let auths = env.auths();
+    assert_eq!(auths.len(), 1);
+    let (auth_addr, _) = auths.first().unwrap();
+    assert_eq!(*auth_addr, admin);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let event_symbol =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "lending_pool_updated")
+    );
+
+    // Event data must carry stale and new addresses
+    let data = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(
+        &env,
+        &last_event.2,
+    )
+    .unwrap();
+    let decoded_new = Address::try_from_val(
+        &env,
+        &data.get(soroban_sdk::Symbol::new(&env, "new_pool")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_new, new_pool);
+    let decoded_old = Option::<Address>::try_from_val(
+        &env,
+        &data.get(soroban_sdk::Symbol::new(&env, "old_pool")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_old, Some(lending_pool.clone()));
+
+    assert_eq!(client.get_lending_pool(), Some(new_pool));
+}
+
+#[test]
+fn test_set_oracle_success() {
+    let (
+        env,
+        client,
+        admin,
+        _user,
+        oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    let new_oracle = Address::generate(&env);
+    client.set_oracle(&new_oracle);
+
+    // Setter must require admin authorization
+    let auths = env.auths();
+    assert_eq!(auths.len(), 1);
+    let (auth_addr, _) = auths.first().unwrap();
+    assert_eq!(*auth_addr, admin);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let event_symbol =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "oracle_updated")
+    );
+
+    // Event data must carry stale and new addresses
+    let data = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(
+        &env,
+        &last_event.2,
+    )
+    .unwrap();
+    let decoded_new = Address::try_from_val(
+        &env,
+        &data.get(soroban_sdk::Symbol::new(&env, "new_oracle")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_new, new_oracle);
+    let decoded_old = Option::<Address>::try_from_val(
+        &env,
+        &data.get(soroban_sdk::Symbol::new(&env, "old_oracle")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_old, Some(oracle.clone()));
+
+    assert_eq!(client.get_oracle(), Some(new_oracle));
+}
+
+#[test]
+fn test_set_liquidation_engine_success() {
+    let (
+        env,
+        client,
+        admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    let new_engine = Address::generate(&env);
+    client.set_liquidation_engine(&new_engine);
+
+    // Setter must require admin authorization
+    let auths = env.auths();
+    assert_eq!(auths.len(), 1);
+    let (auth_addr, _) = auths.first().unwrap();
+    assert_eq!(*auth_addr, admin);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let event_symbol =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "liquidation_engine_updated")
+    );
+
+    // Event data must carry stale and new addresses
+    let data = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(
+        &env,
+        &last_event.2,
+    )
+    .unwrap();
+    let decoded_new = Address::try_from_val(
+        &env,
+        &data.get(soroban_sdk::Symbol::new(&env, "new_engine")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_new, new_engine);
+    let decoded_old = Option::<Address>::try_from_val(
+        &env,
+        &data.get(soroban_sdk::Symbol::new(&env, "old_engine")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_old, Some(liquidation_engine.clone()));
+
+    assert_eq!(client.get_liquidation_engine(), Some(new_engine));
+}
+
 // ── Admin transfer tests ───────────────────────────────────────────────
 
 #[test]
