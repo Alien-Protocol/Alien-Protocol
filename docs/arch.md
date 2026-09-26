@@ -1212,10 +1212,9 @@ alien-protocol/
 ├── frontend/
 │
 ├── docs/
-│   ├── architecture.md
-│   ├── risk-model.md
-│   ├── api.md
-│   └── security.md
+│   ├── arch.md
+│   ├── CONTRIBUTING.md
+│   └── TODO.md
 │
 ├── scripts/
 │
@@ -1223,6 +1222,8 @@ alien-protocol/
 │
 └── README.md
 ```
+
+> Note: Planned documentation files (`docs/risk-model.md`, `docs/api.md`, and `docs/security.md`) are not yet created and remain tracked in `docs/TODO.md`.
 
 ---
 
