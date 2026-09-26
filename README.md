@@ -167,6 +167,7 @@ stellar contract build --locked
 ```text
 Alien-Protocol/
 ├── .github/
+│   ├── CONTRIBUTING.md       # Contribution workflow and conventions
 │   ├── ISSUE_TEMPLATE/       # Contribution templates
 │   └── workflows/            # Contract CI
 ├── contracts/
@@ -176,7 +177,6 @@ Alien-Protocol/
 │   ├── oracle-adapter/       # Price feeds and RedStone integration
 │   └── shared/               # Shared protocol primitives
 ├── docs/
-│   ├── CONTRIBUTING.md       # Contribution workflow and conventions
 │   ├── arch.md               # Architecture documentation
 │   └── TODO.md               # Open contract and project work
 ├── LICENSE
@@ -186,7 +186,7 @@ Alien-Protocol/
 
 ## 🤝 Contributing
 
-Contributions of all sizes are welcome. Read the [contribution guide](docs/CONTRIBUTING.md) for the complete setup, branch naming, commit-message format, quality checks, and pull-request checklist.
+Contributions of all sizes are welcome. Read the [contribution guide](.github/CONTRIBUTING.md) for the complete setup, branch naming, commit-message format, quality checks, and pull-request checklist.
 
 A good first step is to browse the [open issues](https://github.com/Alien-Protocol/Alien-Protocol/issues). For larger features or protocol changes, open an issue before implementation so the approach can be discussed with the maintainers.
 
