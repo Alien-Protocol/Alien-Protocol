@@ -248,6 +248,99 @@ fn test_set_oracle_lending_pool_collision_fails() {
     assert_eq!(res, Err(Ok(VaultError::InvalidAddress)));
 }
 
+#[test]
+fn test_set_lending_pool_success() {
+    let (
+        env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    let new_pool = Address::generate(&env);
+    client.set_lending_pool(&new_pool);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let event_symbol =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "lending_pool_updated")
+    );
+
+    assert_eq!(client.get_lending_pool(), Some(new_pool));
+}
+
+#[test]
+fn test_set_oracle_success() {
+    let (
+        env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    let new_oracle = Address::generate(&env);
+    client.set_oracle(&new_oracle);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let event_symbol =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "oracle_updated")
+    );
+
+    assert_eq!(client.get_oracle(), Some(new_oracle));
+}
+
+#[test]
+fn test_set_liquidation_engine_success() {
+    let (
+        env,
+        client,
+        _admin,
+        _user,
+        _oracle,
+        _lending_pool,
+        _liquidation_engine,
+        _token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    let new_engine = Address::generate(&env);
+    client.set_liquidation_engine(&new_engine);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let event_symbol =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "liquidation_engine_updated")
+    );
+
+    assert_eq!(client.get_liquidation_engine(), Some(new_engine));
+}
+
 // ── Admin transfer tests ───────────────────────────────────────────────
 
 #[test]
