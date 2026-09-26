@@ -196,3 +196,27 @@ fn test_get_all_positions_excludes_withdrawn() {
 
     assert_eq!(client.get_all_positions().len(), 0);
 }
+
+#[test]
+fn test_uninitialized_asset_ops_return_not_initialized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &contract_id);
+
+    let asset = Address::generate(&env);
+
+    assert_eq!(
+        client.try_add_supported_asset(&asset),
+        Err(Ok(VaultError::NotInitialized))
+    );
+    assert_eq!(
+        client.try_set_asset_config(&asset, &7, &7, &6_500, &8_500),
+        Err(Ok(VaultError::NotInitialized))
+    );
+    assert_eq!(
+        client.try_remove_supported_asset(&asset),
+        Err(Ok(VaultError::NotInitialized))
+    );
+}
