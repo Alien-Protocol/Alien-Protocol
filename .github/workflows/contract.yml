@@ -43,16 +43,17 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build Soroban contracts
+      - name: Install Stellar CLI
+        uses: stellar/stellar-cli@v28.0.0
+
+      - name: Build Soroban contracts (Stellar CLI)
+        run: stellar contract build --locked
+
+      - name: Verify WASM artifacts
         run: |
-          cargo build \
-            -p collateral-vault \
-            -p lending-pool \
-            -p liquidation-engine \
-            -p oracle-adapter \
-            --target wasm32v1-none \
-            --release \
-            --verbose
+          for c in collateral_vault lending_pool liquidation_engine oracle_adapter; do
+            test -s "target/wasm32v1-none/release/${c}.wasm" || { echo "Missing ${c}.wasm"; exit 1; }
+          done
 
   test:
     name: Run Tests (native)

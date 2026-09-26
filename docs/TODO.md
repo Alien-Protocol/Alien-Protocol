@@ -105,7 +105,7 @@ Use this with `docs/arch.md` (target design) and `README.md` (honest component s
 - [ ] Deploy scripts: build → upload → deploy → initialize (testnet first)
 - [ ] Network config (RPC URL, passphrase, identity names) without committing secrets
 - [ ] Record contract IDs, WASM hashes, commit SHA after each deploy
-- [ ] Align CONTRIBUTING / CI: `stellar contract build --locked` vs `cargo build --target wasm32v1-none`
+- [x] Align CONTRIBUTING / CI: `stellar contract build --locked` vs `cargo build --target wasm32v1-none`
 - [ ] Makefile or `justfile` for common verify commands
 - [ ] Friendbot / key generation docs for contributors
 
