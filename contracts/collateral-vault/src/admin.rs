@@ -1,6 +1,7 @@
 use crate::{errors::VaultError, events, storage, types::PauseFlag};
 use soroban_sdk::{Address, Env, Symbol};
 
+/// Updates the vault administrator. The current administrator must authorize; returns invalid-input or already-admin errors.
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
     let current_admin = storage::get_admin(&env).ok_or(VaultError::InvalidInputs)?;
     current_admin.require_auth();
@@ -20,6 +21,7 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
     Ok(())
 }
 
+/// Sets the lending-pool address. Only the administrator may call it; rejects an address that conflicts with the oracle.
 pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
@@ -43,6 +45,7 @@ pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultErro
     Ok(())
 }
 
+/// Sets the oracle address. Only the administrator may call it; rejects an address that conflicts with the lending pool.
 pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
@@ -65,6 +68,7 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
     Ok(())
 }
 
+/// Sets the authorized liquidation engine. Only the administrator may call it; returns not-initialized when no admin exists.
 pub fn set_liquidation_engine(env: Env, engine: Address) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
@@ -81,6 +85,7 @@ pub fn set_liquidation_engine(env: Env, engine: Address) -> Result<(), VaultErro
     Ok(())
 }
 
+/// Pauses an operation for an administrator-supplied reason. Only the administrator may call it; returns already-paused when applicable.
 pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
