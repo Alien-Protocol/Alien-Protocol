@@ -1,3 +1,4 @@
+use crate::events::AssetConfigUpdated;
 use crate::{errors::VaultError, events, storage, types::AssetConfig};
 use soroban_sdk::{Address, Env};
 
@@ -59,6 +60,14 @@ pub fn set_asset_config(
         },
     );
 
+    AssetConfigUpdated {
+        asset: asset.clone(),
+        token_decimals,
+        oracle_price_decimals,
+        max_ltv_bps,
+        liquidation_threshold_bps,
+    }
+    .publish(&env);
     Ok(())
 }
 
