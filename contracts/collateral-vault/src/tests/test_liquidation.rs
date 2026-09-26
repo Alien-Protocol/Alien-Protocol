@@ -2,7 +2,25 @@
 
 use super::super::*;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{token, Address, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
+
+#[contract]
+pub struct MockLendingPool;
+
+#[contractimpl]
+impl MockLendingPool {
+    pub fn get_user_debt(_env: Env, _user: Address) -> i128 {
+        0
+    }
+
+    pub fn is_liquidatable(env: Env, user: Address) -> bool {
+        env.storage().persistent().get(&user).unwrap_or(true)
+    }
+
+    pub fn set_liquidatable(env: Env, user: Address, liquidatable: bool) {
+        env.storage().persistent().set(&user, &liquidatable);
+    }
+}
 
 fn setup_env() -> (
     Env,
@@ -23,7 +41,7 @@ fn setup_env() -> (
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
-    let lending_pool = Address::generate(&env);
+    let lending_pool = env.register(MockLendingPool, ());
     let liquidation_engine = Address::generate(&env);
 
     client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
@@ -46,6 +64,24 @@ fn setup_env() -> (
         token_client,
         token_admin_client,
     )
+}
+
+#[test]
+fn test_seize_healthy_position_fails() {
+    let (env, client, _admin, user, _oracle, token_id, _token_client, token_admin) = setup_env();
+    let engine = Address::generate(&env);
+
+    client.set_liquidation_engine(&engine);
+
+    token_admin.mint(&user, &1000);
+    client.deposit(&user, &token_id, &500);
+
+    let pool_id = client.get_lending_pool().unwrap();
+    let pool_client = MockLendingPoolClient::new(&env, &pool_id);
+    pool_client.set_liquidatable(&user, &false);
+
+    let res = client.try_seize_collateral(&engine, &user, &token_id, &200);
+    assert_eq!(res, Err(Ok(VaultError::NotLiquidatable)));
 }
 
 #[test]
