@@ -21,7 +21,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build collateral-vault WASM for upgrade tests
-        run: cargo build -p collateral-vault --target wasm32v1-none --release
+        run: cargo build --locked -p collateral-vault --target wasm32v1-none --release
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -66,7 +66,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build collateral-vault WASM for upgrade tests
-        run: cargo build -p collateral-vault --target wasm32v1-none --release
+        run: cargo build --locked -p collateral-vault --target wasm32v1-none --release
 
       - name: Run Cargo tests
-        run: cargo test --workspace --all-features --verbose
+        run: cargo test --locked --workspace --all-features --verbose
