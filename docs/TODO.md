@@ -155,7 +155,7 @@ backend/
 ## 5. Docs & process
 
 - [x] `docs/arch.md` product architecture
-- [x] `docs/CONTRIBUTING.md`
+- [x] `.github/CONTRIBUTING.md`
 - [ ] Keep README component status table in sync with this TODO
 - [ ] `docs/api.md` when backend routes exist
 - [ ] `docs/risk-model.md` (per-asset LTV table from arch, as implemented)
