@@ -104,5 +104,6 @@ fn test_failed_invocation_no_events() {
     assert_eq!(res, Err(Ok(VaultError::AlreadyInitialized)));
 
     // Failed invocation emits no events
-    assert!(env.events().all().is_empty());
+    let events_after = env.events().all().len();
+    assert_eq!(events_after, 0, "failed call added zero events");
 }

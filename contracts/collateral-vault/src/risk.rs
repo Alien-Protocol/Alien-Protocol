@@ -22,6 +22,11 @@ pub enum RoundingMode {
     Ceiling,
 }
 
+/// Validates the decimal precision used by an asset and its oracle.
+///
+/// # Panics
+///
+/// This function does not panic; invalid values are returned as `VaultError`.
 pub fn validate_asset_config(
     token_decimals: u32,
     oracle_price_decimals: u32,
@@ -51,6 +56,11 @@ fn normalize_with_precision(
     Ok(scaled / scale)
 }
 
+/// Converts a token amount into protocol quote precision using floor rounding.
+///
+/// # Panics
+///
+/// This function does not panic; arithmetic failures are returned as `VaultError`.
 pub fn normalize_token_amount(amount: i128, token_decimals: u32) -> Result<i128, VaultError> {
     Ok(rounded_quote_amount(
         normalize_with_precision(amount, token_decimals, TOKEN_AMOUNT_PRECISION)?,
@@ -58,6 +68,11 @@ pub fn normalize_token_amount(amount: i128, token_decimals: u32) -> Result<i128,
     ))
 }
 
+/// Converts an oracle price into protocol quote precision using floor rounding.
+///
+/// # Panics
+///
+/// This function does not panic; arithmetic failures are returned as `VaultError`.
 pub fn normalize_oracle_price(price: i128, oracle_price_decimals: u32) -> Result<i128, VaultError> {
     Ok(rounded_quote_amount(
         normalize_with_precision(price, oracle_price_decimals, ORACLE_PRICE_PRECISION)?,
@@ -65,10 +80,17 @@ pub fn normalize_oracle_price(price: i128, oracle_price_decimals: u32) -> Result
     ))
 }
 
+/// Normalizes a debt value to protocol quote precision.
 pub fn normalize_debt_amount(amount: i128) -> i128 {
     rounded_quote_amount(amount, RoundingMode::Floor)
 }
 
+/// Calculates the quote value of collateral at an oracle price.
+///
+/// # Panics
+///
+/// Panics if normalization or the multiplication overflows. Callers handling
+/// untrusted values should validate the asset configuration first.
 pub fn collateral_value(
     amount: i128,
     price: i128,
@@ -90,22 +112,33 @@ pub fn collateral_value(
 }
 
 #[allow(dead_code)]
+/// Returns whether collateral covers the normalized debt amount.
 pub fn compare_collateral_with_debt(collateral_value: i128, debt: i128) -> bool {
     let normalized_debt = normalize_debt_amount(debt);
     rounded_quote_amount(collateral_value, RoundingMode::Floor) >= normalized_debt
 }
 
 #[allow(dead_code)]
+/// Calculates the minimum collateral required for a debt amount.
+///
+/// # Panics
+///
+/// Panics if multiplying the debt by the ratio overflows.
 pub fn required_collateral_for_debt(debt: i128, min_ratio_bps: i128) -> i128 {
     let normalized_debt = normalize_debt_amount(debt);
     let numerator = normalized_debt
         .checked_mul(min_ratio_bps)
         .unwrap_or_else(|| panic!("overflow in collateral requirement"));
     // Pass the BPS-scaled numerator so Ceiling can divide with round-up.
-    // Flooring `numerator / 10_000` first would understate the requirement.
+    // Flooring `numerator / shared::BPS_DENOMINATOR` first would understate the requirement.
     rounded_quote_amount(numerator, RoundingMode::Ceiling)
 }
 
+/// Applies the protocol rounding policy to a quote amount.
+///
+/// # Panics
+///
+/// Panics when ceiling division overflows.
 pub fn rounded_quote_amount(amount: i128, mode: RoundingMode) -> i128 {
     match mode {
         RoundingMode::Floor => amount,
@@ -114,10 +147,16 @@ pub fn rounded_quote_amount(amount: i128, mode: RoundingMode) -> i128 {
     }
 }
 
+/// Loads an asset configuration, falling back to protocol defaults.
 pub fn asset_config_for(env: &Env, asset: &Address) -> AssetConfig {
     storage::get_asset_config_or_default(env, asset)
 }
 
+/// Loads and validates an asset configuration before risk calculations.
+///
+/// # Panics
+///
+/// Panics when the stored asset configuration is invalid.
 pub fn validate_and_load_asset_config(env: &Env, asset: &Address) -> AssetConfig {
     let config = asset_config_for(env, asset);
     validate_asset_config(config.token_decimals, config.oracle_price_decimals)
@@ -125,6 +164,12 @@ pub fn validate_and_load_asset_config(env: &Env, asset: &Address) -> AssetConfig
     config
 }
 
+/// Calculates the total normalized collateral value for a user.
+///
+/// # Panics
+///
+/// Panics when the user has no position, no oracle is configured, an asset
+/// configuration is invalid, or an intermediate value overflows.
 pub fn normalized_collateral_value(env: &Env, user: &Address) -> i128 {
     let position = storage::get_position(env, user).unwrap_or_else(|| panic!("no position"));
     let mut total = 0_i128;
@@ -148,6 +193,11 @@ pub fn normalized_collateral_value(env: &Env, user: &Address) -> i128 {
     rounded_quote_amount(total, RoundingMode::Floor)
 }
 
+/// Validates an asset's decimal and loan-to-value risk parameters.
+///
+/// # Panics
+///
+/// This function does not panic; invalid values are returned as `VaultError`.
 pub fn validate_asset_risk_config(
     token_decimals: u32,
     oracle_price_decimals: u32,
@@ -156,7 +206,9 @@ pub fn validate_asset_risk_config(
 ) -> Result<(), VaultError> {
     validate_asset_config(token_decimals, oracle_price_decimals)?;
 
-    if !(1..=10_000).contains(&max_ltv_bps) || !(1..=10_000).contains(&liquidation_threshold_bps) {
+    if !(1..=shared::BPS_DENOMINATOR as u32).contains(&max_ltv_bps)
+        || !(1..=shared::BPS_DENOMINATOR as u32).contains(&liquidation_threshold_bps)
+    {
         return Err(VaultError::InvalidAssetConfig);
     }
     if liquidation_threshold_bps <= max_ltv_bps {
@@ -166,6 +218,11 @@ pub fn validate_asset_risk_config(
     Ok(())
 }
 
+/// Returns the most conservative liquidation threshold for a user's position.
+///
+/// # Panics
+///
+/// This function does not panic; missing positions are returned as `VaultError`.
 pub fn position_liquidation_threshold_bps(env: &Env, user: &Address) -> Result<u32, VaultError> {
     let position = storage::get_position(env, user).ok_or(VaultError::NoPosition)?;
 
@@ -188,6 +245,11 @@ pub fn position_liquidation_threshold_bps(env: &Env, user: &Address) -> Result<u
     min_lt.ok_or(VaultError::NoPosition)
 }
 
+/// Calculates a user's health factor in basis points.
+///
+/// # Panics
+///
+/// This function does not panic; invalid risk inputs are returned as `VaultError`.
 pub fn health_factor_bps(env: &Env, user: &Address, debt: i128) -> Result<i128, VaultError> {
     if storage::get_position(env, user).is_none() {
         return Err(VaultError::NoPosition);
@@ -206,6 +268,11 @@ pub fn health_factor_bps(env: &Env, user: &Address, debt: i128) -> Result<i128, 
     })
 }
 
+/// Checks whether a proposed withdrawal preserves the user's health factor.
+///
+/// # Panics
+///
+/// Panics if the oracle is not configured or a collateral valuation overflows.
 pub fn is_post_withdraw_healthy(
     env: &Env,
     user: &Address,
@@ -278,5 +345,5 @@ pub fn is_post_withdraw_healthy(
             },
         )?;
 
-    Ok(hf_bps >= 10_000)
+    Ok(hf_bps >= shared::BPS_DENOMINATOR)
 }
