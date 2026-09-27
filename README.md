@@ -44,6 +44,8 @@
 > [!WARNING]
 > Alien Protocol is under active development and has not been audited. Do not use these contracts with production funds.
 
+See [`CHANGELOG.md`](CHANGELOG.md) for release notes and contract/storage-schema migration history.
+
 ## 👽 About
 
 Alien Protocol is a modular credit layer for tokenized real-world assets on Stellar. It is designed to make RWA-backed borrowing transparent, programmable, and easier for applications to integrate.
