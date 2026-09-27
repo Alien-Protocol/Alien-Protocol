@@ -9,17 +9,12 @@ pub const PROTOCOL_QUOTE_PRECISION: i128 = 10_000_000;
 pub const TOKEN_AMOUNT_PRECISION: i128 = PROTOCOL_QUOTE_PRECISION;
 /// Standardized precision used when normalizing oracle prices.
 pub const ORACLE_PRICE_PRECISION: i128 = PROTOCOL_QUOTE_PRECISION;
-/// Protocol debt precision. Debt values are expected to be expressed in the
-/// same quote units as collateral values.
-const _DEBT_PRECISION: i128 = PROTOCOL_QUOTE_PRECISION;
 
 /// Rounding policy for risk calculations.
 /// - collateral valuation and debt comparisons use floor rounding
-/// - collateral requirements use ceiling rounding when a minimum ratio is applied
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RoundingMode {
     Floor,
-    Ceiling,
 }
 
 pub fn validate_asset_config(
@@ -65,10 +60,6 @@ pub fn normalize_oracle_price(price: i128, oracle_price_decimals: u32) -> Result
     ))
 }
 
-pub fn normalize_debt_amount(amount: i128) -> i128 {
-    rounded_quote_amount(amount, RoundingMode::Floor)
-}
-
 pub fn collateral_value(
     amount: i128,
     price: i128,
@@ -89,28 +80,10 @@ pub fn collateral_value(
     )
 }
 
-#[allow(dead_code)]
-pub fn compare_collateral_with_debt(collateral_value: i128, debt: i128) -> bool {
-    let normalized_debt = normalize_debt_amount(debt);
-    rounded_quote_amount(collateral_value, RoundingMode::Floor) >= normalized_debt
-}
-
-#[allow(dead_code)]
-pub fn required_collateral_for_debt(debt: i128, min_ratio_bps: i128) -> i128 {
-    let normalized_debt = normalize_debt_amount(debt);
-    let numerator = normalized_debt
-        .checked_mul(min_ratio_bps)
-        .unwrap_or_else(|| panic!("overflow in collateral requirement"));
-    // Pass the BPS-scaled numerator so Ceiling can divide with round-up.
-    // Flooring `numerator / shared::BPS_DENOMINATOR` first would understate the requirement.
-    rounded_quote_amount(numerator, RoundingMode::Ceiling)
-}
 
 pub fn rounded_quote_amount(amount: i128, mode: RoundingMode) -> i128 {
     match mode {
         RoundingMode::Floor => amount,
-        RoundingMode::Ceiling => shared::ceil_div(amount, shared::BPS_DENOMINATOR)
-            .unwrap_or_else(|_| panic!("overflow in ceiling rounding")),
     }
 }
 

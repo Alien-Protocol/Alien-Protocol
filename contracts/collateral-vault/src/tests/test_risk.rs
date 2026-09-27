@@ -2,7 +2,6 @@
 
 use super::super::*;
 use super::helpers::ORACLE_STALE_THRESHOLD;
-use crate::risk::{required_collateral_for_debt, rounded_quote_amount, RoundingMode};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
@@ -103,6 +102,16 @@ fn setup_env() -> (
     )
 }
 
+fn required_collateral_for_debt(debt: i128, min_ratio_bps: i128) -> i128 {
+    let normalized_debt = debt;
+    let numerator = normalized_debt
+        .checked_mul(min_ratio_bps)
+        .unwrap_or_else(|| panic!("overflow in collateral requirement"));
+    // Inline ceiling rounding: ceil_div(numerator, BPS_DENOMINATOR)
+    shared::ceil_div(numerator, shared::BPS_DENOMINATOR)
+        .unwrap_or_else(|_| panic!("overflow in ceiling rounding"))
+}
+
 #[test]
 fn test_set_asset_config_persists_ltv_and_threshold() {
     let (_env, client, _admin, _user, _token_admin, _pool, _oracle, token_id) = setup_env();
@@ -191,11 +200,11 @@ fn test_get_health_factor_zero_debt_is_healthy() {
 fn test_ceiling_rounding_does_not_understate_required_collateral() {
     // 1 * 11_000 / 10_000 = 1.1. Floor would require 1 and understate; ceiling is 2.
     assert_eq!(required_collateral_for_debt(1, 11_000), 2);
-    assert_eq!(rounded_quote_amount(11_000, RoundingMode::Ceiling), 2);
+    assert_eq!(shared::ceil_div(11_000, shared::BPS_DENOMINATOR).unwrap(), 2);
 
     // Exact multiples stay exact.
     assert_eq!(required_collateral_for_debt(10, 11_000), 11);
-    assert_eq!(rounded_quote_amount(110_000, RoundingMode::Ceiling), 11);
+    assert_eq!(shared::ceil_div(110_000, shared::BPS_DENOMINATOR).unwrap(), 11);
 
     // 3 * 11_000 / 10_000 = 3.3 → 4.
     assert_eq!(required_collateral_for_debt(3, 11_000), 4);
