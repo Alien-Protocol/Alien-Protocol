@@ -20,6 +20,25 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # Cache strategy:
+      # - Cache paths:
+      #   * ~/.cargo/registry/index/ & ~/.cargo/registry/cache/: Cargo package index and downloaded crate archives.
+      #   * ~/.cargo/git/db/: Git dependencies repository database.
+      #   * target/: Compiled build artifacts and workspace dependencies.
+      # - Cache key: Runner OS + hash of Cargo.lock ensures invalidation whenever dependencies change.
+      # - Restore key: OS prefix fallback restores the latest cache if Cargo.lock changes, minimizing recompilation.
+      - name: Cache Cargo dependencies and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build -p collateral-vault --target wasm32v1-none --release
 
@@ -43,6 +62,25 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # Cache strategy:
+      # - Cache paths:
+      #   * ~/.cargo/registry/index/ & ~/.cargo/registry/cache/: Cargo package index and downloaded crate archives.
+      #   * ~/.cargo/git/db/: Git dependencies repository database.
+      #   * target/: Compiled build artifacts and workspace dependencies.
+      # - Cache key: Runner OS + hash of Cargo.lock ensures invalidation whenever dependencies change.
+      # - Restore key: OS prefix fallback restores the latest cache if Cargo.lock changes, minimizing recompilation.
+      - name: Cache Cargo dependencies and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Build Soroban contracts
         run: |
           cargo build \
@@ -64,6 +102,25 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      # Cache strategy:
+      # - Cache paths:
+      #   * ~/.cargo/registry/index/ & ~/.cargo/registry/cache/: Cargo package index and downloaded crate archives.
+      #   * ~/.cargo/git/db/: Git dependencies repository database.
+      #   * target/: Compiled build artifacts and workspace dependencies.
+      # - Cache key: Runner OS + hash of Cargo.lock ensures invalidation whenever dependencies change.
+      # - Restore key: OS prefix fallback restores the latest cache if Cargo.lock changes, minimizing recompilation.
+      - name: Cache Cargo dependencies and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build -p collateral-vault --target wasm32v1-none --release
