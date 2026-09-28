@@ -109,7 +109,7 @@ impl VaultContract {
         admin::unpause_operation(env, operation)
     }
 
-    pub fn add_supported_asset(env: Env, asset: Address) {
+    pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
         assets::add_supported_asset(env, asset)
     }
 

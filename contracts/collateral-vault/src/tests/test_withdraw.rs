@@ -1,10 +1,10 @@
 #![cfg(test)]
 
 use super::super::*;
+use super::helpers::ORACLE_STALE_THRESHOLD;
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
 
-const ORACLE_STALE_THRESHOLD: u64 = 300;
 
 #[contract]
 pub struct MockLendingPool;
