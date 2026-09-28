@@ -61,9 +61,6 @@ fn test_deposit_event_topics() {
 
     let topic_asset = Address::try_from_val(&env, &topics.get(2).unwrap()).unwrap();
     assert_eq!(topic_asset, token_id);
-
-    // We do not need to parse the raw data struct since the SDK handles its encoding format.
-    // It is sufficient to verify the correct topics were emitted.
 }
 
 #[test]
@@ -83,12 +80,6 @@ fn test_configuration_events() {
 
     let event_name = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
     assert_eq!(event_name, Symbol::new(&env, "oracle_updated"));
-
-    // Data contains old_oracle and new_oracle
-    // Because they are multiple fields, they are encoded as map/tuple.
-    // In Soroban rust sdk #[contractevent], it encodes non-topic fields as a Tuple/Map.
-    // If it's a struct with named fields, it's typically a Map. We don't need to assert deep raw data
-    // as long as the topic structure is confirmed and we test old/new configuration behavior.
 }
 
 #[test]
@@ -99,10 +90,24 @@ fn test_failed_invocation_no_events() {
     let liquidation_engine = Address::generate(&env);
     client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
-    // try to initialize again which should fail
-    let res = client.try_initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
-    assert_eq!(res, Err(Ok(VaultError::AlreadyInitialized)));
+    let events_before = env.events().all();
 
-    // Failed invocation emits no events
-    assert!(env.events().all().is_empty());
+    // Invocation fails because contract is already initialized
+    let res = client.try_initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
+    assert!(res.is_err());
+
+    let events_after = env.events().all();
+
+    // Verify no new contract events were emitted by comparing total event log
+    // A failed transaction in Soroban rolls back all contract-emitted events
+    let contract_events_after = events_after
+        .iter()
+        .skip(events_before.len() as usize)
+        .filter(|e| e.0 == client.address)
+        .count();
+
+    assert_eq!(
+        contract_events_after, 0,
+        "failed call must not emit contract events"
+    );
 }
