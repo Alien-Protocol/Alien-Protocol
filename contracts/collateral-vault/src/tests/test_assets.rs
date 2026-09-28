@@ -278,3 +278,24 @@ fn test_get_all_positions_excludes_withdrawn() {
 
     assert_eq!(client.get_all_positions().len(), 0);
 }
+
+
+#[test]
+fn test_set_asset_config_emits_event() {
+    use soroban_sdk::testutils::Events;
+    use soroban_sdk::{Symbol, IntoVal};
+
+    let (env, client, _admin, asset, _, _, _) = setup_env();
+
+    env.mock_all_auths();
+
+    client.add_supported_asset(&asset);
+
+    client.set_asset_config(&asset, &18, &8, &8000, &8500);
+
+    let events = env.events().all();
+    let last_event = events.last().unwrap();
+
+    let first_topic: Symbol = last_event.1.get(0).unwrap().into_val(&env);
+    assert_eq!(first_topic, Symbol::new(&env, "asset_config_updated"));
+}
