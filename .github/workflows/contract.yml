@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build -p collateral-vault --target wasm32v1-none --release
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Build Soroban contracts
         run: |
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build -p collateral-vault --target wasm32v1-none --release
