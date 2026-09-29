@@ -20,6 +20,9 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Add wasm32v1-none target
+        run: rustup target add wasm32v1-none
+
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build -p collateral-vault --target wasm32v1-none --release
 
@@ -43,6 +46,9 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Add wasm32v1-none target
+        run: rustup target add wasm32v1-none
+
       - name: Build Soroban contracts
         run: |
           cargo build \
@@ -64,6 +70,9 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Add wasm32v1-none target
+        run: rustup target add wasm32v1-none
 
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build -p collateral-vault --target wasm32v1-none --release
