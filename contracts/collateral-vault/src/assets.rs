@@ -2,13 +2,13 @@ use crate::events::AssetConfigUpdated;
 use crate::{errors::VaultError, events, storage, types::AssetConfig};
 use soroban_sdk::{Address, Env};
 
-/// Registers an asset with default configuration. Only the administrator may call it; panics with already-supported for duplicates.
-pub fn add_supported_asset(env: Env, asset: Address) {
-    let admin = storage::get_admin(&env).expect("not initialized");
+/// Registers an asset with default configuration.
+pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
     if storage::is_supported_asset(&env, &asset) {
-        soroban_sdk::panic_with_error!(&env, VaultError::AlreadySupported);
+        return Err(VaultError::AlreadySupported);
     }
 
     storage::add_supported_asset(&env, &asset);

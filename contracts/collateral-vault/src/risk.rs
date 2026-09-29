@@ -80,7 +80,6 @@ pub fn collateral_value(
     )
 }
 
-
 pub fn rounded_quote_amount(amount: i128, mode: RoundingMode) -> i128 {
     match mode {
         RoundingMode::Floor => amount,

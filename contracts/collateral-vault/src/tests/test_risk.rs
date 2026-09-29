@@ -5,7 +5,6 @@ use super::helpers::ORACLE_STALE_THRESHOLD;
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
-
 #[contract]
 pub struct MockLendingPool;
 
@@ -200,11 +199,17 @@ fn test_get_health_factor_zero_debt_is_healthy() {
 fn test_ceiling_rounding_does_not_understate_required_collateral() {
     // 1 * 11_000 / 10_000 = 1.1. Floor would require 1 and understate; ceiling is 2.
     assert_eq!(required_collateral_for_debt(1, 11_000), 2);
-    assert_eq!(shared::ceil_div(11_000, shared::BPS_DENOMINATOR).unwrap(), 2);
+    assert_eq!(
+        shared::ceil_div(11_000, shared::BPS_DENOMINATOR).unwrap(),
+        2
+    );
 
     // Exact multiples stay exact.
     assert_eq!(required_collateral_for_debt(10, 11_000), 11);
-    assert_eq!(shared::ceil_div(110_000, shared::BPS_DENOMINATOR).unwrap(), 11);
+    assert_eq!(
+        shared::ceil_div(110_000, shared::BPS_DENOMINATOR).unwrap(),
+        11
+    );
 
     // 3 * 11_000 / 10_000 = 3.3 → 4.
     assert_eq!(required_collateral_for_debt(3, 11_000), 4);

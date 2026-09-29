@@ -279,11 +279,10 @@ fn test_get_all_positions_excludes_withdrawn() {
     assert_eq!(client.get_all_positions().len(), 0);
 }
 
-
 #[test]
 fn test_set_asset_config_emits_event() {
     use soroban_sdk::testutils::Events;
-    use soroban_sdk::{Symbol, IntoVal};
+    use soroban_sdk::{IntoVal, Symbol};
 
     let (env, client, _admin, asset, _, _, _) = setup_env();
 

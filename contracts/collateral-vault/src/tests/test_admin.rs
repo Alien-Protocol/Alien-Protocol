@@ -290,13 +290,17 @@ fn test_set_lending_pool_success() {
     .unwrap();
     let decoded_new = Address::try_from_val(
         &env,
-        &data.get(soroban_sdk::Symbol::new(&env, "new_pool")).unwrap(),
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "new_pool"))
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(decoded_new, new_pool);
     let decoded_old = Option::<Address>::try_from_val(
         &env,
-        &data.get(soroban_sdk::Symbol::new(&env, "old_pool")).unwrap(),
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "old_pool"))
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(decoded_old, Some(lending_pool.clone()));
@@ -346,13 +350,17 @@ fn test_set_oracle_success() {
     .unwrap();
     let decoded_new = Address::try_from_val(
         &env,
-        &data.get(soroban_sdk::Symbol::new(&env, "new_oracle")).unwrap(),
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "new_oracle"))
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(decoded_new, new_oracle);
     let decoded_old = Option::<Address>::try_from_val(
         &env,
-        &data.get(soroban_sdk::Symbol::new(&env, "old_oracle")).unwrap(),
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "old_oracle"))
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(decoded_old, Some(oracle.clone()));
@@ -402,13 +410,17 @@ fn test_set_liquidation_engine_success() {
     .unwrap();
     let decoded_new = Address::try_from_val(
         &env,
-        &data.get(soroban_sdk::Symbol::new(&env, "new_engine")).unwrap(),
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "new_engine"))
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(decoded_new, new_engine);
     let decoded_old = Option::<Address>::try_from_val(
         &env,
-        &data.get(soroban_sdk::Symbol::new(&env, "old_engine")).unwrap(),
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "old_engine"))
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(decoded_old, Some(liquidation_engine.clone()));
