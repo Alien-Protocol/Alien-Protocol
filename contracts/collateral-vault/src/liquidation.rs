@@ -6,6 +6,7 @@ use crate::position::checked_debit;
 use crate::storage;
 use crate::types::PauseFlag;
 
+/// Transfers seized collateral after authenticating the registered liquidation engine. Returns unauthorized, vault-paused, or debit errors without transferring funds.
 pub fn execute_seize(
     env: &Env,
     liquidation_engine: Address,
