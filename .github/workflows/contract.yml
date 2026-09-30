@@ -49,16 +49,19 @@ jobs:
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
 
-      - name: Build Soroban contracts
-        run: |
-          cargo build \
-            -p collateral-vault \
-            -p lending-pool \
-            -p liquidation-engine \
-            -p oracle-adapter \
-            --target wasm32v1-none \
-            --release \
-            --verbose
+      - name: Install Stellar CLI
+        uses: taiki-e/install-action@v2
+        with:
+          tool: stellar-cli
+
+      # Keep CI aligned with the contributor-facing canonical build. Besides
+      # compiling, Stellar CLI validates contract metadata and performs the
+      # production WASM optimization pipeline.
+      - name: Build and validate Soroban contracts with Stellar CLI
+        run: stellar contract build --locked
+
+      - name: Verify release WASM artifacts
+        run: test -n "$(find target/wasm32v1-none/release -maxdepth 1 -name '*.wasm' -print -quit)"
 
   test:
     name: Run Tests (native)
