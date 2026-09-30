@@ -60,6 +60,16 @@ pub fn normalize_oracle_price(price: i128, oracle_price_decimals: u32) -> Result
     ))
 }
 
+/// Converts a token amount and oracle price into protocol quote precision.
+///
+/// `amount` and `price` are raw base-unit values whose decimal scales are
+/// supplied by `token_decimals` and `oracle_price_decimals`. The result is
+/// conservatively rounded down at each integer division.
+///
+/// # Panics
+///
+/// Panics when either decimal configuration cannot be normalized or when an
+/// intermediate multiplication exceeds `i128`.
 pub fn collateral_value(
     amount: i128,
     price: i128,
@@ -90,6 +100,13 @@ pub fn asset_config_for(env: &Env, asset: &Address) -> AssetConfig {
     storage::get_asset_config_or_default(env, asset)
 }
 
+/// Loads the stored (or default) configuration for `asset` and validates its
+/// token and oracle decimal scales before it is used in valuation.
+///
+/// # Panics
+///
+/// Panics when either decimal scale is zero or exceeds the supported 18-digit
+/// precision bound.
 pub fn validate_and_load_asset_config(env: &Env, asset: &Address) -> AssetConfig {
     let config = asset_config_for(env, asset);
     validate_asset_config(config.token_decimals, config.oracle_price_decimals)
@@ -97,6 +114,14 @@ pub fn validate_and_load_asset_config(env: &Env, asset: &Address) -> AssetConfig
     config
 }
 
+/// Returns the sum of all of `user`'s collateral in protocol quote precision.
+/// Each asset amount and oracle price is normalized independently and rounded
+/// down, so the aggregate never overstates collateral because of division.
+///
+/// # Panics
+///
+/// Panics if the user has no position, the oracle is not configured, an asset
+/// configuration or price cannot be loaded, or normalization/addition overflows.
 pub fn normalized_collateral_value(env: &Env, user: &Address) -> i128 {
     let position = storage::get_position(env, user).unwrap_or_else(|| panic!("no position"));
     let mut total = 0_i128;
@@ -120,6 +145,11 @@ pub fn normalized_collateral_value(env: &Env, user: &Address) -> i128 {
     rounded_quote_amount(total, RoundingMode::Floor)
 }
 
+/// Validates decimal scales and basis-point risk limits for an asset.
+///
+/// Both LTV values must be in `1..=10_000`, and the liquidation threshold must
+/// be strictly greater than maximum LTV. Returns `InvalidAssetConfig` for any
+/// violation; this function does not panic.
 pub fn validate_asset_risk_config(
     token_decimals: u32,
     oracle_price_decimals: u32,
@@ -140,6 +170,11 @@ pub fn validate_asset_risk_config(
     Ok(())
 }
 
+/// Returns the conservative liquidation threshold for a position in basis
+/// points: the minimum threshold among all non-zero collateral assets.
+///
+/// Returns `NoPosition` when the position is absent or contains no positive
+/// collateral. This function performs no arithmetic that can overflow.
 pub fn position_liquidation_threshold_bps(env: &Env, user: &Address) -> Result<u32, VaultError> {
     let position = storage::get_position(env, user).ok_or(VaultError::NoPosition)?;
 
@@ -162,6 +197,13 @@ pub fn position_liquidation_threshold_bps(env: &Env, user: &Address) -> Result<u
     min_lt.ok_or(VaultError::NoPosition)
 }
 
+/// Computes `user`'s liquidation health factor in basis points from normalized
+/// collateral, debt, and the position's conservative liquidation threshold.
+/// Collateral valuation rounds down before the shared health-factor calculation.
+///
+/// Returns a `VaultError` for missing positions, invalid debt/configuration,
+/// division by zero, or overflow. Valuation may panic under the conditions
+/// documented by [`normalized_collateral_value`].
 pub fn health_factor_bps(env: &Env, user: &Address, debt: i128) -> Result<i128, VaultError> {
     if storage::get_position(env, user).is_none() {
         return Err(VaultError::NoPosition);
@@ -180,6 +222,18 @@ pub fn health_factor_bps(env: &Env, user: &Address, debt: i128) -> Result<i128, 
     })
 }
 
+/// Simulates withdrawing `withdraw_amount` of `asset` and reports whether the
+/// remaining position has a health factor of at least 10,000 basis points.
+/// Inputs are raw token/debt amounts; collateral values are normalized and
+/// rounded down. Zero debt is always healthy.
+///
+/// Returns typed errors for non-positive withdrawals, missing positions,
+/// insufficient balance, invalid shared-risk inputs, and checked subtraction.
+///
+/// # Panics
+///
+/// Panics when the oracle is unavailable, an asset configuration/price cannot
+/// be loaded, or normalized collateral aggregation overflows.
 pub fn is_post_withdraw_healthy(
     env: &Env,
     user: &Address,
