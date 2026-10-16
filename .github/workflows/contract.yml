@@ -20,6 +20,14 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
 
+      - name: Verify pinned Rust toolchain
+        run: |
+          rustc --version
+          pinned=$(grep -E '^channel' rust-toolchain.toml | sed -E 's/.*"(.*)".*/\1/')
+          actual=$(rustc --version | awk '{print $2}')
+          echo "Pinned: $pinned, Actual: $actual"
+          test "$actual" = "$pinned"
+
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
 
@@ -46,6 +54,14 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
 
+      - name: Verify pinned Rust toolchain
+        run: |
+          rustc --version
+          pinned=$(grep -E '^channel' rust-toolchain.toml | sed -E 's/.*"(.*)".*/\1/')
+          actual=$(rustc --version | awk '{print $2}')
+          echo "Pinned: $pinned, Actual: $actual"
+          test "$actual" = "$pinned"
+
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
 
@@ -71,11 +87,27 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
 
+      - name: Verify pinned Rust toolchain
+        run: |
+          rustc --version
+          pinned=$(grep -E '^channel' rust-toolchain.toml | sed -E 's/.*"(.*)".*/\1/')
+          actual=$(rustc --version | awk '{print $2}')
+          echo "Pinned: $pinned, Actual: $actual"
+          test "$actual" = "$pinned"
+
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
 
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build --locked -p collateral-vault --target wasm32v1-none --release
+
+      - name: Verify pinned Rust toolchain
+        run: |
+          rustc --version
+          pinned=$(grep -E '^channel' rust-toolchain.toml | sed -E 's/.*"(.*)".*/\1/')
+          actual=$(rustc --version | awk '{print $2}')
+          echo "Pinned: $pinned, Actual: $actual"
+          test "$actual" = "$pinned"
 
       - name: Run Cargo tests
         run: cargo test --locked --workspace --all-features --verbose
