@@ -5,8 +5,8 @@ use crate::events;
 use crate::storage;
 use crate::types::LiquidationResult;
 use shared::{
-    ceil_div, CollateralAsset, CLOSE_FACTOR_BPS, HEALTHY_HF_BPS, LIQUIDATION_BONUS_BPS,
-    MIN_REMAINING_DEBT, PROTOCOL_QUOTE_PRECISION, TARGET_HF_BPS,
+    ceil_div, CollateralAsset, BPS_DENOMINATOR, CLOSE_FACTOR_BPS, HEALTHY_HF_BPS,
+    LIQUIDATION_BONUS_BPS, MIN_REMAINING_DEBT, PROTOCOL_QUOTE_PRECISION, TARGET_HF_BPS,
 };
 
 #[soroban_sdk::contractclient(name = "VaultClient")]
@@ -257,7 +257,7 @@ pub fn calculate_bonus(env: Env, repaid_amount: i128) -> Result<i128, EngineErro
         .checked_mul(LIQUIDATION_BONUS_BPS as i128)
         .ok_or(EngineError::Overflow)?;
 
-    ceil_div(bonus_numerator, 10_000).map_err(|_| EngineError::Overflow)
+    ceil_div(bonus_numerator, BPS_DENOMINATOR).map_err(|_| EngineError::Overflow)
 }
 
 pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, EngineError> {
@@ -327,10 +327,10 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
 
     // Denominator: TARGET_HF_BPS - (10_000 + LIQUIDATION_BONUS_BPS) * lt_bps / 10_000
     // First compute: (10_000 + LIQUIDATION_BONUS_BPS) * lt_bps / 10_000
-    let temp = (10_000i128 + LIQUIDATION_BONUS_BPS as i128)
+    let temp = (BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS as i128)
         .checked_mul(lt_bps)
         .ok_or(EngineError::Overflow)?;
-    let denominator_sub = ceil_div(temp, 10_000).map_err(|_| EngineError::Overflow)?;
+    let denominator_sub = ceil_div(temp, BPS_DENOMINATOR).map_err(|_| EngineError::Overflow)?;
 
     let denominator = TARGET_HF_BPS
         .checked_sub(denominator_sub)
@@ -347,7 +347,7 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
     let close_factor = debt
         .checked_mul(CLOSE_FACTOR_BPS as i128)
         .ok_or(EngineError::Overflow)?
-        / 10_000;
+        / BPS_DENOMINATOR;
 
     if repay > close_factor {
         repay = close_factor;
@@ -361,9 +361,9 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
     // Unsafe leftover fallback: if applying the capped R (including the 8% seize)
     // would leave HF_bps < 10_000, return full debt.
     let seized_value = repay
-        .checked_mul(10_000i128 + LIQUIDATION_BONUS_BPS as i128)
+        .checked_mul(BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS as i128)
         .ok_or(EngineError::Overflow)?
-        / 10_000;
+        / BPS_DENOMINATOR;
 
     let remaining_collateral_value = collateral_value
         .checked_sub(seized_value)
