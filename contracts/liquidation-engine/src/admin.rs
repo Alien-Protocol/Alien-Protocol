@@ -1,11 +1,11 @@
 use soroban_sdk::{Address, Env};
 
 use crate::errors::EngineError;
-use crate::events::{AdminChanged, Initialized};
+use crate::events::{AdminChanged, Initialized, OracleUpdated, PoolUpdated, VaultUpdated};
 use crate::storage;
 
 pub fn initialize(
-    env: Env,
+(    env: Env,
     admin: Address,
     vault: Address,
     pool: Address,
@@ -40,7 +40,7 @@ pub fn initialize(
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
@@ -68,11 +68,11 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
 
     AdminChanged {
         old_admin: current_admin,
-        new_admin,
+        new_admin: new_admin,
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
@@ -91,9 +91,17 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
 
     admin.require_auth();
 
+    let old_vault = storage::get_vault(&env);
+
     storage::set_vault(&env, &vault);
 
-    Ok(())
+    VaultUpdated {
+        old_vault,
+        new_vault: vault,
+    }
+    .publish(&env);
+
+    Ok(()
 }
 
 pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
@@ -112,9 +120,17 @@ pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
 
     admin.require_auth();
 
+    let old_pool = storage::get_pool(&env);
+
     storage::set_pool(&env, &pool);
 
-    Ok(())
+    PoolUpdated {
+        old_pool,
+        new_pool: pool,
+    }
+    .publish(&env);
+
+    Ok(()
 }
 
 pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
@@ -133,7 +149,15 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
 
     admin.require_auth();
 
+    let old_oracle = storage::get_oracle(&env);
+
     storage::set_oracle(&env, &oracle);
 
-    Ok(())
+    OracleUpdated {
+        old_oracle,
+        new_oracle: oracle,
+    }
+    .publish(&env);
+
+    Ok(()
 }
