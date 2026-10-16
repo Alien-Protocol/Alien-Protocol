@@ -82,3 +82,9 @@ fn test_ceil_div_rounds_up() {
 fn test_ceil_div_rejects_zero_denominator() {
     assert_eq!(ceil_div(1, 0), Err(SharedError::DivisionByZero));
 }
+
+#[test]
+fn test_ceil_div_negative_numerator_rounds_toward_positive_infinity() {
+    assert_eq!(ceil_div(-5, 2).unwrap(), -2);
+    assert_eq!(ceil_div(-6, 3).unwrap(), -2);
+}
