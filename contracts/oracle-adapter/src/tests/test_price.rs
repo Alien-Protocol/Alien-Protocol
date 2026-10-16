@@ -237,6 +237,27 @@ fn test_set_price_future_timestamp_rejected() {
     );
 }
 
+/// set_price must reject a timestamp that exceeds the current ledger time.
+/// Acceptance criterion: "Timestamp after ledger time fails".
+#[test]
+fn test_set_price_future_timestamp_rejected() {
+    let (env, client, admin) = setup_env_mock_all_auths();
+    let asset = Address::generate(&env);
+
+    // Pin the ledger to a known time, then try to submit a price timestamped
+    // one second in the future.
+    let ledger_now: u64 = 50_000;
+    env.ledger().set_timestamp(ledger_now);
+
+    let result = client.try_set_price(&admin, &asset, &300_i128, &(ledger_now + 1));
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::InvalidTimestamp as u32)
+    );
+}
+
 /// A price timestamped exactly at ledger time is valid (boundary: timestamp == ledger).
 #[test]
 fn test_set_price_at_ledger_timestamp_succeeds() {
