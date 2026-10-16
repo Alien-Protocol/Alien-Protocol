@@ -251,8 +251,10 @@ pub fn calculate_bonus(env: Env, repaid_amount: i128) -> Result<i128, EngineErro
         return Err(EngineError::InvalidAmount);
     }
 
-    // Calculate bonus: ceil_div(repaid_amount * LIQUIDATION_BONUS_BPS, 10_000)
-    // bonus = ceil_div(repaid_amount * bonus_bps, 10_000)
+    // bonus = ceil_div(repaid_amount * LIQUIDATION_BONUS_BPS, BPS_DENOMINATOR)
+    // Ceiling so the liquidator always receives at least the full 8% bonus
+    // on non-exact amounts — this is intentional and favours the liquidator
+    // by at most 1 unit, keeping the incentive intact.
     let bonus_numerator = repaid_amount
         .checked_mul(LIQUIDATION_BONUS_BPS as i128)
         .ok_or(EngineError::Overflow)?;
@@ -325,12 +327,17 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
         )
         .ok_or(EngineError::Overflow)?;
 
-    // Denominator: TARGET_HF_BPS - (10_000 + LIQUIDATION_BONUS_BPS) * lt_bps / 10_000
-    // First compute: (10_000 + LIQUIDATION_BONUS_BPS) * lt_bps / 10_000
+    // Denominator: TARGET_HF_BPS - (BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS) * lt_bps / BPS_DENOMINATOR
+    // The effective bonus-adjusted LT factor uses floor division: seizing
+    // R*(1+bonus) of collateral value can only reduce the HF by the floored
+    // multiple, so rounding up here would overstate the denominator_sub,
+    // shrink the denominator, and inflate R beyond what is needed.
     let temp = (BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS as i128)
         .checked_mul(lt_bps)
         .ok_or(EngineError::Overflow)?;
-    let denominator_sub = ceil_div(temp, BPS_DENOMINATOR).map_err(|_| EngineError::Overflow)?;
+    let denominator_sub = temp
+        .checked_div(BPS_DENOMINATOR)
+        .ok_or(EngineError::Overflow)?;
 
     let denominator = TARGET_HF_BPS
         .checked_sub(denominator_sub)

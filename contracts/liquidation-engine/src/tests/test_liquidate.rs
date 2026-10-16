@@ -211,10 +211,11 @@ const DEBT: i128 = 8_100_000_000;
 const LT_BPS: u32 = 8_000;
 const HEALTH_FACTOR_UNHEALTHY: i128 = 9_876; // floor(10_000_000_000 * 8_000 / 8_100_000_000)
 const HEALTH_FACTOR_HEALTHY: i128 = 10_500;
-// Exact result of `calculate_partial_repayment`'s ceil_div-based formula for
-// this fixture; ceil_div does not scale linearly with the underlying
-// fixture, so this is the precise value rather than a naive x1e6 scale-up of
-// test_math.rs's 3_856 fixture result.
+// Exact result of `calculate_partial_repayment` for this fixture.
+// lt_bps=8_000 → (10_800 * 8_000) % 10_000 == 0, so floor and ceil of
+// denominator_sub agree; the value is the same under both rounding modes.
+// See test_denominator_sub_rounding_regression in test_math.rs for a fixture
+// that exercises the non-exact case and would catch a ceil regression.
 const EXPECTED_PARTIAL_REPAY: i128 = 3_855_932_204;
 const COLLATERAL_BALANCE: i128 = 6_000_000_000;
 
