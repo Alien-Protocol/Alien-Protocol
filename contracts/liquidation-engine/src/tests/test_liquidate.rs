@@ -453,6 +453,24 @@ fn test_liquidate_rejects_self_liquidation() {
 }
 
 #[test]
+fn test_liquidate_rejects_zero_max_repay() {
+    let ctx = setup();
+
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &0);
+
+    assert_eq!(res, Err(Ok(EngineError::InvalidAmount)));
+}
+
+#[test]
+fn test_liquidate_rejects_negative_max_repay() {
+    let ctx = setup();
+
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &-1);
+
+    assert_eq!(res, Err(Ok(EngineError::InvalidAmount)));
+}
+
+#[test]
 fn test_liquidate_rejects_non_positive_max_repay() {
     let ctx = setup();
 
