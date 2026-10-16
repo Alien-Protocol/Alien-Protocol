@@ -133,3 +133,23 @@ fn test_utilization_zero_when_nothing_borrowed() {
 
     assert_eq!(client.get_utilization_bps(), 0);
 }
+
+#[test]
+fn test_utilization_large_values_saturate_without_panicking() {
+    let (env, client, _admin, _user, _vault, _token_id, _token_client, _token_admin) = setup_env();
+
+    // borrowed * 10_000 overflows i128; must saturate to 10_000 bps, not panic.
+    let huge = i128::MAX / 1_000;
+    env.as_contract(&client.address, || {
+        storage::set_total_supply(&env, huge);
+        storage::set_total_borrowed(&env, huge);
+    });
+    assert_eq!(client.get_utilization_bps(), 10_000);
+
+    // Product fits in i128 but the bps result exceeds u32; must saturate, not wrap.
+    env.as_contract(&client.address, || {
+        storage::set_total_supply(&env, 1);
+        storage::set_total_borrowed(&env, 10_000_000_000);
+    });
+    assert_eq!(client.get_utilization_bps(), 10_000);
+}

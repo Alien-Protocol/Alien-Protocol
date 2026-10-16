@@ -100,5 +100,9 @@ pub fn get_utilization_bps(env: Env) -> u32 {
         return 0;
     }
     let total_borrowed = storage::get_total_borrowed(&env);
-    (total_borrowed * 10_000 / total_supply) as u32
+    total_borrowed
+        .checked_mul(10_000)
+        .and_then(|product| product.checked_div(total_supply))
+        .and_then(|bps| u32::try_from(bps).ok())
+        .unwrap_or(10_000)
 }
