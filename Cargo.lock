@@ -959,6 +959,7 @@ name = "oracle-adapter"
 version = "0.0.0"
 dependencies = [
  "redstone",
+ "shared",
  "soroban-sdk",
 ]
 
