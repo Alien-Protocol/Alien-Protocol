@@ -5,7 +5,7 @@ use crate::events::{AdminChanged, Initialized};
 use crate::storage;
 
 pub fn initialize(
-    env: Env,
+(    env: Env,
     admin: Address,
     vault: Address,
     pool: Address,
@@ -40,7 +40,7 @@ pub fn initialize(
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {

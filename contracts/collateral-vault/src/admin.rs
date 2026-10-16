@@ -1,14 +1,15 @@
 use crate::{errors::VaultError, events, storage, types::PauseFlag};
+use shared::access::{require_admin, ensure_new_admin, pause_mask, unpause_mask};
 use soroban_sdk::{Address, Env, Symbol};
 
 /// Updates the vault administrator. The current administrator must authorize; returns invalid-input or already-admin errors.
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
-    let current_admin = storage::get_admin(&env).ok_or(VaultError::InvalidInputs)?;
-    current_admin.require_auth();
+    let current_admin = require_admin(
+        storage::get_admin(&env),
+        VaultError::InvalidInputs,
+    )?
 
-    if current_admin == new_admin {
-        return Err(VaultError::AlreadyAdmin);
-    }
+    ensure_new_admin(&current_admin, &new_admin, VaultError::AlreadyAdmin)?;
 
     storage::set_admin(&env, &new_admin);
 
@@ -18,13 +19,12 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 /// Sets the lending-pool address. Only the administrator may call it; rejects an address that conflicts with the oracle.
 pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultError> {
-    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
-    admin.require_auth();
+    let admin = require_admin(storage::get_admin(&env), VaultError::NotInitialized)?;
 
     if let Some(oracle) = storage::get_oracle(&env) {
         if lending_pool == oracle {
@@ -42,13 +42,12 @@ pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultErro
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 /// Sets the oracle address. Only the administrator may call it; rejects an address that conflicts with the lending pool.
 pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
-    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
-    admin.require_auth();
+    let admin = require_admin(storage::get_admin(&env), VaultError::NotInitialized)?;
 
     if let Some(pool) = storage::get_lending_pool(&env) {
         if oracle == pool {
@@ -65,13 +64,12 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 /// Sets the authorized liquidation engine. Only the administrator may call it; returns not-initialized when no admin exists.
 pub fn set_liquidation_engine(env: Env, engine: Address) -> Result<(), VaultError> {
-    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
-    admin.require_auth();
+    let admin = require_admin(storage::get_admin(&env), VaultError::NotInitialized)?;
 
     let old_engine = storage::get_liquidation_engine(&env);
     storage::set_liquidation_engine(&env, &engine);
@@ -82,20 +80,16 @@ pub fn set_liquidation_engine(env: Env, engine: Address) -> Result<(), VaultErro
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 /// Pauses an operation for an administrator-supplied reason. Only the administrator may call it; returns already-paused when applicable.
 pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result<(), VaultError> {
-    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
-    admin.require_auth();
-
-    if storage::is_operation_paused(&env, &operation) {
-        return Err(VaultError::AlreadyPaused);
-    }
+    let admin = require_admin(storage::get_admin(&env), VaultError::NotInitialized)?;
 
     let mask = storage::get_pause_mask(&env);
-    storage::set_pause_mask(&env, mask | operation.bit());
+    let new_mask = pause_mask(mask, operation.bit()).ok_or(VaultError::AlreadyPaused)?;
+    storage::set_pause_mask(&env, new_mask);
 
     let op_symbol = crate::types::pause_flag_symbol(&env, &operation);
     events::OperationPaused {
@@ -105,21 +99,17 @@ pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 /// Unpause a specific operation. Only callable by the admin (emergency role).
 /// Returns an error if the operation is not currently paused.
 pub fn unpause_operation(env: Env, operation: PauseFlag) -> Result<(), VaultError> {
-    let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
-    admin.require_auth();
-
-    if !storage::is_operation_paused(&env, &operation) {
-        return Err(VaultError::NotPaused);
-    }
+    let admin = require_admin(storage::get_admin(&env), VaultError::NotInitialized)?;
 
     let mask = storage::get_pause_mask(&env);
-    storage::set_pause_mask(&env, mask & !operation.bit());
+    let new_mask = unpause_mask(mask, operation.bit()).ok_or(VaultError::NotPaused)?;
+    storage::set_pause_mask(&env, new_mask);
 
     let op_symbol = crate::types::pause_flag_symbol(&env, &operation);
     events::OperationUnpaused {
@@ -128,5 +118,5 @@ pub fn unpause_operation(env: Env, operation: PauseFlag) -> Result<(), VaultErro
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }

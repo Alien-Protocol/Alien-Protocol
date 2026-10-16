@@ -1,11 +1,13 @@
+use crate::access::{ensure_new_admin, pause_mask, require_admin, unpause_mask};
 use crate::errors::SharedError;
 use crate::types::{
     accrue_linear_interest, borrow_limit_from_collateral, ceil_div, health_factor_bps, Debt,
 };
+use soroban_sdk::{Address, Env};
 
 #[test]
 fn test_accrue_linear_interest_one_year_eight_percent() {
-    assert_eq!(
+    assert_eq(
         accrue_linear_interest(1_000_000_000, 800, 31_536_000).unwrap(),
         80_000_000
     );
@@ -13,12 +15,12 @@ fn test_accrue_linear_interest_one_year_eight_percent() {
 
 #[test]
 fn test_accrue_linear_interest_zero_elapsed_is_zero() {
-    assert_eq!(accrue_linear_interest(1_000_000_000, 800, 0).unwrap(), 0);
+    assert_eq(accrue_linear_interest(1_000_000_000, 800, 0).unwrap(), 0);
 }
 
 #[test]
 fn test_accrue_linear_interest_rejects_negative_principal() {
-    assert_eq!(
+    assert_eq(
         accrue_linear_interest(-1, 800, 31_536_000),
         Err(SharedError::InvalidAmount)
     );
@@ -32,22 +34,22 @@ fn test_debt_total_is_principal_plus_accrued() {
         interest_rate_bps: 800,
         last_accrual_at: 0,
     };
-    assert_eq!(debt.total().unwrap(), 1_080_000_000);
+    assert_eq(debt.total().unwrap(), 1_080_000_000);
 }
 
 #[test]
 fn test_health_factor_bps_example_from_arch() {
-    assert_eq!(health_factor_bps(10_000, 7_500, 8_000).unwrap(), 10_666);
+    assert_eq(health_factor_bps(10_000, 7_500, 8_000).unwrap(), 10_666);
 }
 
 #[test]
 fn test_health_factor_zero_debt_is_max() {
-    assert_eq!(health_factor_bps(10_000, 0, 8_000).unwrap(), i128::MAX);
+    assert_eq(health_factor_bps(10_000, 0, 8_000).unwrap(), i128::MAX);
 }
 
 #[test]
 fn test_health_factor_rejects_negative_debt() {
-    assert_eq!(
+    assert_eq(
         health_factor_bps(10_000, -1, 8_000),
         Err(SharedError::InvalidAmount)
     );
@@ -55,7 +57,7 @@ fn test_health_factor_rejects_negative_debt() {
 
 #[test]
 fn test_health_factor_rejects_negative_collateral() {
-    assert_eq!(
+    assert_eq(
         health_factor_bps(-1, 7_500, 8_000),
         Err(SharedError::InvalidAmount)
     );
@@ -63,7 +65,7 @@ fn test_health_factor_rejects_negative_collateral() {
 
 #[test]
 fn test_borrow_limit_seventy_percent() {
-    assert_eq!(
+    assert_eq(
         borrow_limit_from_collateral(10_000_000, 7_000).unwrap(),
         7_000_000
     );
@@ -71,14 +73,67 @@ fn test_borrow_limit_seventy_percent() {
 
 #[test]
 fn test_ceil_div_rounds_up() {
-    assert_eq!(ceil_div(10, 3).unwrap(), 4);
-    assert_eq!(ceil_div(9, 3).unwrap(), 3);
-    assert_eq!(ceil_div(1, 3).unwrap(), 1);
-    assert_eq!(ceil_div(0, 3).unwrap(), 0);
-    assert_eq!(ceil_div(5, -2).unwrap(), -2);
+    assert_eq(ceil_div(10, 3).unwrap(), 4);
+    assert_eq(ceil_div(9, 3).unwrap(), 3);
+    assert_eq(ceil_div(1, 3).unwrap(), 1);
+    assert_eq(ceil_div(0, 3).unwrap(), 0);
+    assert_eq(ceil_div(5, -2).unwrap(), -2);
 }
 
 #[test]
 fn test_ceil_div_rejects_zero_denominator() {
-    assert_eq!(ceil_div(1, 0), Err(SharedError::DivisionByZero));
+    assert_eq(ceil_div(1, 0), Err(SharedError::DivisionByZero));
+}
+
+#[test]
+fn test_require_admin_returns_not_initialized_when_absent() {
+    let env = Env::default();
+    let admin: Option<Address> = None;
+    assert_eq(
+        require_admin(admin, SharedError::NotInitialized),
+        Err(SharedError::NotInitialized)
+    );
+    // Ensure the env is used to avoid an unused variable warning.
+    let _ = env;
+}
+
+#[test]
+fn test_require_admin_returns_admin_when_present() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let result = require_admin(Some(admin.clone()), SharedError::NotInitialized);
+    assert_eq(result.unwrap(), admin);
+}
+
+#[test]
+fn test_ensure_new_admin_rejects_same_address() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    assert_eq(
+        ensure_new_admin(&admin, &admin, SharedError::AlreadyAdmin),
+        Err(SharedError::AlreadyAdmin)
+    );
+}
+
+#[test]
+fn test_ensure_new_admin_accepts_different_address() {
+    let env = Env::default();
+    let current = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    assert_eq(
+        ensure_new_admin(&current, &new_admin, SharedError::AlreadyAdmin),
+        Ok(())
+    );
+}
+
+#[test]
+fn test_pause_mask_sets_bit_when_clear() {
+    assert_eq(pause_mask(0 b000, 0 b001), Some(0 b001));
+    assert_eq(pause_mask(0 b001, 0 b001), None);
+}
+
+#[test]
+fn test_unpause_mask_clears_bit_when_set() {
+    assert_eq(unpause_mask(0 b011, 0 b001), Some(0 b010));
+    assert_eq(unpause_mask(0 b010, 0 b001), None);
 }

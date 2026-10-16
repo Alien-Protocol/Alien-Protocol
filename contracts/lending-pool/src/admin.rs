@@ -4,6 +4,7 @@ use crate::errors::PoolError;
 use crate::events;
 use crate::storage::{self, get_pause_mask, set_pause_mask};
 use crate::types::{pause_flag_symbol, PauseFlag};
+use shared::access::require_admin;
 
 pub fn initialize(
     env: Env,
@@ -43,12 +44,14 @@ pub fn initialize(
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), PoolError> {
-    let current_admin = storage::get_admin(&env).ok_or(PoolError::NotInitialized)?;
-    current_admin.require_auth();
+    let current_admin = require_admin(
+        storage::get_admin(&env),
+        PoolError::NotInitialized,
+    )?;
 
     if current_admin == new_admin {
         return Err(PoolError::AlreadyAdmin);
@@ -62,12 +65,11 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), PoolError> {
     .publish(&env);
 
     storage::set_admin(&env, &new_admin);
-    Ok(())
+    Ok(()
 }
 
 pub fn set_vault(env: Env, vault: Address) -> Result<(), PoolError> {
-    let admin = storage::get_admin(&env).ok_or(PoolError::NotInitialized)?;
-    admin.require_auth();
+    let _admin = require_admin(storage::get_admin(&env), PoolError::NotInitialized)?;
 
     if let Some(current_oracle) = storage::get_oracle(&env) {
         if vault == current_oracle {
@@ -76,12 +78,11 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), PoolError> {
     }
 
     storage::set_vault(&env, &vault);
-    Ok(())
+    Ok(()
 }
 
 pub fn set_oracle(env: Env, oracle: Address) -> Result<(), PoolError> {
-    let admin = storage::get_admin(&env).ok_or(PoolError::NotInitialized)?;
-    admin.require_auth();
+    let _admin = require_admin(storage::get_admin(&env), PoolError::NotInitialized)?;
 
     if let Some(current_vault) = storage::get_vault(&env) {
         if oracle == current_vault {
@@ -90,12 +91,11 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), PoolError> {
     }
 
     storage::set_oracle(&env, &oracle);
-    Ok(())
+    Ok(()
 }
 
 pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result<(), PoolError> {
-    let admin = storage::get_admin(&env).ok_or(PoolError::NotInitialized)?;
-    admin.require_auth();
+    let admin = require_admin(storage::get_admin(&env), PoolError::NotInitialized)?;
 
     let current_mask = get_pause_mask(&env);
     let flag_bit = operation.bit();
@@ -115,12 +115,11 @@ pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 pub fn unpause_operation(env: Env, operation: PauseFlag) -> Result<(), PoolError> {
-    let admin = storage::get_admin(&env).ok_or(PoolError::NotInitialized)?;
-    admin.require_auth();
+    let admin = require_admin(storage::get_admin(&env), PoolError::NotInitialized)?;
 
     let current_mask = get_pause_mask(&env);
     let flag_bit = operation.bit();
@@ -139,5 +138,5 @@ pub fn unpause_operation(env: Env, operation: PauseFlag) -> Result<(), PoolError
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }

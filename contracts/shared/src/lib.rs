@@ -1,10 +1,14 @@
-#![no_std]
+#[!no_std]
 
-pub mod constant;
-pub mod errors;
-pub mod events;
-pub mod types;
+pubmod access;
+pubmod constant;
+pubmod errors;
+pubmod events;
+pubmod types;
 
+pub use access::*{
+    ensure_new_admin, pause_mask, require_admin, unpause_mask,
+};
 pub use constant::*;
 pub use errors::*;
 pub use types::*;
