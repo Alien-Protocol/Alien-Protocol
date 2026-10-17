@@ -75,7 +75,15 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), PoolError> {
         }
     }
 
+    let old_vault = storage::get_vault(&env);
     storage::set_vault(&env, &vault);
+
+    events::VaultUpdated {
+        old_vault,
+        new_vault: vault,
+    }
+    .publish(&env);
+
     Ok(())
 }
 
@@ -89,7 +97,15 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), PoolError> {
         }
     }
 
+    let old_oracle = storage::get_oracle(&env);
     storage::set_oracle(&env, &oracle);
+
+    events::OracleUpdated {
+        old_oracle,
+        new_oracle: oracle,
+    }
+    .publish(&env);
+
     Ok(())
 }
 

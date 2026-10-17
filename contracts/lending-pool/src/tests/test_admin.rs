@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::super::*;
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{token, Address, Env};
 
 fn setup_env() -> (
@@ -168,4 +168,96 @@ fn test_getters_match_initialize_args() {
     assert_eq!(client.get_oracle(), Some(oracle.clone()));
     assert_eq!(client.get_borrow_asset(), Some(token_id.clone()));
     assert_eq!(client.get_interest_rate_bps(), interest_rate_bps);
+}
+
+#[test]
+fn test_set_vault_emits_event() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let new_vault = Address::generate(&env);
+    client.set_vault(&new_vault);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let event_symbol =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "vault_updated")
+    );
+
+    // Event data must carry old and new vault addresses
+    let data = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(
+        &env,
+        &last_event.2,
+    )
+    .unwrap();
+    let decoded_new = Address::try_from_val(
+        &env,
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "new_vault"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_new, new_vault);
+    let decoded_old = Option::<Address>::try_from_val(
+        &env,
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "old_vault"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_old, Some(vault.clone()));
+
+    assert_eq!(client.get_vault(), Some(new_vault));
+}
+
+#[test]
+fn test_set_oracle_emits_event() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let new_oracle = Address::generate(&env);
+    client.set_oracle(&new_oracle);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+    use soroban_sdk::TryFromVal;
+    let event_symbol =
+        soroban_sdk::Symbol::try_from_val(&env, &last_event.1.get(0).unwrap()).unwrap();
+    assert_eq!(
+        event_symbol,
+        soroban_sdk::Symbol::new(&env, "oracle_updated")
+    );
+
+    // Event data must carry old and new oracle addresses
+    let data = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(
+        &env,
+        &last_event.2,
+    )
+    .unwrap();
+    let decoded_new = Address::try_from_val(
+        &env,
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "new_oracle"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_new, new_oracle);
+    let decoded_old = Option::<Address>::try_from_val(
+        &env,
+        &data
+            .get(soroban_sdk::Symbol::new(&env, "old_oracle"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded_old, Some(oracle.clone()));
+
+    assert_eq!(client.get_oracle(), Some(new_oracle));
 }
