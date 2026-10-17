@@ -34,7 +34,7 @@ jobs:
           script: |
             const commentBody = `## ⚠️ Branch Policy Violation
 
-            This PR targets \`main\` but does not come from \`develop\`. Per repository policy, **PRs to \`main\` must come from \`develop\`**.
+            @${{ github.event.pull_request.user.login }} — This PR targets \`main\` but does not come from \`develop\`. Per repository policy, **PRs to \`main\` must come from \`develop\`**.
 
             ### How to Fix
 
