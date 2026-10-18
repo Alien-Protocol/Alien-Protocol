@@ -35,7 +35,7 @@ pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
 
     events::Supplied { user, amount }.publish(&env);
 
-    Ok(()
+    Ok(())
 }
 
 pub fn withdraw_liquidity(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
