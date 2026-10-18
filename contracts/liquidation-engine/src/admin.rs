@@ -5,10 +5,7 @@ use crate::events::{AdminChanged, Initialized};
 use crate::storage;
 
 fn assert_distinct(candidate: &Address, others: &[Option<Address>]) -> Result<(), EngineError> {
-    if others
-        .iter()
-        .any(|other| other.as_ref() == Some(candidate))
-    {
+    if others.iter().any(|other| other.as_ref() == Some(candidate)) {
         return Err(EngineError::InvalidAddress);
     }
     Ok(())
@@ -88,10 +85,7 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
     let current_pool = storage::get_pool(&env);
     let current_oracle = storage::get_oracle(&env);
 
-    assert_distinct(
-        &vault,
-        &[Some(admin.clone()), current_pool, current_oracle],
-    )?;
+    assert_distinct(&vault, &[Some(admin.clone()), current_pool, current_oracle])?;
 
     admin.require_auth();
 
@@ -107,10 +101,7 @@ pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
     let current_vault = storage::get_vault(&env);
     let current_oracle = storage::get_oracle(&env);
 
-    assert_distinct(
-        &pool,
-        &[Some(admin.clone()), current_vault, current_oracle],
-    )?;
+    assert_distinct(&pool, &[Some(admin.clone()), current_vault, current_oracle])?;
 
     admin.require_auth();
 
@@ -126,10 +117,7 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
     let current_vault = storage::get_vault(&env);
     let current_pool = storage::get_pool(&env);
 
-    assert_distinct(
-        &oracle,
-        &[Some(admin.clone()), current_vault, current_pool],
-    )?;
+    assert_distinct(&oracle, &[Some(admin.clone()), current_vault, current_pool])?;
 
     admin.require_auth();
 
