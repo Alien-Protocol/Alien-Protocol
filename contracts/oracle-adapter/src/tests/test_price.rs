@@ -176,6 +176,42 @@ fn test_set_price_overwrites_existing() {
     assert_eq!(second.timestamp, 200);
 }
 
+// ── Issue: set_price rejects a non-increasing timestamp ──────────────────────
+
+/// A rewrite at the same timestamp as the existing price must be rejected.
+#[test]
+fn test_set_price_rewind_equal_timestamp_rejected() {
+    let (env, client, admin) = setup_env_mock_all_auths();
+    let asset = Address::generate(&env);
+
+    client.set_price(&admin, &asset, &100_i128, &5_000_u64);
+
+    let result = client.try_set_price(&admin, &asset, &200_i128, &5_000_u64);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::InvalidTimestamp as u32)
+    );
+}
+
+/// A rewrite at an earlier timestamp than the existing price must be rejected.
+#[test]
+fn test_set_price_rewind_earlier_timestamp_rejected() {
+    let (env, client, admin) = setup_env_mock_all_auths();
+    let asset = Address::generate(&env);
+
+    client.set_price(&admin, &asset, &100_i128, &5_000_u64);
+
+    let result = client.try_set_price(&admin, &asset, &200_i128, &4_999_u64);
+    assert!(result.is_err());
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::InvalidTimestamp as u32)
+    );
+}
+
 // ── Issue #647: stale and future timestamp guards ────────────────────────────
 
 /// set_price must reject a timestamp older than the last stored price timestamp.
