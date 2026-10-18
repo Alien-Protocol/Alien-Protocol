@@ -2,7 +2,7 @@ name: Branch Policy
 
 on:
   pull_request_target:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   pull-requests: write
