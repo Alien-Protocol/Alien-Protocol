@@ -31,7 +31,7 @@ mod tests {
 
     #[test]
     fn is_set_reports_bit_state() {
-        assert!(is_set(0b1010, 0b0001) == false);
+        assert!(!is_set(0b1010, 0b0001));
         assert!(is_set(0b1010, 0b0010));
         assert!(is_set(0b1010, 0b1000));
     }
