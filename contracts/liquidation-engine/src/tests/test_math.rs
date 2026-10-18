@@ -1,3 +1,4 @@
+
 #[cfg(test)]
 mod tests {
     use crate::errors::EngineError;
@@ -37,7 +38,10 @@ mod tests {
     fn test_calculate_bonus_large_amount() {
         // 10_000_000_000 * 800 / 10_000 = 800_000_000 (exact)
         let env = Env::default();
-        assert_eq!(calculate_bonus(env, 10_000_000_000).unwrap(), 800_000_000);
+        assert_eq!(
+            calculate_bonus(env, 10_000_000_000).unwrap(),
+            800_000_000
+        );
     }
 
     #[test]
@@ -67,12 +71,15 @@ mod tests {
             (1250, 100),   // 1_000_000 / 10_000 = 100, exact
             (12500, 1000), // 10_000_000 / 10_000 = 1_000, exact
         ];
+
         for &(repaid, expected) in cases {
+            let result = calculate_bonus(env.clone(), repaid);
+            assert!(result.is_ok(), "Failed for repaid={repaid}");
+
+            let bonus = result.unwrap();
             assert_eq!(
-                calculate_bonus(env.clone(), repaid).unwrap(),
-                expected,
-                "repaid={}",
-                repaid
+                bonus, expected,
+                "Mismatch for repaid={repaid}: expected {expected}, got {bonus}"
             );
         }
     }
@@ -131,7 +138,7 @@ mod tests {
 
         // After repay=3_856, seize=4_164:
         let remaining_collateral = collateral_value - 4_164; // 5_836
-        let remaining_debt = debt - 3_856;                   // 4_244
+        let remaining_debt = debt - 3_856; // 4_244
         assert_eq!(remaining_collateral, 5_836);
         assert_eq!(remaining_debt, 4_244);
 
@@ -156,7 +163,8 @@ mod tests {
 
     /// denominator_sub computed with floor division (correct).
     fn denom_sub_floor(lt_bps: i128) -> i128 {
-        (shared::BPS_DENOMINATOR + shared::LIQUIDATION_BONUS_BPS as i128) * lt_bps
+        (shared::BPS_DENOMINATOR + shared::LIQUIDATION_BONUS_BPS as i128)
+            * lt_bps
             / shared::BPS_DENOMINATOR
     }
 
@@ -188,12 +196,12 @@ mod tests {
     #[test]
     fn test_denominator_sub_regression_ceil_inflates_repayment() {
         // Fixture: collateral=10_000, debt=8_000, lt_bps=7_777
-        // HF_now = floor(10_000 * 7_777 / 8_000) = 9_721  (liquidatable)
+        // HF_now = floor(10_000 * 7_777 / 8_000) = 9_721 (liquidatable)
         let collateral = 10_000i128;
         let debt = 8_000i128;
         let lt_bps = 7_777i128;
-        let target = shared::TARGET_HF_BPS;  // 11_000
-        let bps = shared::BPS_DENOMINATOR;   // 10_000
+        let target = shared::TARGET_HF_BPS; // 11_000
+        let bps = shared::BPS_DENOMINATOR; // 10_000
 
         // numerator = 11_000*8_000 - 10_000*7_777 = 88_000_000 - 77_770_000 = 10_230_000
         let numerator = target * debt - collateral * lt_bps;
@@ -229,9 +237,9 @@ mod tests {
     #[test]
     fn test_denominator_sub_regression_multiple_lt_values() {
         // For lt_bps where (10_800 * lt_bps) is divisible by 10_000:
-        //   floor == ceil (no bug manifestation).
+        // floor == ceil (no bug manifestation).
         // For all others: ceil == floor + 1 (bug inflates R by one denominator unit).
-        let cases: &[(i128, bool /* exact? */)] = &[
+        let cases: &[(i128, bool)] = &[
             (5_000, true),
             (6_250, true),
             (7_000, true),
@@ -242,13 +250,22 @@ mod tests {
             (6_543, false),
             (9_001, false),
         ];
+
         for &(lt_bps, exact) in cases {
-            let f = denom_sub_floor(lt_bps);
-            let c = denom_sub_ceil(lt_bps);
+            let floor = denom_sub_floor(lt_bps);
+            let ceil = denom_sub_ceil(lt_bps);
+
             if exact {
-                assert_eq!(f, c, "lt_bps={}: expected floor==ceil", lt_bps);
+                assert_eq!(
+                    floor, ceil,
+                    "lt_bps={lt_bps}: expected floor==ceil"
+                );
             } else {
-                assert_eq!(c, f + 1, "lt_bps={}: expected ceil==floor+1", lt_bps);
+                assert_eq!(
+                    ceil,
+                    floor + 1,
+                    "lt_bps={lt_bps}: expected ceil==floor+1"
+                );
             }
         }
     }
