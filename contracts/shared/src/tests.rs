@@ -1,4 +1,5 @@
 use crate::errors::SharedError;
+use crate::constant::{SECONDS_PER_YEAR, V1_BORROW_APR_BPS};
 use crate::types::{
     accrue_linear_interest, borrow_limit_from_collateral, ceil_div, health_factor_bps, Debt,
 };
@@ -6,14 +7,33 @@ use crate::types::{
 #[test]
 fn test_accrue_linear_interest_one_year_eight_percent() {
     assert_eq!(
-        accrue_linear_interest(1_000_000_000, 800, 31_536_000).unwrap(),
+        accrue_linear_interest(1_000_000_000, V1_BORROW_APR_BPS, SECONDS_PER_YEAR).unwrap(),
         80_000_000
     );
 }
 
 #[test]
+fn test_accrue_linear_interest_zero_principal_is_zero() {
+    assert_eq!(
+        accrue_linear_interest(0, V1_BORROW_APR_BPS, SECONDS_PER_YEAR).unwrap(),
+        0
+    );
+}
+
+#[test]
 fn test_accrue_linear_interest_zero_elapsed_is_zero() {
-    assert_eq!(accrue_linear_interest(1_000_000_000, 800, 0).unwrap(), 0);
+    assert_eq!(
+        accrue_linear_interest(1_000_000_000, V1_BORROW_APR_BPS, 0).unwrap(),
+        0
+    );
+}
+
+#[test]
+fn test_accrue_linear_interest_overflow_is_error() {
+    assert_eq!(
+        accrue_linear_interest(i128::MAX, V1_BORROW_APR_BPS, SECONDS_PER_YEAR),
+        Err(SharedError::Overflow)
+    );
 }
 
 #[test]
