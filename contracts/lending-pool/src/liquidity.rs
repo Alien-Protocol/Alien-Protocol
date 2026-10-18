@@ -19,7 +19,7 @@ pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
     let borrow_asset = storage::get_borrow_asset(&env).ok_or(PoolError::NotInitialized)?;
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    token_client.transfer(&user, &env.current_contract_address(), &amount);
+    token_client.transfer(&user, env.current_contract_address(), &amount);
 
     let current_supply = storage::get_user_supply(&env, &user);
     let new_supply = current_supply
