@@ -49,6 +49,9 @@ jobs:
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
 
+      - name: Install Stellar CLI
+        run: cargo install --locked stellar-cli --version 23.0.0
+
       - name: Build Soroban contracts
         run: |
           cargo build \
@@ -59,6 +62,9 @@ jobs:
             --target wasm32v1-none \
             --release \
             --verbose
+
+      - name: Build contracts with Stellar CLI
+        run: stellar contract build --locked
 
   test:
     name: Run Tests (native)
