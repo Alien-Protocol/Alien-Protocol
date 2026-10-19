@@ -211,16 +211,19 @@ const DEBT: i128 = 8_100_000_000;
 const LT_BPS: u32 = 8_000;
 const HEALTH_FACTOR_UNHEALTHY: i128 = 9_876; // floor(10_000_000_000 * 8_000 / 8_100_000_000)
 const HEALTH_FACTOR_HEALTHY: i128 = 10_500;
-// Exact result of `calculate_partial_repayment` for this fixture.
-// lt_bps=8_000 → (10_800 * 8_000) % 10_000 == 0, so floor and ceil of
-// denominator_sub agree; the value is the same under both rounding modes.
-// See test_denominator_sub_rounding_regression in test_math.rs for a fixture
-// that exercises the non-exact case and would catch a ceil regression.
+// Exact result of `calculate_partial_repayment`'s ceil_div-based formula for
+// this fixture; ceil_div does not scale linearly with the underlying
+// fixture, so this is the precise value rather than a naive x1e6 scale-up of
+// test_math.rs's 3_856 fixture result.
 const EXPECTED_PARTIAL_REPAY: i128 = 3_855_932_204;
 const COLLATERAL_BALANCE: i128 = 6_000_000_000;
 
 fn expected_bonus(repay: i128) -> i128 {
-    shared::ceil_div(repay * 800, 10_000).unwrap()
+    shared::ceil_div(
+        repay * shared::LIQUIDATION_BONUS_BPS as i128,
+        shared::BPS_DENOMINATOR,
+    )
+    .unwrap()
 }
 
 #[allow(dead_code)]
@@ -490,4 +493,39 @@ fn test_liquidate_fails_if_vault_engine_mismatch() {
     let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
 
     assert_eq!(res, Err(Ok(EngineError::Unauthorized)));
+}
+
+#[test]
+fn test_calculate_partial_repayment_non_exact_lt_reaches_target_hf() {
+    let ctx = setup();
+    let debt = 8_000_000_000i128;
+    ctx.pool.set_debt(&ctx.user, &debt);
+
+    let non_exact_lt = 7_777u32;
+    ctx.vault.set_asset_config(
+        &ctx.collateral_asset,
+        &shared::AssetConfig {
+            token_decimals: 7,
+            oracle_price_decimals: 7,
+            max_ltv_bps: 7_000,
+            liquidation_threshold_bps: non_exact_lt,
+        },
+    );
+    // User is liquidatable with HF < 10_000
+    ctx.vault.set_health_factor(&ctx.user, &9_721);
+
+    let repay = ctx.engine.calculate_partial_repayment(&ctx.user);
+
+    let bonus = expected_bonus(repay);
+    let seized = repay + bonus;
+    let remaining_collateral = COLLATERAL_VALUE - seized;
+    let remaining_debt = debt - repay;
+    let post_hf = (remaining_collateral * non_exact_lt as i128) / remaining_debt;
+
+    assert!(
+        post_hf >= shared::TARGET_HF_BPS,
+        "post-HF {post_hf} must reach TARGET_HF_BPS {}",
+        shared::TARGET_HF_BPS
+    );
+    assert_eq!(post_hf, shared::TARGET_HF_BPS);
 }

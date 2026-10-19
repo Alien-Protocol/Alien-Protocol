@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
     use crate::errors::EngineError;
@@ -21,10 +20,7 @@ mod tests {
             calculate_bonus(env.clone(), 0),
             Err(EngineError::InvalidAmount)
         );
-        assert_eq!(
-            calculate_bonus(env, -100),
-            Err(EngineError::InvalidAmount)
-        );
+        assert_eq!(calculate_bonus(env, -100), Err(EngineError::InvalidAmount));
     }
 
     #[test]
@@ -38,19 +34,13 @@ mod tests {
     fn test_calculate_bonus_large_amount() {
         // 10_000_000_000 * 800 / 10_000 = 800_000_000 (exact)
         let env = Env::default();
-        assert_eq!(
-            calculate_bonus(env, 10_000_000_000).unwrap(),
-            800_000_000
-        );
+        assert_eq!(calculate_bonus(env, 10_000_000_000).unwrap(), 800_000_000);
     }
 
     #[test]
     fn test_calculate_bonus_overflow_protection() {
         let env = Env::default();
-        assert_eq!(
-            calculate_bonus(env, i128::MAX),
-            Err(EngineError::Overflow)
-        );
+        assert_eq!(calculate_bonus(env, i128::MAX), Err(EngineError::Overflow));
     }
 
     #[test]
@@ -148,125 +138,56 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Regression tests: denominator_sub must use floor, not ceil.
-    //
-    // The repayment formula solves for R in:
-    //   (C - R*(1+b)) * lt / (D - R) = TARGET
-    //
-    // which gives:
-    //   denominator = TARGET - floor((BPS_DENOM + BONUS) * lt / BPS_DENOM)
-    //
-    // Using ceil_div here overstates denominator_sub, shrinks the denominator,
-    // and inflates R — more collateral is seized than needed to restore the
-    // target health factor.
+    // Regression tests: denominator_sub uses ceil_div so that repayment is
+    // sufficient to reach TARGET_HF_BPS after calculate_bonus rounds up.
     // -----------------------------------------------------------------------
 
-    /// denominator_sub computed with floor division (correct).
-    fn denom_sub_floor(lt_bps: i128) -> i128 {
-        (shared::BPS_DENOMINATOR + shared::LIQUIDATION_BONUS_BPS as i128)
-            * lt_bps
-            / shared::BPS_DENOMINATOR
-    }
-
-    /// denominator_sub computed with ceil division (old, buggy).
-    fn denom_sub_ceil(lt_bps: i128) -> i128 {
-        let temp =
-            (shared::BPS_DENOMINATOR + shared::LIQUIDATION_BONUS_BPS as i128) * lt_bps;
-        shared::ceil_div(temp, shared::BPS_DENOMINATOR).unwrap()
-    }
-
     #[test]
-    fn test_denominator_sub_exact_division_floor_eq_ceil() {
-        // (10_800 * 8_000) % 10_000 == 0 → both round to 8_640
-        let lt_bps = 8_000i128;
-        assert_eq!(denom_sub_floor(lt_bps), denom_sub_ceil(lt_bps));
-        assert_eq!(denom_sub_floor(lt_bps), 8_640);
-    }
-
-    #[test]
-    fn test_denominator_sub_non_exact_floor_lt_ceil() {
-        // (10_800 * 7_777) = 83_991_600; 83_991_600 / 10_000 = 8_399.16
-        // floor = 8_399, ceil = 8_400
-        let lt_bps = 7_777i128;
-        assert_eq!(denom_sub_floor(lt_bps), 8_399);
-        assert_eq!(denom_sub_ceil(lt_bps), 8_400);
-        assert!(denom_sub_floor(lt_bps) < denom_sub_ceil(lt_bps));
-    }
-
-    #[test]
-    fn test_denominator_sub_regression_ceil_inflates_repayment() {
-        // Fixture: collateral=10_000, debt=8_000, lt_bps=7_777
-        // HF_now = floor(10_000 * 7_777 / 8_000) = 9_721 (liquidatable)
+    fn test_partial_repayment_non_exact_fixture_reaches_target_hf() {
+        // Fixture: Collateral=10_000, Debt=8_000, LT=7_777 bps, TARGET=11_000, BONUS=800
+        // Current HF = floor(10_000 * 7_777 / 8_000) = 9_721 (liquidatable)
         let collateral = 10_000i128;
         let debt = 8_000i128;
         let lt_bps = 7_777i128;
         let target = shared::TARGET_HF_BPS; // 11_000
         let bps = shared::BPS_DENOMINATOR; // 10_000
+        let bonus_bps = shared::LIQUIDATION_BONUS_BPS as i128; // 800
 
-        // numerator = 11_000*8_000 - 10_000*7_777 = 88_000_000 - 77_770_000 = 10_230_000
-        let numerator = target * debt - collateral * lt_bps;
+        let numerator = target * debt - collateral * lt_bps; // 10_230_000
         assert_eq!(numerator, 10_230_000);
 
-        // Fixed (floor): denominator = 11_000 - 8_399 = 2_601
-        // R = ceil(10_230_000 / 2_601) = ceil(3932.33) = 3_933
-        let denom_fixed = target - denom_sub_floor(lt_bps);
-        assert_eq!(denom_fixed, 2_601);
-        let r_fixed = shared::ceil_div(numerator, denom_fixed).unwrap();
-        assert_eq!(r_fixed, 3_933);
+        // denominator_sub uses ceil_div: ceil(10_800 * 7_777 / 10_000) = ceil(8_399.16) = 8_400
+        let temp = (bps + bonus_bps) * lt_bps;
+        let denominator_sub = shared::ceil_div(temp, bps).unwrap();
+        assert_eq!(denominator_sub, 8_400);
 
-        // Buggy (ceil): denominator = 11_000 - 8_400 = 2_600
+        let denominator = target - denominator_sub;
+        assert_eq!(denominator, 2_600);
+
         // R = ceil(10_230_000 / 2_600) = ceil(3934.61) = 3_935
-        let denom_buggy = target - denom_sub_ceil(lt_bps);
-        assert_eq!(denom_buggy, 2_600);
-        let r_buggy = shared::ceil_div(numerator, denom_buggy).unwrap();
-        assert_eq!(r_buggy, 3_935);
+        let repay = shared::ceil_div(numerator, denominator).unwrap();
+        assert_eq!(repay, 3_935);
 
-        // Buggy path demands 2 more units of repayment than necessary.
-        assert!(r_buggy > r_fixed, "ceil path must produce more repayment");
+        // calculate_bonus rounds up: ceil(3_935 * 800 / 10_000) = ceil(314.8) = 315
+        let env = Env::default();
+        let bonus = calculate_bonus(env, repay).unwrap();
+        assert_eq!(bonus, 315);
 
-        // Verify the fixed R restores HF to at least HEALTHY_HF_BPS.
-        let seized = r_fixed * (bps + 800) / bps;
-        let post_hf = (collateral - seized) * lt_bps / (debt - r_fixed);
+        let seized = repay + bonus;
+        assert_eq!(seized, 4_250);
+
+        let remaining_collateral = collateral - seized;
+        assert_eq!(remaining_collateral, 5_750);
+
+        let remaining_debt = debt - repay;
+        assert_eq!(remaining_debt, 4_065);
+
+        // post-HF = 5_750 * 7_777 / 4_065 = 11_000 >= TARGET_HF_BPS
+        let post_hf = remaining_collateral * lt_bps / remaining_debt;
         assert!(
-            post_hf >= shared::HEALTHY_HF_BPS,
-            "post-HF {} < HEALTHY_HF_BPS after fixed repayment",
-            post_hf
+            post_hf >= target,
+            "post-HF {post_hf} must reach TARGET_HF_BPS {target}"
         );
-    }
-
-    #[test]
-    fn test_denominator_sub_regression_multiple_lt_values() {
-        // For lt_bps where (10_800 * lt_bps) is divisible by 10_000:
-        // floor == ceil (no bug manifestation).
-        // For all others: ceil == floor + 1 (bug inflates R by one denominator unit).
-        let cases: &[(i128, bool)] = &[
-            (5_000, true),
-            (6_250, true),
-            (7_000, true),
-            (7_500, true),
-            (8_000, true),
-            (8_500, true),
-            (7_777, false),
-            (6_543, false),
-            (9_001, false),
-        ];
-
-        for &(lt_bps, exact) in cases {
-            let floor = denom_sub_floor(lt_bps);
-            let ceil = denom_sub_ceil(lt_bps);
-
-            if exact {
-                assert_eq!(
-                    floor, ceil,
-                    "lt_bps={lt_bps}: expected floor==ceil"
-                );
-            } else {
-                assert_eq!(
-                    ceil,
-                    floor + 1,
-                    "lt_bps={lt_bps}: expected ceil==floor+1"
-                );
-            }
-        }
+        assert_eq!(post_hf, 11_000);
     }
 }

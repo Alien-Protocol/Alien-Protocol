@@ -328,16 +328,11 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
         .ok_or(EngineError::Overflow)?;
 
     // Denominator: TARGET_HF_BPS - (BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS) * lt_bps / BPS_DENOMINATOR
-    // The effective bonus-adjusted LT factor uses floor division: seizing
-    // R*(1+bonus) of collateral value can only reduce the HF by the floored
-    // multiple, so rounding up here would overstate the denominator_sub,
-    // shrink the denominator, and inflate R beyond what is needed.
+    // First compute: (BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS) * lt_bps / BPS_DENOMINATOR
     let temp = (BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS as i128)
         .checked_mul(lt_bps)
         .ok_or(EngineError::Overflow)?;
-    let denominator_sub = temp
-        .checked_div(BPS_DENOMINATOR)
-        .ok_or(EngineError::Overflow)?;
+    let denominator_sub = ceil_div(temp, BPS_DENOMINATOR).map_err(|_| EngineError::Overflow)?;
 
     let denominator = TARGET_HF_BPS
         .checked_sub(denominator_sub)
