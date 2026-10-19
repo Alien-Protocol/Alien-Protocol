@@ -1,4 +1,4 @@
-#![no_std]
+#`!no_std]
 use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, Symbol, Vec};
 
 mod errors;
@@ -14,7 +14,16 @@ pub use types::{DataKey, PriceData};
 #[contract]
 pub struct OracleContract;
 
-#[contractimpl]
+/// Load the admin address or panic with `NotInitialized` if the contract has not been initialized.
+/// This is the single source of truth for the admin-load block across all panicking entry points.
+fn admin_or_panic(env: &Env) -> Address {
+    match storage::get_admin(env) {
+        Some(addr) => addr,
+        None => soroban_sdk::panic_with_error!(env, OracleError::NotInitialized),
+    }
+}
+
+#[oncontractimpl]
 impl OracleContract {
     pub fn initialize(env: Env, admin: Address, staleness_threshold: u64) {
         if storage::is_initialized(&env) {
@@ -63,10 +72,7 @@ impl OracleContract {
     }
 
     pub fn set_price(env: Env, caller: Address, asset: Address, price: i128, timestamp: u64) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         let is_admin = caller == admin;
         let is_authorized_feeder = storage::is_authorized_feeder(&env, &caller);
 
@@ -128,10 +134,7 @@ impl OracleContract {
     }
 
     pub fn set_staleness_threshold(env: Env, threshold: u64) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if threshold == 0 {
@@ -144,10 +147,7 @@ impl OracleContract {
     }
 
     pub fn set_admin(env: Env, new_admin: Address) {
-        let current_admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let current_admin = admin_or_panic(&env);
         current_admin.require_auth();
 
         if current_admin == new_admin {
@@ -164,10 +164,7 @@ impl OracleContract {
     }
 
     pub fn pause(env: Env) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if storage::is_paused(&env) {
@@ -179,10 +176,7 @@ impl OracleContract {
     }
 
     pub fn unpause(env: Env) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if !storage::is_paused(&env) {
@@ -194,10 +188,7 @@ impl OracleContract {
     }
 
     pub fn add_authorized_feeder(env: Env, feeder: Address) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if storage::is_authorized_feeder(&env, &feeder) {
@@ -210,10 +201,7 @@ impl OracleContract {
     }
 
     pub fn remove_authorized_feeder(env: Env, feeder: Address) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if !storage::has_authorized_feeder(&env, &feeder) {
