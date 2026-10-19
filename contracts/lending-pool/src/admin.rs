@@ -20,7 +20,13 @@ pub fn initialize(
 
     admin.require_auth();
 
-    if vault == oracle {
+    if admin == vault
+        || admin == oracle
+        || admin == borrow_asset
+        || vault == oracle
+        || vault == borrow_asset
+        || oracle == borrow_asset
+    {
         return Err(PoolError::InvalidAddress);
     }
 
