@@ -11,6 +11,16 @@ for published contract releases.
 ### Added
 
 - A changelog for tracking user-visible contract, interface, and storage changes.
+- Implemented the lending pool's supply, borrow, repayment, and
+  interest-accrual flows.
+- Implemented the liquidation engine, including partial liquidations, a partial
+  repayment solver, liquidation bonuses, and close-factor limits.
+- Integrated the `shared` crate across the lending pool, liquidation engine,
+  and collateral vault for common types and risk calculations.
+
+### Changed
+
+- Unified contract price feeds on the shared `PriceData` type.
 
 ## [2.0.0]
 

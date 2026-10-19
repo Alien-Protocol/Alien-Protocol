@@ -89,12 +89,11 @@ mod tests {
 
         for (repaid, expected_bonus) in &test_cases {
             let result = calculate_bonus(env.clone(), *repaid);
-            assert!(result.is_ok(), "Failed for repaid={}", repaid);
+            assert!(result.is_ok(), "Failed for repaid={repaid}");
             let bonus = result.unwrap();
             assert_eq!(
                 bonus, *expected_bonus,
-                "Mismatch for repaid={}: expected {}, got {}",
-                repaid, expected_bonus, bonus
+                "Mismatch for repaid={repaid}: expected {expected_bonus}, got {bonus}"
             );
         }
     }
