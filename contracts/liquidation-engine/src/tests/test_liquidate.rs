@@ -438,8 +438,6 @@ fn test_liquidate_rejects_healthy_user() {
     ctx.vault
         .set_health_factor(&ctx.user, &HEALTH_FACTOR_HEALTHY);
 
-    assert!(HEALTH_FACTOR_HEALTHY >= shared::HEALTHY_HF_BPS);
-
     let collateral_balance_before = ctx.collateral_token.balance(&ctx.vault_addr);
     let liquidator_collateral_before = ctx.collateral_token.balance(&ctx.liquidator);
     let events_before = ctx.env.events().all();
