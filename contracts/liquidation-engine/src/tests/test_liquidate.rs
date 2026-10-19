@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
 use super::super::*;
@@ -438,9 +438,34 @@ fn test_liquidate_rejects_healthy_user() {
     ctx.vault
         .set_health_factor(&ctx.user, &HEALTH_FACTOR_HEALTHY);
 
+    let collateral_balance_before = ctx.collateral_token.balance(&ctx.vault_addr);
+    let liquidator_collateral_before = ctx.collateral_token.balance(&ctx.liquidator);
+    let events_before = ctx.env.events().all();
+
     let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
 
     assert_eq!(res, Err(Ok(EngineError::NotLiquidatable)));
+    assert_eq!(
+        ctx.collateral_token.balance(&ctx.vault_addr),
+        collateral_balance_before,
+        "healthy position collateral must not be seized"
+    );
+    assert_eq!(
+        ctx.collateral_token.balance(&ctx.liquidator),
+        liquidator_collateral_before,
+        "liquidator must not receive collateral from a healthy position"
+    );
+
+    let events_after = ctx.env.events().all();
+    let liquidation_events = events_after
+        .iter()
+        .skip(events_before.len() as usize)
+        .filter(|event| event.0 == ctx.engine_addr)
+        .count();
+    assert_eq!(
+        liquidation_events, 0,
+        "liquidating a healthy position must not emit a Liquidated event"
+    );
 }
 
 #[test]

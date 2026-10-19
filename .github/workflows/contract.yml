@@ -49,6 +49,7 @@ jobs:
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
 
+
       - name: Build Soroban contracts
         run: |
           cargo build \
