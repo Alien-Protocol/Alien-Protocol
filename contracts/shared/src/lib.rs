@@ -1,4 +1,4 @@
-#[!no_std]
+#no_std]
 
 pub mod access;
 pub mod bitmask;
@@ -7,7 +7,7 @@ pub mod errors;
 pub mod events;
 pub mod types;
 
-pub use access::*{
+pub use access:{
     ensure_new_admin, pause_mask, require_admin, unpause_mask,
 };
 pub use bitmask::*;
