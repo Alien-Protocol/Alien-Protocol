@@ -1,6 +1,6 @@
 # Alien Protocol — TODO
 
-Living checklist of work still open. Status reflects the repo as of **9 September 2026**.
+Living checklist of work still open. Status reflects the repo as of **16 October 2026**.
 
 Use this with `docs/arch.md` (target design) and `README.md` (honest component status). Check items off in PRs; do not treat unchecked items as “in progress” unless an issue is linked.
 
@@ -12,11 +12,11 @@ Use this with `docs/arch.md` (target design) and `README.md` (honest component s
 
 | Area | Status | Notes |
 |------|--------|--------|
-| Collateral vault | `[~]` | Core custody + risk paths exist; oracle typing / full 4-way integration still open |
-| Oracle adapter | `[~]` | Feeder + RedStone paths exist; not fully wired to vault `PriceData` |
-| Lending pool | `[~]` | Borrow/repay/supply/accrual implemented; still mock-heavy in places |
-| Liquidation engine | `[~]` | Liquidate path exists; tests use mocks, not real vault/pool/oracle |
-| Shared crate | `[~]` | Types/math/constants exist; duplicate types remain in feature crates |
+| Collateral vault | `[~]` | Core custody + risk paths exist; now consumes `shared::PriceData`; full 4-way integration still open |
+| Oracle adapter | `[~]` | Feeder + RedStone paths exist; `set_price` now rejects stale/future timestamps and stores `write_timestamp` |
+| Lending pool | `[~]` | Borrow/repay/repay_for/supply + linear APR accrual implemented against real storage |
+| Liquidation engine | `[~]` | Real `liquidate`, `is_liquidatable`, partial-repay solver, 8% bonus, 50% close factor; cross-contract tests still use mocks |
+| Shared crate | `[~]` | `PriceData`/`Debt`/`AssetConfig`/HF+interest helpers/constants exist and are now consumed by vault/pool/engine; `events` module still empty; oracle does not depend on it |
 | Cross-contract integration | `[~]` | Vault↔pool tests with mock oracle; no full vault↔pool↔oracle↔engine suite |
 | Testnet deploy | `[ ]` | No scripts, IDs, or network config in-repo |
 | Backend | `[ ]` | No `backend/` tree |
@@ -32,7 +32,7 @@ Use this with `docs/arch.md` (target design) and `README.md` (honest component s
 ### 1.1 Cross-contract / system integration
 
 - [ ] End-to-end native test: **real** `collateral-vault` + `lending-pool` + `oracle-adapter` + `liquidation-engine` in one `Env`
-- [ ] Unify `PriceData` across vault / oracle / shared (vault still has 2 fields; oracle + shared have `write_timestamp`)
+- [x] Unify `PriceData` across vault / oracle / shared (vault now re-exports `shared::PriceData`; all three fields match)
 - [ ] Prove vault valuation against the real `oracle-adapter` (not only `MockOracle`)
 - [ ] Prove engine `liquidate` against real vault + pool + oracle (today liquidate tests use mock contracts)
 - [ ] Document and enforce init order: oracle → vault → pool → engine (addresses, allowlists, borrow asset)
@@ -54,8 +54,8 @@ Use this with `docs/arch.md` (target design) and `README.md` (honest component s
 ### 1.3 Lending pool
 
 - [x] Supply / withdraw liquidity, borrow / repay / repay_for
-- [x] Debt storage + linear APR accrual helpers
-- [x] Pause, admin, vault/oracle wiring
+- [x] Debt storage + linear APR accrual helpers (`accrue_interest`, `shared::accrue_linear_interest`)
+- [x] Pause (bitmask), admin, vault/oracle wiring
 - [~] Vault composition tests (`test_pool_integration`) — still mock oracle
 - [ ] Replace remaining `unimplemented!()` mock vault stubs in repay tests with real vault or thin complete mocks
 - [ ] Utilization-driven behavior beyond reads (V1 may stay fixed APR; document clearly)
@@ -65,10 +65,11 @@ Use this with `docs/arch.md` (target design) and `README.md` (honest component s
 
 ### 1.4 Liquidation engine
 
-- [x] `liquidate`, `is_liquidatable`, bonus / partial repayment helpers
-- [x] Admin + vault/pool/oracle setters
+- [x] `liquidate`, `is_liquidatable`, bonus / partial repayment solver (50% close factor, 8% bonus, HF→1.10 target, dust fallback)
+- [x] Admin + vault/pool/oracle setters with pairwise collision checks
+- [x] Engine-only seize verified via `vault.get_liquidation_engine()` match + HF < 1.0 gate
 - [ ] Integration tests with **real** vault, pool, and oracle-adapter
-- [ ] Full vs partial liquidation fallback when leftover would be unsafe or dust
+- [ ] Full vs partial liquidation fallback when leftover would be unsafe or dust (solver exists; prove with tests)
 - [ ] Permissionless liquidator UX path verified (auth trees, token approvals, events)
 - [ ] Align HF / close-factor / bonus constants with vault withdraw safety in one shared source of truth
 - [ ] Pause / circuit-breaker behavior if vault or pool is paused mid-liquidation
@@ -76,6 +77,8 @@ Use this with `docs/arch.md` (target design) and `README.md` (honest component s
 ### 1.5 Oracle adapter
 
 - [x] Admin/feeder `set_price`, staleness, pause, RedStone push/pull
+- [x] `initialize` requires admin auth
+- [x] `set_price` rejects non-increasing and future timestamps; stores `write_timestamp`
 - [ ] Single price model consumed by vault and engine (address-keyed vs RedStone symbol-keyed mapping)
 - [ ] Map RWA / collateral asset addresses ↔ RedStone feed IDs for production assets
 - [ ] Multi-feeder / deviation bounds (architecture Phase 3 aggregation — not required for V1 demo)
@@ -84,8 +87,10 @@ Use this with `docs/arch.md` (target design) and `README.md` (honest component s
 ### 1.6 Shared crate
 
 - [x] `PriceData`, `Debt`, `AssetConfig`, interest / HF / LTV helpers, constants
-- [ ] Deduplicate vault-local `PriceData` / `AssetConfig` in favor of `shared` where ABI-safe
-- [ ] Shared event topics or docs so indexers have one schema
+- [x] Deduplicate vault-local `PriceData` in favor of `shared` (vault + engine now `use shared::PriceData`)
+- [ ] Deduplicate `AssetConfig` / `Position` across remaining feature crates where ABI-safe
+- [ ] Fill the empty `shared/src/events.rs` with shared event topics or docs so indexers have one schema
+- [ ] Add `shared` as a dependency of `oracle-adapter` (currently the only contract that does not use it)
 - [ ] Keep error codes stable; never renumber after testnet
 
 ### 1.7 Contract quality / security
@@ -93,7 +98,8 @@ Use this with `docs/arch.md` (target design) and `README.md` (honest component s
 - [ ] Scout / static analysis pass before testnet
 - [ ] Auth-tree review on all wrappers that call `token.transfer` / `repay_for` / `seize_collateral`
 - [ ] Fuzz or property tests for deposit/withdraw/borrow/repay/liquidate value paths
-- [ ] Threat model doc (`docs/security.md` or `SECURITY.md`)
+- [x] Private vulnerability reporting path (`SECURITY.md` at repo root)
+- [ ] Threat model / per-contract attack-surface doc (`docs/security.md`) — beyond the reporting policy already in `SECURITY.md`
 - [ ] Pause runbook (who pauses what, in which order)
 - [ ] No mainnet funds until external review plan exists (README already warns unaudited)
 
@@ -101,7 +107,7 @@ Use this with `docs/arch.md` (target design) and `README.md` (honest component s
 
 ## 2. Deploy & tooling
 
-- [ ] `rust-toolchain.toml` pinned to CI toolchain
+- [~] `rust-toolchain.toml` exists at repo root — confirm it is pinned to an exact version (not `stable`) and matches CI
 - [ ] Deploy scripts: build → upload → deploy → initialize (testnet first)
 - [ ] Network config (RPC URL, passphrase, identity names) without committing secrets
 - [ ] Record contract IDs, WASM hashes, commit SHA after each deploy
@@ -156,11 +162,12 @@ backend/
 
 - [x] `docs/arch.md` product architecture
 - [x] `.github/CONTRIBUTING.md`
-- [ ] Keep README component status table in sync with this TODO
+- [x] `SECURITY.md` + private vulnerability reporting path (exists at repo root; linked from README)
+- [x] `CHANGELOG.md` at repo root
+- [ ] Keep README component status table in sync with this TODO (pool/engine still marked “Scaffolded” but are now implemented)
 - [ ] `docs/api.md` when backend routes exist
 - [ ] `docs/risk-model.md` (per-asset LTV table from arch, as implemented)
-- [ ] `SECURITY.md` + private vulnerability reporting path
-- [ ] Refresh or archive `private/implementation-status.md` (Aug 2026; pool/engine no longer hello stubs)
+- [ ] Refresh or archive `private/implementation-status.md` (Aug 2026; pool/engine no longer hello stubs, shared crate wired, `PriceData` unified)
 - [ ] Deployment / ops runbook
 
 ---

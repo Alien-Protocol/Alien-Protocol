@@ -19,7 +19,7 @@ impl MockLendingPool {
     }
 
     pub fn is_liquidatable(_env: Env, _user: Address) -> bool {
-        false
+        true
     }
 }
 

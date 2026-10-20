@@ -4,6 +4,7 @@ use crate::errors::PoolError;
 use crate::events;
 use crate::storage::{self, get_pause_mask, set_pause_mask};
 use crate::types::{pause_flag_symbol, PauseFlag};
+use shared::bitmask::{clear_flag, is_set, set_flag};
 
 pub fn initialize(
     env: Env,
@@ -19,7 +20,13 @@ pub fn initialize(
 
     admin.require_auth();
 
-    if vault == oracle {
+    if admin == vault
+        || admin == oracle
+        || admin == borrow_asset
+        || vault == oracle
+        || vault == borrow_asset
+        || oracle == borrow_asset
+    {
         return Err(PoolError::InvalidAddress);
     }
 
@@ -100,12 +107,11 @@ pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result
     let current_mask = get_pause_mask(&env);
     let flag_bit = operation.bit();
 
-    if current_mask & flag_bit != 0 {
+    if is_set(current_mask, flag_bit) {
         return Err(PoolError::AlreadyPaused);
     }
 
-    let new_mask = current_mask | flag_bit;
-    set_pause_mask(&env, new_mask);
+    set_pause_mask(&env, set_flag(current_mask, flag_bit));
 
     let operation_symbol = pause_flag_symbol(&env, &operation);
     events::OperationPaused {
@@ -125,12 +131,11 @@ pub fn unpause_operation(env: Env, operation: PauseFlag) -> Result<(), PoolError
     let current_mask = get_pause_mask(&env);
     let flag_bit = operation.bit();
 
-    if current_mask & flag_bit == 0 {
+    if !is_set(current_mask, flag_bit) {
         return Err(PoolError::NotPaused);
     }
 
-    let new_mask = current_mask & !flag_bit;
-    set_pause_mask(&env, new_mask);
+    set_pause_mask(&env, clear_flag(current_mask, flag_bit));
 
     let operation_symbol = pause_flag_symbol(&env, &operation);
     events::OperationUnpaused {
