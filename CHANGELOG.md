@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 for published contract releases.
 
+## Versioning Policy
+
+Contract crates share the workspace version and follow Semantic Versioning, with
+the following additional rules tied to on-chain ABI stability:
+
+- **Major (1.0.0 => 2.0.0)** is reserved for breaking ABI changes: error code
+  renumbering or removal, `DataKey` layout changes that invalidate existing
+  storage, event topic renaming, or removal of public functions.
+- **Minor (0.1.0 => 0.2.0)** covers additive, backward-compatible ABI changes:
+  new public functions, new error codes appended to the end of an existing
+  enum, new event topics, and new `DataKey` variants that do not collide with
+  existing keys.
+- **Patch (0.1.0 => 0.1.1)** covers changes that do not alter the ABI: bug fixes
+  internal to a function, documentation, and build or tooling changes.
+
+The workspace version is bumped to `0.1.0` at the first ABI freeze for testnet.
+From that point on, error codes, `DataKey` layouts, and event topics are
+considered stable and may only change under the rules above.
+
 ## [Unreleased]
 
 ### Added
@@ -25,6 +44,8 @@ for published contract releases.
   math helpers with their `shared` equivalents.
 - Unified the oracle price type on `shared::PriceData` so the vault, pool, and
   liquidation engine decode `get_price`/`get_price_or_fail` consistently.
+- Bumped the workspace crate version from `0.0.0` to `0.1.0` to mark the
+  first testnet ABI freeze (error codes, `DataKey` layout, and event topics).
 
 ## [2.0.0]
 
