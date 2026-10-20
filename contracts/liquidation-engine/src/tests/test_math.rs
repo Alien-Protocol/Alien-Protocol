@@ -4,6 +4,168 @@ mod tests {
     use crate::liquidate::calculate_bonus;
     use soroban_sdk::Env;
 
+    // -----------------------------------------------------------------------
+    // calculate_bonus core test cases (issue #791)
+    // -----------------------------------------------------------------------
+    // calculate_bonus computes: ceil_div(repaid * LIQUIDATION_BONUS_BPS, 10_000)
+    // where LIQUIDATION_BONUS_BPS = 800 (8% bonus)
+    //
+    // These tests explicitly cover the four required cases:
+    // 1. Even division (no remainder, no ceiling adjustment)
+    // 2. Ceiling rounding (has remainder, rounds up by +1)
+    // 3. Non-positive amounts (rejected with InvalidAmount)
+    // 4. Near-overflow scenarios (rejected with Overflow)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_calculate_bonus_even_division() {
+        // Case 1: Even division - repay amount whose bonus divides evenly
+        // repaid = 10_000_000_000
+        // bonus = 10_000_000_000 * 800 / 10_000 = 800_000_000 (exact, no remainder)
+        let env = Env::default();
+        let result = calculate_bonus(env.clone(), 10_000_000_000i128);
+        assert!(result.is_ok(), "Even division should succeed");
+        assert_eq!(
+            result.unwrap(),
+            800_000_000,
+            "Even division: 10_000_000_000 * 8% = 800_000_000"
+        );
+
+        // Additional even division cases
+        assert_eq!(
+            calculate_bonus(env.clone(), 125).unwrap(),
+            10,
+            "125 * 800 / 10_000 = 10 (exact)"
+        );
+        assert_eq!(
+            calculate_bonus(env.clone(), 1250).unwrap(),
+            100,
+            "1250 * 800 / 10_000 = 100 (exact)"
+        );
+        assert_eq!(
+            calculate_bonus(env, 12500).unwrap(),
+            1000,
+            "12500 * 800 / 10_000 = 1000 (exact)"
+        );
+    }
+
+    #[test]
+    fn test_calculate_bonus_ceiling_rounding() {
+        // Case 2: Ceiling rounding - repay amount that forces ceil rounding (+1)
+        let env = Env::default();
+
+        // repaid = 101
+        // numerator = 101 * 800 = 80_800
+        // 80_800 / 10_000 = 8.08 → ceil = 9 (rounds up by 1)
+        assert_eq!(
+            calculate_bonus(env.clone(), 101).unwrap(),
+            9,
+            "101 * 800 = 80_800; ceil(80_800 / 10_000) = ceil(8.08) = 9"
+        );
+
+        // repaid = 1
+        // numerator = 1 * 800 = 800
+        // 800 / 10_000 = 0.08 → ceil = 1 (rounds up from fractional)
+        assert_eq!(
+            calculate_bonus(env.clone(), 1).unwrap(),
+            1,
+            "1 * 800 = 800; ceil(800 / 10_000) = ceil(0.08) = 1"
+        );
+
+        // repaid = 13
+        // numerator = 13 * 800 = 10_400
+        // 10_400 / 10_000 = 1.04 → ceil = 2
+        assert_eq!(
+            calculate_bonus(env.clone(), 13).unwrap(),
+            2,
+            "13 * 800 = 10_400; ceil(10_400 / 10_000) = ceil(1.04) = 2"
+        );
+
+        // repaid = 1_000_001
+        // numerator = 1_000_001 * 800 = 800_000_800
+        // 800_000_800 / 10_000 = 80_000.08 → ceil = 80_001
+        assert_eq!(
+            calculate_bonus(env, 1_000_001).unwrap(),
+            80_001,
+            "1_000_001 * 800 = 800_000_800; ceil(800_000_800 / 10_000) = 80_001"
+        );
+    }
+
+    #[test]
+    fn test_calculate_bonus_non_positive_rejected() {
+        // Case 3: Non-positive amounts - must be rejected with InvalidAmount
+        let env = Env::default();
+
+        // Zero should be rejected
+        assert_eq!(
+            calculate_bonus(env.clone(), 0),
+            Err(EngineError::InvalidAmount),
+            "Zero repay amount must be rejected"
+        );
+
+        // Negative amounts should be rejected
+        assert_eq!(
+            calculate_bonus(env.clone(), -1),
+            Err(EngineError::InvalidAmount),
+            "Negative repay amount (-1) must be rejected"
+        );
+
+        assert_eq!(
+            calculate_bonus(env.clone(), -100),
+            Err(EngineError::InvalidAmount),
+            "Negative repay amount (-100) must be rejected"
+        );
+
+        assert_eq!(
+            calculate_bonus(env, i128::MIN),
+            Err(EngineError::InvalidAmount),
+            "i128::MIN must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_calculate_bonus_overflow_scenarios() {
+        // Case 4: Near-overflow scenarios - must return Overflow error
+        let env = Env::default();
+
+        // i128::MAX will overflow when multiplied by 800
+        assert_eq!(
+            calculate_bonus(env.clone(), i128::MAX),
+            Err(EngineError::Overflow),
+            "i128::MAX * 800 overflows and must be caught"
+        );
+
+        // Value that causes overflow: i128::MAX / 800 + 1
+        // This is the smallest value that will overflow when multiplied by 800
+        let overflow_threshold = i128::MAX / 800 + 1;
+        assert_eq!(
+            calculate_bonus(env.clone(), overflow_threshold),
+            Err(EngineError::Overflow),
+            "Value just above i128::MAX/800 must overflow"
+        );
+
+        // Just below the overflow threshold should succeed
+        let safe_max = i128::MAX / 800;
+        let result = calculate_bonus(env.clone(), safe_max);
+        assert!(
+            result.is_ok(),
+            "Value at i128::MAX/800 should not overflow"
+        );
+
+        // Verify the largest safe value produces correct result
+        // safe_max * 800 should be close to i128::MAX
+        let bonus = result.unwrap();
+        let expected_bonus = (safe_max * 800 + 10_000 - 1) / 10_000; // ceil_div formula
+        assert_eq!(
+            bonus, expected_bonus,
+            "Largest safe repay amount should compute correct bonus"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Additional calculate_bonus regression tests
+    // -----------------------------------------------------------------------
+
     #[test]
     fn test_calculate_bonus_eight_percent() {
         // repaid=1_000_000_000 => bonus = ceil(1_000_000_000 * 800 / 10_000) = 80_000_000
@@ -11,45 +173,6 @@ mod tests {
         let result = calculate_bonus(env, 1_000_000_000i128);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 80_000_000);
-    }
-
-    #[test]
-    fn test_calculate_bonus_rejects_non_positive() {
-        let env = Env::default();
-        assert_eq!(
-            calculate_bonus(env.clone(), 0),
-            Err(EngineError::InvalidAmount)
-        );
-        assert_eq!(calculate_bonus(env, -100), Err(EngineError::InvalidAmount));
-    }
-
-    #[test]
-    fn test_calculate_bonus_small_amount() {
-        // ceil_div(1 * 800, 10_000) = ceil(0.08) = 1
-        let env = Env::default();
-        assert_eq!(calculate_bonus(env, 1).unwrap(), 1);
-    }
-
-    #[test]
-    fn test_calculate_bonus_large_amount() {
-        // 10_000_000_000 * 800 / 10_000 = 800_000_000 (exact)
-        let env = Env::default();
-        assert_eq!(calculate_bonus(env, 10_000_000_000).unwrap(), 800_000_000);
-    }
-
-    #[test]
-    fn test_calculate_bonus_overflow_protection() {
-        let env = Env::default();
-        assert_eq!(calculate_bonus(env, i128::MAX), Err(EngineError::Overflow));
-    }
-
-    #[test]
-    fn test_calculate_bonus_rounding() {
-        let env = Env::default();
-        // 100 * 800 / 10_000 = 8 (exact)
-        assert_eq!(calculate_bonus(env.clone(), 100).unwrap(), 8);
-        // 101 * 800 = 80_800; ceil(80_800 / 10_000) = ceil(8.08) = 9
-        assert_eq!(calculate_bonus(env, 101).unwrap(), 9);
     }
 
     #[test]
