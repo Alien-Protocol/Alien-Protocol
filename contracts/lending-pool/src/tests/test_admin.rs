@@ -77,6 +77,40 @@ fn test_initialize_vault_equals_oracle_fails() {
 }
 
 #[test]
+fn test_initialize_rejects_all_colliding_address_pairs() {
+    let (env, client, admin, _user, vault, borrow_asset, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+    let invalid_addresses = [
+        (
+            admin.clone(),
+            admin.clone(),
+            oracle.clone(),
+            borrow_asset.clone(),
+        ),
+        (
+            admin.clone(),
+            vault.clone(),
+            admin.clone(),
+            borrow_asset.clone(),
+        ),
+        (admin.clone(), vault.clone(), oracle.clone(), admin.clone()),
+        (
+            admin.clone(),
+            vault.clone(),
+            vault.clone(),
+            borrow_asset.clone(),
+        ),
+        (admin.clone(), vault.clone(), oracle.clone(), vault.clone()),
+        (admin.clone(), vault.clone(), oracle.clone(), oracle.clone()),
+    ];
+
+    for (admin, vault, oracle, borrow_asset) in invalid_addresses {
+        let res = client.try_initialize(&admin, &vault, &oracle, &borrow_asset, &500);
+        assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+    }
+}
+
+#[test]
 fn test_set_vault_equals_oracle_fails() {
     let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
     let oracle = Address::generate(&env);

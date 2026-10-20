@@ -4,6 +4,14 @@ members = [
   "contracts/*",
 ]
 
+
+[workspace.package]
+version = "0.0.0"
+authors = ["Alien Protocol Contributors"]
+repository = "https://github.com/Alien-Protocol/Alien-Protocol"
+license = "MIT"
+description = "Alien Protocol Smart Contracts"
+
 [workspace.dependencies]
 soroban-sdk = "23"
 

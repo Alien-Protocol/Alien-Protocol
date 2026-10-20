@@ -109,7 +109,7 @@ impl VaultContract {
         admin::unpause_operation(env, operation)
     }
 
-    pub fn add_supported_asset(env: Env, asset: Address) {
+    pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
         assets::add_supported_asset(env, asset)
     }
 
@@ -182,6 +182,9 @@ impl VaultContract {
 
     pub fn deposit(env: Env, user: Address, asset: Address, amount: i128) {
         user.require_auth();
+
+        position::validate_positive_amount(amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
 
         if storage::is_operation_paused(&env, &PauseFlag::Deposit) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
