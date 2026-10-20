@@ -125,11 +125,31 @@ fn test_withdraw_liquidity_when_paused_fails() {
 }
 
 #[test]
-fn test_utilization_zero_when_nothing_borrowed() {
-    let (_env, client, _admin, user, _vault, _token_id, _token_client, token_admin) = setup_env();
-
-    token_admin.mint(&user, &1000);
-    client.supply(&user, &500);
-
+fn test_utilization_empty_pool_is_zero() {
+    let (_env, client, _admin, _user, _vault, _token_id, _token_client, _token_admin) = setup_env();
     assert_eq!(client.get_utilization_bps(), 0);
+}
+
+#[test]
+fn test_utilization_half_full_is_five_thousand_bps() {
+    let (env, client, _admin, _user, _vault, _token_id, _token_client, _token_admin) = setup_env();
+
+    env.as_contract(&client.address, || {
+        storage::set_total_supply(&env, 1_000);
+        storage::set_total_borrowed(&env, 500);
+    });
+
+    assert_eq!(client.get_utilization_bps(), 5_000);
+}
+
+#[test]
+fn test_utilization_full_is_ten_thousand_bps() {
+    let (env, client, _admin, _user, _vault, _token_id, _token_client, _token_admin) = setup_env();
+
+    env.as_contract(&client.address, || {
+        storage::set_total_supply(&env, 1_000);
+        storage::set_total_borrowed(&env, 1_000);
+    });
+
+    assert_eq!(client.get_utilization_bps(), 10_000);
 }
