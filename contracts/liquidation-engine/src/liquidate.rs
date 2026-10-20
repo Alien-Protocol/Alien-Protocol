@@ -88,6 +88,29 @@ fn token_amount_to_value(
     numerator.checked_div(scale).ok_or(EngineError::Overflow)
 }
 
+/// Executes a liquidation: the liquidator repays up to the partial-repayment
+/// cap and receives collateral worth `repay + bonus` from the user's vault
+/// position.
+///
+/// Collateral selection is a greedy largest-first strategy. Each iteration
+/// scans the position's collateral vector and seizes from the asset with the
+/// biggest token balance. Ties are broken by order in `get_position`: the
+/// scan uses a strict `>` comparison, so among equal balances the asset
+/// appearing earliest in the vector always wins. Selection therefore costs
+/// O(n²) in the number of collateral assets — acceptable because positions
+/// carry few assets, but worth knowing when reasoning about gas.
+///
+/// Instead of removing processed assets from the vector, each one is zeroed
+/// in a local copy of the collateral list. A zeroed entry can never win the
+/// `candidate.amount > best_amount` comparison (best starts at 0), so assets
+/// already seized are skipped without changing the vector's length or index
+/// stability. The loop runs at most once per collateral asset and exits early
+/// once `remaining_value` reaches 0.
+///
+/// After the loop, a final `remaining_value > 0` guard reverts with
+/// `EngineError::InvalidAmount` if the position's collateral could not cover
+/// the seizure target — no partial seize is committed on an under-collateralised
+/// liquidation.
 pub fn liquidate(
     env: Env,
     liquidator: Address,
