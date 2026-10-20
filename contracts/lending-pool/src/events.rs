@@ -23,6 +23,20 @@ pub struct AdminChanged {
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
+pub struct VaultUpdated {
+    pub old_vault: Option<Address>,
+    pub new_vault: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OracleUpdated {
+    pub old_oracle: Option<Address>,
+    pub new_oracle: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OperationPaused {
     #[topic]
     pub by: Address,
