@@ -104,6 +104,8 @@ The diagram represents the target protocol flow. Individual modules are being co
 - Administrative pause and role-transfer controls.
 - Oracle price publication with staleness validation.
 - RedStone push- and pull-model oracle integration.
+- Borrowing, repayment, interest accrual, and debt accounting via the lending pool.
+- Liquidation execution with partial-solver support and health-factor enforcement via the liquidation engine.
 - Native contract tests and automated formatting, linting, build, and test checks.
 
 ## 🚀 Getting started
