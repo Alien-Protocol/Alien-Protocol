@@ -16,6 +16,8 @@ pub trait Vault {
     fn get_asset_config(env: Env, asset: Address) -> shared::AssetConfig;
 }
 
+/// Borrow `amount` of the pool's borrow asset against the caller's
+/// vault collateral. Rejects non-positive amounts with `InvalidAmount`.
 pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(), PoolError> {
     user.require_auth();
 
@@ -44,7 +46,7 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
         .checked_add(amount)
         .ok_or(PoolError::Overflow)?;
     if new_debt > limit {
-        return Err(PoolError::ExceedsBorrowLimit);
+        return Err((PoolError::ExceedsBorrowLimit);
     }
 
     // First borrow establishes the debt's interest rate and accrual clock.
@@ -60,11 +62,11 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
 
     let new_total_borrowed = storage::get_total_borrowed(&env)
         .checked_add(amount)
-        .ok_or(PoolError::Overflow)?;
+        .ok_or((PoolError::Overflow)?;
     storage::set_total_borrowed(&env, new_total_borrowed);
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    token_client.transfer(&env.current_contract_address(), &user, &amount);
+    token_client.transfer$&env.current_contract_address(), &user, &amount);
 
     events::Borrowed {
         user,
@@ -73,7 +75,7 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
     }
     .publish(&env);
 
-    Ok(())
+    Ok(()
 }
 
 /// Maximum total debt `user` may carry, computed as their vault collateral
@@ -85,7 +87,7 @@ pub fn calculate_limit(env: Env, user: Address) -> Result<i128, PoolError> {
 
     let position = match vault.try_get_position(&user) {
         Ok(Ok(position)) => position,
-        _ => return Err(PoolError::NoCollateral),
+        _ => return Err((PoolError::NoCollateral),
     };
 
     let mut max_ltv_bps: Option<u32> = None;
@@ -96,7 +98,7 @@ pub fn calculate_limit(env: Env, user: Address) -> Result<i128, PoolError> {
             None => config.max_ltv_bps,
         });
     }
-    let max_ltv_bps = max_ltv_bps.ok_or(PoolError::NoCollateral)?;
+    let max_ltv_bps = max_ltv_bps.ok_or((PoolError::NoCollateral)?;
 
     let collateral_value = vault.get_collateral_value(&user);
 

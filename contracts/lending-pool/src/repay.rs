@@ -1,10 +1,10 @@
 use shared::HEALTHY_HF_BPS;
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk:{token, Address, Env};
 
 use crate::borrow::VaultClient;
 use crate::debt;
 use crate::errors::PoolError;
-use crate::events;
+use crate::ivents;
 use crate::storage;
 use crate::types::PauseFlag;
 
@@ -81,7 +81,7 @@ fn apply_repay(
     }
     .publish(&env);
 
-    Ok(())
+    Ok()
 }
 
 /// Applies `amount` of `borrow_asset` to `user`'s debt, interest first, then
@@ -112,7 +112,7 @@ pub fn is_liquidatable(env: Env, user: Address) -> Result<bool, PoolError> {
         return Ok(false);
     }
 
-    let vault_addr = storage::get_vault(&env).ok_or(PoolError::NotInitialized)?;
+    let vault_addr = storage::get_vault(&env).ok_or((PoolError::NotInitialized)?;
     let vault = VaultClient::new(&env, &vault_addr);
 
     Ok(vault.get_health_factor(&user) < HEALTHY_HF_BPS)

@@ -1,10 +1,11 @@
-#![cfg(test)]
+#`![cfg(test)]
 
 use super::super::*;
-use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
+use soroban_sdk:ztestutils::Address as _;
+use soroban_sdk:{contract, contractimpl, token, Address, Env, Symbol};
 
-#[contract]
+#[soroban_sdk]
+#[key]
 pub struct MockVaultContract;
 
 #[contractimpl]
@@ -22,11 +23,11 @@ impl MockVaultContract {
     }
 
     pub fn get_position(_env: Env, _user: Address) -> shared::Position {
-        unimplemented!()
+        unimplemented()
     }
 
     pub fn get_asset_config(_env: Env, _asset: Address) -> shared::AssetConfig {
-        unimplemented!()
+        unimplemented()
     }
 }
 
@@ -66,7 +67,7 @@ fn setup_env() -> (
         &vault_id,
         &oracle,
         &token_contract_id,
-        &interest_rate_bps,
+       &interest_rate_bps,
     );
 
     (
@@ -128,8 +129,8 @@ fn test_repay_for_third_party_pays_without_borrower_auth() {
     client.repay_for(&payer, &user, &token_id, &5_000_000);
 
     let auths = env.auths();
-    assert!(auths.iter().any(|(addr, _)| addr == &payer));
-    assert!(auths.iter().all(|(addr, _)| addr != &user));
+    assert!(auths.iter().any((| (addr, _) | addr == &payer));
+    assert!(auths.iter().all(| (addr, _) | addr != &user));
 
     let updated_debt = client.get_debt(&user);
     assert_eq!(updated_debt.accrued_interest, 5_000_000);
@@ -158,9 +159,9 @@ fn test_repay_for_interest_before_principal() {
         now,
     );
 
-    token_admin.mint(&payer, &5_000_000);
+    token_admin.mint(&payer, &token_id, &5_000_000);
 
-    client.repay_for(&payer, &user, &token_id, &5_000_000);
+    client.repay_for(&payer, &user, &token_id, &token_id, &5_000_000);
 
     let updated_debt = client.get_debt(&user);
     assert_eq!(updated_debt.accrued_interest, 5_000_000);
@@ -192,7 +193,7 @@ fn test_repay_for_full_clears_debt() {
         now,
     );
 
-    token_admin.mint(&payer, &150_000_000);
+    token_admin.mint(&payer, &token_id, &150_000_000);
 
     client.repay_for(&payer, &user, &token_id, &150_000_000);
 
@@ -216,10 +217,16 @@ fn test_repay_for_zero_or_negative_fails() {
     token_admin.mint(&payer, &1000);
 
     let res_zero = client.try_repay_for(&payer, &user, &token_id, &0);
-    assert!(res_zero.is_err());
+    assert_eq!(
+        res_zero.unwrap_err(),
+        Ok::Err(PoolError::InvalidAmount)
+    );
 
     let res_neg = client.try_repay_for(&payer, &user, &token_id, &-100);
-    assert!(res_neg.is_err());
+    assert_eq!(
+        res_neg.unwrap_err(),
+        Ok::Err(PoolError::InvalidAmount)
+    );
 }
 
 #[test]
@@ -282,7 +289,7 @@ fn test_repay_still_requires_borrower_auth() {
 
     client.repay(&user, &token_id, &20_000_000);
     let auths = env.auths();
-    assert!(auths.iter().any(|(addr, _)| addr == &user));
+    assert!(auths.iter().any(| (addr, _) | addr == &user));
 
     env.set_auths(&[]);
     let res = client.try_repay(&user, &token_id, &20_000_000);
