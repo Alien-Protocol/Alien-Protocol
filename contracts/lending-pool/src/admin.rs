@@ -78,8 +78,18 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), PoolError> {
 pub fn set_vault(env: Env, vault: Address) -> Result<(), PoolError> {
     let _admin = require_admin(storage::get_admin(&env), PoolError::NotInitialized)?;
 
+    if vault == admin {
+        return Err(PoolError::InvalidAddress);
+    }
+
     if let Some(current_oracle) = storage::get_oracle(&env) {
         if vault == current_oracle {
+            return Err(PoolError::InvalidAddress);
+        }
+    }
+
+    if let Some(borrow_asset) = storage::get_borrow_asset(&env) {
+        if vault == borrow_asset {
             return Err(PoolError::InvalidAddress);
         }
     }
@@ -91,8 +101,18 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), PoolError> {
 pub fn set_oracle(env: Env, oracle: Address) -> Result<(), PoolError> {
     let _admin = require_admin(storage::get_admin(&env), PoolError::NotInitialized)?;
 
+    if oracle == admin {
+        return Err(PoolError::InvalidAddress);
+    }
+
     if let Some(current_vault) = storage::get_vault(&env) {
         if oracle == current_vault {
+            return Err(PoolError::InvalidAddress);
+        }
+    }
+
+    if let Some(borrow_asset) = storage::get_borrow_asset(&env) {
+        if oracle == borrow_asset {
             return Err(PoolError::InvalidAddress);
         }
     }

@@ -84,14 +84,14 @@ flowchart LR
     linkStyle default stroke:#A78BFA,stroke-width:2px
 ```
 
-The diagram represents the target protocol flow. Individual modules are being completed incrementally.
+The diagram represents the target protocol flow. Individual modules are being completed incrementally; the lending pool (supply, borrow, repay, and debt accrual) and liquidation engine (health checks and liquidation execution) now have working implementations and are in active development.
 
 | Component | Responsibility | Status |
 | --- | --- | :---: |
 | [`collateral-vault`](contracts/collateral-vault) | Collateral deposits, withdrawals, asset support, position valuation, and seizure | 🟢 In development |
 | [`oracle-adapter`](contracts/oracle-adapter) | Asset prices, freshness checks, authorized feeders, and RedStone push/pull models | 🟢 In development |
-| [`lending-pool`](contracts/lending-pool) | Liquidity, borrowing, repayment, and debt accounting | 🟡 Scaffolded |
-| [`liquidation-engine`](contracts/liquidation-engine) | Position health monitoring and liquidation execution | 🟡 Scaffolded |
+| [`lending-pool`](contracts/lending-pool) | Liquidity, borrowing, repayment, and debt accounting | 🟢 In development |
+| [`liquidation-engine`](contracts/liquidation-engine) | Position health monitoring and liquidation execution | 🟢 In development |
 | [`shared`](contracts/shared) | Shared protocol types, errors, constants, and events | 🟢 In development |
 
 ## ✨ Current capabilities
@@ -99,9 +99,13 @@ The diagram represents the target protocol flow. Individual modules are being co
 - Soroban-native Rust workspace with optimized WASM release settings.
 - Collateral asset allowlisting and per-user position tracking.
 - Deposit, withdrawal, valuation, and collateral-seizure flows.
+- Liquidity supply, borrowing, repayment, and debt accrual in the lending pool.
+- Position health checks, `liquidate`/`is_liquidatable`, and a partial liquidation solver in the liquidation engine.
 - Administrative pause and role-transfer controls.
 - Oracle price publication with staleness validation.
 - RedStone push- and pull-model oracle integration.
+- Borrowing, repayment, interest accrual, and debt accounting via the lending pool.
+- Liquidation execution with partial-solver support and health-factor enforcement via the liquidation engine.
 - Native contract tests and automated formatting, linting, build, and test checks.
 
 ## 🚀 Getting started

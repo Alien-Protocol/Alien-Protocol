@@ -167,7 +167,7 @@ backend/
 - [ ] Keep README component status table in sync with this TODO (pool/engine still marked “Scaffolded” but are now implemented)
 - [ ] `docs/api.md` when backend routes exist
 - [ ] `docs/risk-model.md` (per-asset LTV table from arch, as implemented)
-- [ ] Refresh or archive `private/implementation-status.md` (Aug 2026; pool/engine no longer hello stubs, shared crate wired, `PriceData` unified)
+- [x] Refresh or archive `private/implementation-status.md` (Aug 2026; pool/engine no longer hello stubs, shared crate wired, `PriceData` unified)
 - [ ] Deployment / ops runbook
 
 ---
