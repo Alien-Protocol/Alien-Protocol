@@ -197,3 +197,61 @@ fn test_push_model_unauthorized() {
     let result = client.try_write_prices(&non_admin, &feed_ids, &payload);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_pull_model_uninitialized_config() {
+    let (env, client, _admin) = setup_env();
+    set_ledger_time(&env, 1744829560);
+
+    let payload = hex_to_bytes(&env, PAYLOAD_3SIG_HEX);
+    let feed_ids = Vec::from_array(&env, [Symbol::new(&env, "BTC")]);
+
+    // RedStone config has not been initialized
+    let result = client.try_get_prices(&feed_ids, &payload);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_redstone_signer_rotation_and_config_usage() {
+    let (env, client, admin) = setup_env();
+    set_ledger_time(&env, 1744829560);
+
+    let payload = hex_to_bytes(&env, PAYLOAD_3SIG_HEX);
+    let feed_ids = Vec::from_array(&env, [Symbol::new(&env, "BTC"), Symbol::new(&env, "ETH")]);
+
+    // 1. Configure with dummy signers that do not match the payload signers
+    let mut wrong_signers = Vec::new(&env);
+    let dummy_signer = hex_to_bytes(&env, "0000000000000000000000000000000000000001");
+    wrong_signers.push_back(dummy_signer);
+    client.set_redstone_config(&admin, &wrong_signers, &1);
+
+    // Verification must fail because stored signers do not match the signatures in payload
+    let fail_res = client.try_get_prices(&feed_ids, &payload);
+    assert!(fail_res.is_err());
+
+    // 2. Rotate signers to the valid PRIMARY_SIGNERS via set_redstone_config
+    setup_redstone_config(&env, &client, &admin);
+
+    // Verification must now succeed using the newly stored configuration
+    let (timestamp, prices) = client.get_prices(&feed_ids, &payload);
+    assert_eq!(timestamp, 1744829560000);
+    assert_eq!(prices.get(0).unwrap(), 8396083019375);
+    assert_eq!(prices.get(1).unwrap(), 156537608660);
+}
+
+#[test]
+fn test_set_redstone_config_validation() {
+    let (env, client, admin) = setup_env();
+    let mut signers = Vec::new(&env);
+    for s in PRIMARY_SIGNERS.iter() {
+        signers.push_back(hex_to_bytes(&env, s));
+    }
+
+    // Threshold 0 is invalid
+    let err_zero = client.try_set_redstone_config(&admin, &signers, &0);
+    assert!(err_zero.is_err());
+
+    // Threshold exceeding number of signers is invalid
+    let err_too_high = client.try_set_redstone_config(&admin, &signers, &6);
+    assert!(err_too_high.is_err());
+}

@@ -84,7 +84,7 @@ flowchart LR
     linkStyle default stroke:#A78BFA,stroke-width:2px
 ```
 
-The diagram represents the target protocol flow. Individual modules are being completed incrementally.
+The diagram represents the target protocol flow. Individual modules are being completed incrementally; the lending pool (supply, borrow, repay, and debt accrual) and liquidation engine (health checks and liquidation execution) now have working implementations and are in active development.
 
 | Component | Responsibility | Status |
 | --- | --- | :---: |
@@ -99,11 +99,13 @@ The diagram represents the target protocol flow. Individual modules are being co
 - Soroban-native Rust workspace with optimized WASM release settings.
 - Collateral asset allowlisting and per-user position tracking.
 - Deposit, withdrawal, valuation, and collateral-seizure flows.
+- Liquidity supply, borrowing, repayment, and debt accrual in the lending pool.
+- Position health checks, `liquidate`/`is_liquidatable`, and a partial liquidation solver in the liquidation engine.
 - Administrative pause and role-transfer controls.
 - Oracle price publication with staleness validation.
 - RedStone push- and pull-model oracle integration.
-- Borrowing and repayment against deposited collateral.
-- Liquidation of unhealthy positions.
+- Borrowing, repayment, interest accrual, and debt accounting via the lending pool.
+- Liquidation execution with partial-solver support and health-factor enforcement via the liquidation engine.
 - Native contract tests and automated formatting, linting, build, and test checks.
 
 ## 🚀 Getting started
