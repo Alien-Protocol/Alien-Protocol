@@ -1,8 +1,41 @@
 #![cfg(test)]
 
 use super::super::*;
+use crate::errors::PoolError;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{token, Address, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
+
+#[contract]
+pub struct MockVaultContract;
+
+#[contractimpl]
+impl MockVaultContract {
+    pub fn get_position(env: Env, user: Address) -> shared::Position {
+        let mut collateral = soroban_sdk::Vec::new(&env);
+        collateral.push_back(shared::CollateralAsset {
+            asset: Address::generate(&env),
+            amount: 10_000,
+        });
+        shared::Position { user, collateral }
+    }
+
+    pub fn get_asset_config(_env: Env, _asset: Address) -> shared::AssetConfig {
+        shared::AssetConfig {
+            token_decimals: 7,
+            oracle_price_decimals: 7,
+            max_ltv_bps: 8_000,
+            liquidation_threshold_bps: 8_500,
+        }
+    }
+
+    pub fn get_collateral_value(_env: Env, _user: Address) -> i128 {
+        100_000
+    }
+
+    pub fn get_health_factor(_env: Env, _user: Address) -> i128 {
+        15_000
+    }
+}
 
 fn setup_env() -> (
     Env,
@@ -22,7 +55,7 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
-    let vault = Address::generate(&env);
+    let vault = env.register(MockVaultContract, ());
     let oracle = Address::generate(&env);
 
     let token_admin = Address::generate(&env);
@@ -108,7 +141,46 @@ fn test_withdraw_liquidity_exceeds_balance_fails() {
     client.supply(&user, &500);
 
     let res = client.try_withdraw_liquidity(&user, &600);
-    assert!(res.is_err());
+    assert_eq!(res, Err(Ok(PoolError::InsufficientSupply)));
+}
+
+#[test]
+fn test_withdraw_liquidity_insufficient_liquidity_when_borrowed() {
+    let (env, client, _admin, supplier, _vault, token_id, token_client, token_admin) = setup_env();
+    let borrower = Address::generate(&env);
+
+    // Supplier deposits 1000 tokens
+    token_admin.mint(&supplier, &1000);
+    client.supply(&supplier, &1000);
+
+    assert_eq!(client.get_user_supply(&supplier), 1000);
+    assert_eq!(client.get_total_supply(), 1000);
+    assert_eq!(client.get_available_liquidity(), 1000);
+
+    // Borrower draws down 700 tokens of liquidity
+    client.borrow(&borrower, &token_id, &700);
+
+    assert_eq!(token_client.balance(&borrower), 700);
+    assert_eq!(token_client.balance(&client.address), 300);
+    assert_eq!(client.get_available_liquidity(), 300);
+
+    // Supplier attempts to withdraw 500 tokens:
+    // User's own supply is sufficient (1000 >= 500), but available liquidity is only 300 (< 500).
+    // The call must fail with InsufficientLiquidity, distinguishing it from InsufficientSupply.
+    let res_liquidity = client.try_withdraw_liquidity(&supplier, &500);
+    assert_eq!(res_liquidity, Err(Ok(PoolError::InsufficientLiquidity)));
+
+    // In contrast, requesting more than the supplier's own deposited balance (1200 > 1000)
+    // fails with InsufficientSupply.
+    let res_supply = client.try_withdraw_liquidity(&supplier, &1200);
+    assert_eq!(res_supply, Err(Ok(PoolError::InsufficientSupply)));
+
+    // Supplier can still successfully withdraw within available liquidity
+    client.withdraw_liquidity(&supplier, &200);
+    assert_eq!(client.get_user_supply(&supplier), 800);
+    assert_eq!(client.get_total_supply(), 800);
+    assert_eq!(client.get_available_liquidity(), 100);
+    assert_eq!(token_client.balance(&supplier), 200);
 }
 
 #[test]
