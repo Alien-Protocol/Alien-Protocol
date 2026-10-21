@@ -102,3 +102,33 @@ fn test_ceil_div_rounds_up() {
 fn test_ceil_div_rejects_zero_denominator() {
     assert_eq!(ceil_div(1, 0), Err(SharedError::DivisionByZero));
 }
+
+/// `ceil_div` is a mathematical ceiling for every sign combination: when the
+/// division is not exact, the quotient rounds up toward `+∞`. Negative
+/// numerators are therefore not rejected — they round toward `+∞` like any
+/// other case (for example `ceil(-10 / 3) == -3`).
+#[test]
+fn test_ceil_div_negative_numerator_rounds_toward_positive_infinity() {
+    // ceil(-10 / 3) = ceil(-3.33) = -3
+    assert_eq!(ceil_div(-10, 3).unwrap(), -3);
+    // ceil(-7 / 2) = ceil(-3.5) = -3
+    assert_eq!(ceil_div(-7, 2).unwrap(), -3);
+    // ceil(-1 / 3) = ceil(-0.33) = 0
+    assert_eq!(ceil_div(-1, 3).unwrap(), 0);
+}
+
+/// Exact division with a negative numerator is returned unchanged.
+#[test]
+fn test_ceil_div_negative_numerator_exact_division() {
+    assert_eq!(ceil_div(-9, 3).unwrap(), -3);
+    assert_eq!(ceil_div(-6, -3).unwrap(), 2);
+}
+
+/// A negative numerator and a negative denominator also round up toward `+∞`.
+#[test]
+fn test_ceil_div_negative_numerator_and_denominator_rounds_up() {
+    // ceil(-10 / -3) = ceil(3.33) = 4
+    assert_eq!(ceil_div(-10, -3).unwrap(), 4);
+    // ceil(-1 / -2) = ceil(0.5) = 1
+    assert_eq!(ceil_div(-1, -2).unwrap(), 1);
+}

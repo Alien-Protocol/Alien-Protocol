@@ -481,15 +481,29 @@ fn test_liquidate_rejects_self_liquidation() {
     assert_eq!(res, Err(Ok(EngineError::Unauthorized)));
 }
 
+/// A zero `max_repay_amount` is not a repayment and must be rejected with
+/// `InvalidAmount` (issue #767).
 #[test]
-fn test_liquidate_rejects_non_positive_max_repay() {
+fn test_liquidate_rejects_zero_max_repay() {
     let ctx = setup();
 
-    let res_zero = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &0);
-    assert_eq!(res_zero, Err(Ok(EngineError::InvalidAmount)));
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &0);
 
-    let res_negative = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &-1);
-    assert_eq!(res_negative, Err(Ok(EngineError::InvalidAmount)));
+    assert_eq!(res, Err(Ok(EngineError::InvalidAmount)));
+}
+
+/// Every negative `max_repay_amount`, including `i128::MIN`, must be rejected
+/// with `InvalidAmount` (issue #767).
+#[test]
+fn test_liquidate_rejects_negative_max_repay() {
+    let ctx = setup();
+
+    for amount in [-1i128, -1_000_000_000, i128::MIN] {
+        let res = ctx
+            .engine
+            .try_liquidate(&ctx.liquidator, &ctx.user, &amount);
+        assert_eq!(res, Err(Ok(EngineError::InvalidAmount)), "amount {amount}");
+    }
 }
 
 #[test]

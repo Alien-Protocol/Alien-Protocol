@@ -273,6 +273,29 @@ fn test_set_price_future_timestamp_rejected() {
     );
 }
 
+/// A rejected future timestamp must not leave a price behind: the guard runs
+/// before the storage write, so nothing is persisted for the asset
+/// (issue #774).
+#[test]
+fn test_set_price_future_timestamp_rejected_and_not_stored() {
+    let (env, client, admin) = setup_env_mock_all_auths();
+    let asset = Address::generate(&env);
+
+    let ledger_now: u64 = 50_000;
+    env.ledger().set_timestamp(ledger_now);
+
+    let result = client.try_set_price(&admin, &asset, &300_i128, &(ledger_now + 1));
+    let err = result.err().unwrap().unwrap();
+    assert_eq!(
+        err,
+        soroban_sdk::Error::from_contract_error(OracleError::InvalidTimestamp as u32)
+    );
+    assert!(
+        client.get_price(&asset).is_none(),
+        "a rejected future timestamp must not be persisted"
+    );
+}
+
 /// A price timestamped exactly at ledger time is valid (boundary: timestamp == ledger).
 #[test]
 fn test_set_price_at_ledger_timestamp_succeeds() {
