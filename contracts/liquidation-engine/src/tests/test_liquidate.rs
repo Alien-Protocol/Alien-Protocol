@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
 use super::super::*;
@@ -219,7 +219,11 @@ const EXPECTED_PARTIAL_REPAY: i128 = 3_855_932_204;
 const COLLATERAL_BALANCE: i128 = 6_000_000_000;
 
 fn expected_bonus(repay: i128) -> i128 {
-    shared::ceil_div(repay * 800, 10_000).unwrap()
+    shared::ceil_div(
+        repay * shared::LIQUIDATION_BONUS_BPS as i128,
+        shared::BPS_DENOMINATOR,
+    )
+    .unwrap()
 }
 
 #[allow(dead_code)]
@@ -438,9 +442,34 @@ fn test_liquidate_rejects_healthy_user() {
     ctx.vault
         .set_health_factor(&ctx.user, &HEALTH_FACTOR_HEALTHY);
 
+    let collateral_balance_before = ctx.collateral_token.balance(&ctx.vault_addr);
+    let liquidator_collateral_before = ctx.collateral_token.balance(&ctx.liquidator);
+    let events_before = ctx.env.events().all();
+
     let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
 
     assert_eq!(res, Err(Ok(EngineError::NotLiquidatable)));
+    assert_eq!(
+        ctx.collateral_token.balance(&ctx.vault_addr),
+        collateral_balance_before,
+        "healthy position collateral must not be seized"
+    );
+    assert_eq!(
+        ctx.collateral_token.balance(&ctx.liquidator),
+        liquidator_collateral_before,
+        "liquidator must not receive collateral from a healthy position"
+    );
+
+    let events_after = ctx.env.events().all();
+    let liquidation_events = events_after
+        .iter()
+        .skip(events_before.len() as usize)
+        .filter(|event| event.0 == ctx.engine_addr)
+        .count();
+    assert_eq!(
+        liquidation_events, 0,
+        "liquidating a healthy position must not emit a Liquidated event"
+    );
 }
 
 #[test]
@@ -452,6 +481,8 @@ fn test_liquidate_rejects_self_liquidation() {
     assert_eq!(res, Err(Ok(EngineError::Unauthorized)));
 }
 
+/// A zero `max_repay_amount` is not a repayment and must be rejected with
+/// `InvalidAmount` (issue #767).
 #[test]
 fn test_liquidate_rejects_zero_max_repay() {
     let ctx = setup();
@@ -474,11 +505,23 @@ fn test_liquidate_rejects_negative_max_repay() {
 fn test_liquidate_rejects_non_positive_max_repay() {
     let ctx = setup();
 
-    let res_zero = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &0);
-    assert_eq!(res_zero, Err(Ok(EngineError::InvalidAmount)));
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &0);
 
-    let res_negative = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &-1);
-    assert_eq!(res_negative, Err(Ok(EngineError::InvalidAmount)));
+    assert_eq!(res, Err(Ok(EngineError::InvalidAmount)));
+}
+
+/// Every negative `max_repay_amount`, including `i128::MIN`, must be rejected
+/// with `InvalidAmount` (issue #767).
+#[test]
+fn test_liquidate_rejects_negative_max_repay() {
+    let ctx = setup();
+
+    for amount in [-1i128, -1_000_000_000, i128::MIN] {
+        let res = ctx
+            .engine
+            .try_liquidate(&ctx.liquidator, &ctx.user, &amount);
+        assert_eq!(res, Err(Ok(EngineError::InvalidAmount)), "amount {amount}");
+    }
 }
 
 #[test]
@@ -507,4 +550,39 @@ fn test_liquidate_fails_if_vault_engine_mismatch() {
     let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
 
     assert_eq!(res, Err(Ok(EngineError::Unauthorized)));
+}
+
+#[test]
+fn test_calculate_partial_repayment_non_exact_lt_reaches_target_hf() {
+    let ctx = setup();
+    let debt = 8_000_000_000i128;
+    ctx.pool.set_debt(&ctx.user, &debt);
+
+    let non_exact_lt = 7_777u32;
+    ctx.vault.set_asset_config(
+        &ctx.collateral_asset,
+        &shared::AssetConfig {
+            token_decimals: 7,
+            oracle_price_decimals: 7,
+            max_ltv_bps: 7_000,
+            liquidation_threshold_bps: non_exact_lt,
+        },
+    );
+    // User is liquidatable with HF < 10_000
+    ctx.vault.set_health_factor(&ctx.user, &9_721);
+
+    let repay = ctx.engine.calculate_partial_repayment(&ctx.user);
+
+    let bonus = expected_bonus(repay);
+    let seized = repay + bonus;
+    let remaining_collateral = COLLATERAL_VALUE - seized;
+    let remaining_debt = debt - repay;
+    let post_hf = (remaining_collateral * non_exact_lt as i128) / remaining_debt;
+
+    assert!(
+        post_hf >= shared::TARGET_HF_BPS,
+        "post-HF {post_hf} must reach TARGET_HF_BPS {}",
+        shared::TARGET_HF_BPS
+    );
+    assert_eq!(post_hf, shared::TARGET_HF_BPS);
 }

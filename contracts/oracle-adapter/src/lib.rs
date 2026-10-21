@@ -265,6 +265,10 @@ impl OracleContract {
         }
         caller.require_auth();
 
+        if threshold == 0 || threshold > signers.len() || threshold > (u8::MAX as u32) {
+            return Err(OracleError::InvalidThreshold);
+        }
+
         oracle::storage::set_redstone_signers(&env, &signers);
         oracle::storage::set_redstone_threshold(&env, threshold);
         Ok(())
