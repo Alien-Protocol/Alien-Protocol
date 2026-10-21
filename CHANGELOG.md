@@ -11,6 +11,20 @@ for published contract releases.
 ### Added
 
 - A changelog for tracking user-visible contract, interface, and storage changes.
+- `lending-pool` public interface implemented: `supply`, `borrow`,
+  `repay`/`repay_for`, and per-position interest accrual via `accrue_interest`,
+  together with liquidity accounting (total/available supply and utilization).
+- `liquidation-engine` public interface implemented: `liquidate`, the partial
+  repayment solver that targets a healthy post-liquidation health factor, the
+  liquidation bonus calculation, and the close-factor cap on repaid debt.
+
+### Changed
+
+- Wired the `shared` crate into `collateral-vault`, `lending-pool`, and
+  `liquidation-engine`, replacing per-contract copies of constants, types, and
+  math helpers with their `shared` equivalents.
+- Unified the oracle price type on `shared::PriceData` so the vault, pool, and
+  liquidation engine decode `get_price`/`get_price_or_fail` consistently.
 
 ## [2.0.0]
 
