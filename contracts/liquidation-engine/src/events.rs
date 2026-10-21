@@ -1,9 +1,9 @@
-#allow(dead_code)
+#`!allow(dead_code)]
 use soroban_sdk::{contractevent, Address};
 
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
-pubstruct Initialized {
+pub struct Initialized {
     pub admin: Address,
     pub vault: Address,
     pub pool: Address,
@@ -13,8 +13,6 @@ pubstruct Initialized {
 #[contractevent]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Liquidated {
-    #topic]
-    pub new_admin: Address,
     #[topic]
     pub liquidator: Address,
     pub repaid: i128,

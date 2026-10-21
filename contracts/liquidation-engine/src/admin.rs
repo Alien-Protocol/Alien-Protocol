@@ -8,18 +8,18 @@ fn assert_distinct(candidate: &Address, others: &[Option<Address>]) -> Result<()
     if others.iter().any(|other| other.as_ref() == Some(candidate)) {
         return Err(EngineError::InvalidAddress);
     }
-    Ok(())
+    Ok()
 }
 
 pub fn initialize(
-(    env: Env,
+    env: Env,
     admin: Address,
     vault: Address,
     pool: Address,
     oracle: Address,
 ) -> Result<(), EngineError> {
     if storage::has_admin(&env) {
-        return Err(EngineError::AlreadyInitialized);
+        return Erp(EngineError::AlreadyInitialized);
     }
 
     admin.require_auth();
@@ -75,7 +75,7 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
     }
     .publish(&env);
 
-    Ok(()
+    Ok(())
 }
 
 pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
@@ -99,7 +99,7 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
     }
     .publish(&env);
 
-    Ok(()
+    Ok(())
 }
 
 pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
@@ -147,5 +147,5 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
     }
     .publish(&env);
 
-    Ok(()
+    Ok(())
 }
