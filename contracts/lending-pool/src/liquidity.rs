@@ -98,5 +98,15 @@ pub fn get_utilization_bps(env: Env) -> u32 {
         return 0;
     }
     let total_borrowed = storage::get_total_borrowed(&env);
-    (total_borrowed * 10_000 / total_supply) as u32
+
+    // Use checked_mul to avoid overflow when total_borrowed is large.
+    // On overflow, the pool is beyond 100% utilization, so clamp to 10_000 bps.
+    // Then divide and clamp the final result to 10_000 so utilization is
+    // always in [0, 10_000] regardless of the stored values.
+    let numer = match total_borrowed.checked_mul(10_000) {
+        Some(n) => n,
+        None => return 10_000,
+    };
+    let raw = numer / total_supply;
+    raw.min(10_000) as u32
 }
