@@ -225,3 +225,37 @@ fn test_utilization_full_is_ten_thousand_bps() {
 
     assert_eq!(client.get_utilization_bps(), 10_000);
 }
+
+/// `total_borrowed * 10_000` overflows i128 when `total_borrowed` is close to
+/// `i128::MAX`.  The function must not panic and must clamp to 10_000 bps.
+#[test]
+fn test_utilization_large_borrowed_does_not_panic_and_clamps_to_ten_thousand() {
+    let (env, client, _admin, _user, _vault, _token_id, _token_client, _token_admin) = setup_env();
+
+    // total_borrowed chosen so that total_borrowed * 10_000 overflows i128.
+    // i128::MAX / 10_000 ≈ 1.7e34, so anything above that will overflow.
+    let huge: i128 = i128::MAX / 100;
+
+    env.as_contract(&client.address, || {
+        storage::set_total_supply(&env, 1);
+        storage::set_total_borrowed(&env, huge);
+    });
+
+    // Must not panic; overflow path saturates to 10_000 bps.
+    let util = client.get_utilization_bps();
+    assert_eq!(util, 10_000);
+}
+
+/// Utilization is clamped even when borrowed legitimately exceeds supply
+/// (e.g. due to accrued interest increasing total_borrowed above total_supply).
+#[test]
+fn test_utilization_over_supply_clamps_to_ten_thousand() {
+    let (env, client, _admin, _user, _vault, _token_id, _token_client, _token_admin) = setup_env();
+
+    env.as_contract(&client.address, || {
+        storage::set_total_supply(&env, 1_000);
+        storage::set_total_borrowed(&env, 2_000); // 200% — clamp to 10_000 bps
+    });
+
+    assert_eq!(client.get_utilization_bps(), 10_000);
+}
