@@ -1,0 +1,222 @@
+name: Pull Request Security Scan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, develop, drip]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-security-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+jobs:
+  # ---------------------------------------------------------------
+  # 1. Heuristic scan of ADDED lines + risky file changes
+  # ---------------------------------------------------------------
+  suspicious-code:
+    name: Suspicious code heuristics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan PR diff
+        shell: bash
+        run: |
+          set -uo pipefail
+          export LC_ALL=C.UTF-8
+          HIGH=0; MED=0
+          REPORT="$GITHUB_STEP_SUMMARY"
+          SELF=".github/workflows/pr-security-scan.yml"
+          echo "## PR heuristic scan" >> "$REPORT"
+          # Added lines as "file:line:content"
+          git diff -U0 --no-color "$BASE_SHA...$HEAD_SHA" | awk '
+            /^\+\+\+ b\//{f=substr($0,7); next}
+            /^@@/{match($0,/\+[0-9]+/); ln=substr($0,RSTART+1,RLENGTH-1)-1; next}
+            /^\+/{ln++; print f":"ln":"substr($0,2)}' \
+            | grep -v "^${SELF}:" > added.txt || true
+
+          check() { # severity, name, regex
+            local sev="$1" name="$2" re="$3" hits
+            hits=$(grep -aiE -- "$re" added.txt | cut -c1-220 | head -20 || true)
+            if [ -n "$hits" ]; then
+              echo "::warning title=[$sev] $name::see job summary"
+              { echo "### [$sev] $name"; echo '```'; echo "$hits"; echo '```'; } >> "$REPORT"
+              if [ "$sev" = "HIGH" ]; then HIGH=$((HIGH+1)); else MED=$((MED+1)); fi
+            fi
+          }
+
+          # ---- HIGH: classic malicious patterns ----
+          check HIGH "Remote script piped to shell"      '(curl|wget)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z|da)?sh'
+          check HIGH "Decode-and-execute"                 'base64[[:space:]]+(-d|--decode)[^|]*\|[[:space:]]*(ba)?sh|eval[[:space:]]*\(?[[:space:]]*(atob|Buffer\.from|base64)|exec[[:space:]]*\([^)]*(b64decode|base64)|marshal\.loads|zlib\.decompress[^)]*exec'
+          check HIGH "Reverse shell indicators"           '/dev/tcp/|bash[[:space:]]+-i[[:space:]]*>&|nc(at)?[[:space:]]+(-e|-c)[[:space:]]|socat[^|]*exec:|mkfifo[^;]*nc[[:space:]]'
+          check HIGH "Crypto-miner indicators"            'xmrig|minerd|stratum\+tcp|cryptonight|monero.*pool|coinhive'
+          check HIGH "Exfil endpoints"                    'discord(app)?\.com/api/webhooks|webhook\.site|pastebin\.com/raw|transfer\.sh|ngrok(-free)?\.(io|app|dev)|interact\.sh|oast\.(pro|live|fun|me)|requestbin|pipedream\.net|api\.telegram\.org/bot'
+          check HIGH "Env/secret dump to network"         '(printenv|env|process\.env|os\.environ)[^#]{0,80}(curl|wget|fetch|axios|requests\.(post|get)|http\.request)|(curl|wget)[^#]{0,80}(\$\{?(GITHUB_TOKEN|AWS_SECRET|NPM_TOKEN)|~/\.ssh|\.aws/credentials|\.npmrc|\.env)'
+          check HIGH "Credential file access"             '(~|\$HOME|/home/[a-z]+)/\.(ssh|aws|kube|docker/config\.json|npmrc|pypirc|git-credentials)|id_rsa|wallet\.dat|\.config/solana|keystore'
+          check HIGH "Hidden/bidi Unicode (Trojan Source)" $'[\u202A-\u202E\u2066-\u2069\u200B-\u200F\uFEFF]'
+          check HIGH "Workflow secret exfiltration"       'secrets\.[A-Z_]+[^#]{0,80}(curl|wget|nc[[:space:]]|base64)'
+          check HIGH "Dangerous workflow trigger"         'pull_request_target|workflow_run:'
+          check HIGH "Persistence / system tampering"     'crontab[[:space:]]+-|/etc/(cron|rc\.local|ld\.so\.preload|sudoers)|authorized_keys|systemctl[[:space:]]+enable|LD_PRELOAD'
+          check HIGH "Destructive commands"               'rm[[:space:]]+-rf[[:space:]]+(/|~|\$HOME)([[:space:]]|$)|mkfs\.|dd[[:space:]]+if=.*of=/dev/'
+
+          # ---- MEDIUM: review manually ----
+          check MED  "Dynamic code execution"             '\b(eval|new[[:space:]]+Function|vm\.runIn|child_process|os\.system|subprocess\.(Popen|call|run)|Runtime\.getRuntime\(\)\.exec)\b'
+          check MED  "Long base64/hex blob (>200 chars)"  '[A-Za-z0-9+/=]{200,}|(\\x[0-9a-fA-F]{2}){40,}'
+          check MED  "Obfuscation helpers"                'String\.fromCharCode\([0-9, ]{40,}|\\u00[0-9a-f]{2}.{0,3}\\u00[0-9a-f]{2}.{0,3}\\u00[0-9a-f]{2}|_0x[0-9a-f]{4,}'
+          check MED  "Raw IP URL"                         'https?://[0-9]{1,3}(\.[0-9]{1,3}){3}'
+          check MED  "Disabled TLS verification"          'rejectUnauthorized[[:space:]]*:[[:space:]]*false|verify[[:space:]]*=[[:space:]]*False|NODE_TLS_REJECT_UNAUTHORIZED|--insecure|curl[^|]*[[:space:]]-k[[:space:]]'
+          check MED  "Unpinned action / mutable ref"      'uses:[[:space:]]*[^@[:space:]]+@(main|master|latest)'
+          check MED  "Install-time lifecycle script"      '"(preinstall|install|postinstall|prepare)"[[:space:]]*:'
+          check MED  "Typosquat-ish install of git/URL dep" '(npm|pnpm|yarn|pip3?)[[:space:]]+(install|add|i)[^#]*(git\+|https?://|github:)'
+
+          # ---- File-level checks ----
+          ADDED_FILES=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA")
+
+          BIN=$(echo "$ADDED_FILES" | grep -aiE '\.(exe|dll|so|dylib|bin|msi|dmg|apk|jar|war|scr|com|ps1|bat|cmd|vbs|wasm|pyc|node)$' || true)
+
+          if [ -n "$BIN" ]; then
+            { echo "### [HIGH] Executable/binary files added or changed"; echo '```'; echo "$BIN"; echo '```'; } >> "$REPORT"
+            echo "::warning title=[HIGH] Binary files::$BIN"; HIGH=$((HIGH+1))
+          fi
+
+          # Git-tracked files that are executable binaries but with innocent extensions
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            if head -c 4 "$f" | grep -qaE $'^(\x7fELF|MZ|\xcf\xfa\xed\xfe|\xca\xfe\xba\xbe)'; then
+              echo "### [HIGH] Binary disguised as source: \`$f\`" >> "$REPORT"
+              echo "::warning title=[HIGH] Disguised binary::$f"; HIGH=$((HIGH+1))
+            fi
+          done <<< "$ADDED_FILES"
+
+          CI=$(echo "$ADDED_FILES" | grep -aE '^\.github/(workflows|actions)/|^\.husky/|^\.gitmodules$|^(Makefile|Dockerfile)$|^scripts/' || true)
+
+          if [ -n "$CI" ]; then
+            { echo "### [MED] CI / build / hook files modified — review carefully"; echo '```'; echo "$CI"; echo '```'; } >> "$REPORT"
+            MED=$((MED+1))
+          fi
+
+          LOCK=$(echo "$ADDED_FILES" | grep -aE '(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|poetry\.lock|go\.sum)$' || true)
+
+          if [ -n "$LOCK" ] && ! echo "$ADDED_FILES" | grep -qaE '(package\.json|Cargo\.toml|pyproject\.toml|go\.mod)$'; then
+            { echo "### [MED] Lockfile changed without manifest change (possible dependency swap)"; echo '```'; echo "$LOCK"; echo '```'; } >> "$REPORT"
+            MED=$((MED+1))
+          fi
+
+          echo "**HIGH: $HIGH | MEDIUM: $MED**" >> "$REPORT"
+
+          if [ "$HIGH" -gt 0 ]; then
+            echo "::error::$HIGH high-severity finding(s). See job summary."
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------
+  # 2. ClamAV signature scan of changed files
+  # ---------------------------------------------------------------
+  clamav:
+    name: ClamAV (changed files)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install ClamAV + update signatures
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clamav
+          sudo systemctl stop clamav-freshclam || true
+          # Fail hard if signatures can't update: a stale/empty DB = false "clean".
+          sudo freshclam
+
+      - name: Scan changed files
+        run: |
+          git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA" > changed.txt
+          if [ ! -s changed.txt ]; then echo "No changed files"; exit 0; fi
+          clamscan --infected --no-summary --file-list=changed.txt
+          # exit 1 = virus found (fails job), 2 = error (also fails)
+
+  # ---------------------------------------------------------------
+  # 3. Semgrep SAST (new findings only)
+  # ---------------------------------------------------------------
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Semgrep
+        run: |
+          pip install --quiet semgrep
+          semgrep scan \
+            --config p/security-audit \
+            --config p/secrets \
+            --baseline-commit "$BASE_SHA" \
+            --severity ERROR --severity WARNING \
+            --error --metrics=off
+
+  # ---------------------------------------------------------------
+  # 4. Secret scanning over the PR's commits
+  # ---------------------------------------------------------------
+  gitleaks:
+    name: Gitleaks (secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run gitleaks
+        run: |
+          VER=8.18.4
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks detect --source . --log-opts="${BASE_SHA}..${HEAD_SHA}" --redact --verbose --exit-code 1
+
+  # ---------------------------------------------------------------
+  # 5. Dependency risk (known-vulnerable / newly added deps)
+  # ---------------------------------------------------------------
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write   # only for the PR comment summary
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Needs the dependency graph enabled (free on public repos; GHAS on private).
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
