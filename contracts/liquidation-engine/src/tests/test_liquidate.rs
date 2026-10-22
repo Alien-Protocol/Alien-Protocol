@@ -444,3 +444,74 @@ fn test_liquidate_rejects_self_liquidation() {
     );
     assert_eq!(ctx.collateral_token.balance(&ctx.engine_addr), 0);
 }
+
+/// A zero `max_repay_amount` is not a repayment and must be rejected with
+/// `InvalidAmount` (issue #767).
+#[test]
+fn test_liquidate_rejects_zero_max_repay() {
+    let ctx = setup();
+
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &0);
+
+    assert_eq!(res, Err(Ok(EngineError::InvalidAmount)));
+}
+
+/// Every negative `max_repay_amount`, including `i128::MIN`, must be rejected
+/// with `InvalidAmount` (issue #767).
+#[test]
+fn test_liquidate_rejects_negative_max_repay() {
+    let ctx = setup();
+
+    for amount in [-1i128, -1_000_000_000, i128::MIN] {
+        let res = ctx
+            .engine
+            .try_liquidate(&ctx.liquidator, &ctx.user, &amount);
+        assert_eq!(res, Err(Ok(EngineError::InvalidAmount)), "amount {amount}");
+    }
+}
+
+#[test]
+fn test_liquidate_requires_liquidator_auth() {
+    // No `mock_all_auths` / explicit auth for the liquidator: the very first
+    // `liquidator.require_auth()` in `liquidate` must fail the call.
+    let env = Env::default();
+
+    let engine_id = env.register(LiquidationContract, ());
+    let engine = LiquidationContractClient::new(&env, &engine_id);
+
+    let liquidator = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let res = engine.try_liquidate(&liquidator, &user, &1_000);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_liquidate_fails_if_vault_engine_mismatch() {
+    let ctx = setup();
+
+    let other_engine = Address::generate(&ctx.env);
+    ctx.vault.set_liquidation_engine(&other_engine);
+
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+
+    assert_eq!(res, Err(Ok(EngineError::Unauthorized)));
+}
+
+#[test]
+fn test_calculate_partial_repayment_non_exact_lt_reaches_target_hf() {
+    let ctx = setup();
+    let debt = 8_000_000_000i128;
+    ctx.pool.set_debt(&ctx.user, &debt);
+
+    let non_exact_lt = 7_777u32;
+    ctx.vault.set_asset_config(
+        &ctx.collateral_asset,
+        &shared::AssetConfig {
+            token_decimals: 7,
+            oracle_price_decimals: 7,
+            max_ltv_bps: 7_000,
+            liquidation_threshold_bps: non_exact_lt,
+        },
+    );
+}

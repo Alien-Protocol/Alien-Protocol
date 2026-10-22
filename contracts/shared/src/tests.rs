@@ -1,3 +1,4 @@
+use crate::constant::{SECONDS_PER_YEAR, V1_BORROW_APR_BPS};
 use crate::errors::SharedError;
 use crate::types::{
     accrue_linear_interest, borrow_limit_from_collateral, ceil_div, health_factor_bps, Debt,
@@ -6,14 +7,33 @@ use crate::types::{
 #[test]
 fn test_accrue_linear_interest_one_year_eight_percent() {
     assert_eq!(
-        accrue_linear_interest(1_000_000_000, 800, 31_536_000).unwrap(),
+        accrue_linear_interest(1_000_000_000, V1_BORROW_APR_BPS, SECONDS_PER_YEAR).unwrap(),
         80_000_000
     );
 }
 
 #[test]
+fn test_accrue_linear_interest_zero_principal_is_zero() {
+    assert_eq!(
+        accrue_linear_interest(0, V1_BORROW_APR_BPS, SECONDS_PER_YEAR).unwrap(),
+        0
+    );
+}
+
+#[test]
 fn test_accrue_linear_interest_zero_elapsed_is_zero() {
-    assert_eq!(accrue_linear_interest(1_000_000_000, 800, 0).unwrap(), 0);
+    assert_eq!(
+        accrue_linear_interest(1_000_000_000, V1_BORROW_APR_BPS, 0).unwrap(),
+        0
+    );
+}
+
+#[test]
+fn test_accrue_linear_interest_overflow_is_error() {
+    assert_eq!(
+        accrue_linear_interest(i128::MAX, V1_BORROW_APR_BPS, SECONDS_PER_YEAR),
+        Err(SharedError::Overflow)
+    );
 }
 
 #[test]
@@ -81,4 +101,34 @@ fn test_ceil_div_rounds_up() {
 #[test]
 fn test_ceil_div_rejects_zero_denominator() {
     assert_eq!(ceil_div(1, 0), Err(SharedError::DivisionByZero));
+}
+
+/// `ceil_div` is a mathematical ceiling for every sign combination: when the
+/// division is not exact, the quotient rounds up toward `+∞`. Negative
+/// numerators are therefore not rejected — they round toward `+∞` like any
+/// other case (for example `ceil(-10 / 3) == -3`).
+#[test]
+fn test_ceil_div_negative_numerator_rounds_toward_positive_infinity() {
+    // ceil(-10 / 3) = ceil(-3.33) = -3
+    assert_eq!(ceil_div(-10, 3).unwrap(), -3);
+    // ceil(-7 / 2) = ceil(-3.5) = -3
+    assert_eq!(ceil_div(-7, 2).unwrap(), -3);
+    // ceil(-1 / 3) = ceil(-0.33) = 0
+    assert_eq!(ceil_div(-1, 3).unwrap(), 0);
+}
+
+/// Exact division with a negative numerator is returned unchanged.
+#[test]
+fn test_ceil_div_negative_numerator_exact_division() {
+    assert_eq!(ceil_div(-9, 3).unwrap(), -3);
+    assert_eq!(ceil_div(-6, -3).unwrap(), 2);
+}
+
+/// A negative numerator and a negative denominator also round up toward `+∞`.
+#[test]
+fn test_ceil_div_negative_numerator_and_denominator_rounds_up() {
+    // ceil(-10 / -3) = ceil(3.33) = 4
+    assert_eq!(ceil_div(-10, -3).unwrap(), 4);
+    // ceil(-1 / -2) = ceil(0.5) = 1
+    assert_eq!(ceil_div(-1, -2).unwrap(), 1);
 }
