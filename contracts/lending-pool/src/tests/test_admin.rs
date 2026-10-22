@@ -122,6 +122,28 @@ fn test_set_vault_equals_oracle_fails() {
 }
 
 #[test]
+fn test_set_vault_equals_admin_fails() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let res = client.try_set_vault(&admin);
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+}
+
+#[test]
+fn test_set_vault_equals_borrow_asset_fails() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let res = client.try_set_vault(&token_id);
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+}
+
+#[test]
 fn test_set_oracle_equals_vault_fails() {
     let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
     let oracle = Address::generate(&env);
@@ -130,6 +152,66 @@ fn test_set_oracle_equals_vault_fails() {
 
     let res = client.try_set_oracle(&vault);
     assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+}
+
+#[test]
+fn test_set_oracle_equals_admin_fails() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let res = client.try_set_oracle(&admin);
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+}
+
+#[test]
+fn test_set_oracle_equals_borrow_asset_fails() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let res = client.try_set_oracle(&token_id);
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+}
+
+#[test]
+fn test_set_vault_after_admin_rotation_rejects_new_admin_and_allows_old_admin() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+    client.set_admin(&new_admin);
+
+    // Colliding with new admin must fail
+    let res = client.try_set_vault(&new_admin);
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+
+    // Setting to old admin is now allowed since old admin is no longer the active admin
+    let res = client.try_set_vault(&admin);
+    assert_eq!(res, Ok(Ok(())));
+    assert_eq!(client.get_vault(), Some(admin));
+}
+
+#[test]
+fn test_set_oracle_after_admin_rotation_rejects_new_admin_and_allows_old_admin() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+    client.set_admin(&new_admin);
+
+    // Colliding with new admin must fail
+    let res = client.try_set_oracle(&new_admin);
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::InvalidAddress)));
+
+    // Setting to old admin is now allowed since old admin is no longer the active admin
+    let res = client.try_set_oracle(&admin);
+    assert_eq!(res, Ok(Ok(())));
+    assert_eq!(client.get_oracle(), Some(admin));
 }
 
 #[test]
