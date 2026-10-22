@@ -1,4 +1,3 @@
-#![allow(unused)]
 use soroban_sdk::{contracttype, Address};
 
 #[contracttype]
