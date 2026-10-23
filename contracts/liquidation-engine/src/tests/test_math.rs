@@ -62,14 +62,13 @@ mod tests {
             (12500, 1000), // 10_000_000 / 10_000 = 1_000, exact
         ];
 
-        for &(repaid, expected) in cases {
-            let result = calculate_bonus(env.clone(), repaid);
+        for (repaid, expected_bonus) in &test_cases {
+            let result = calculate_bonus(env.clone(), *repaid);
             assert!(result.is_ok(), "Failed for repaid={repaid}");
-
             let bonus = result.unwrap();
             assert_eq!(
-                bonus, expected,
-                "Mismatch for repaid={repaid}: expected {expected}, got {bonus}"
+                bonus, *expected_bonus,
+                "Mismatch for repaid={repaid}: expected {expected_bonus}, got {bonus}"
             );
         }
     }
