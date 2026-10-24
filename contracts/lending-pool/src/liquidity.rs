@@ -19,7 +19,6 @@ pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
     let borrow_asset = storage::get_borrow_asset(&env).ok_or(PoolError::NotInitialized)?;
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    #[allow(clippy::needless_borrows_for_generic_args)]
     token_client.transfer(&user, env.current_contract_address(), &amount);
 
     let current_supply = storage::get_user_supply(&env, &user);
@@ -63,7 +62,6 @@ pub fn withdraw_liquidity(env: Env, user: Address, amount: i128) -> Result<(), P
     let borrow_asset = storage::get_borrow_asset(&env).ok_or(PoolError::NotInitialized)?;
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    #[allow(clippy::needless_borrows_for_generic_args)]
     token_client.transfer(&env.current_contract_address(), &user, &amount);
 
     let new_supply = user_supply.checked_sub(amount).ok_or(PoolError::Overflow)?;
@@ -100,5 +98,15 @@ pub fn get_utilization_bps(env: Env) -> u32 {
         return 0;
     }
     let total_borrowed = storage::get_total_borrowed(&env);
-    (total_borrowed * 10_000 / total_supply) as u32
+
+    // Use checked_mul to avoid overflow when total_borrowed is large.
+    // On overflow, the pool is beyond 100% utilization, so clamp to 10_000 bps.
+    // Then divide and clamp the final result to 10_000 so utilization is
+    // always in [0, 10_000] regardless of the stored values.
+    let numer = match total_borrowed.checked_mul(10_000) {
+        Some(n) => n,
+        None => return 10_000,
+    };
+    let raw = numer / total_supply;
+    raw.min(10_000) as u32
 }
