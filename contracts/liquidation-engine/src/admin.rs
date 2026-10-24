@@ -1,7 +1,7 @@
 use soroban_sdk::{Address, Env};
 
 use crate::errors::EngineError;
-use crate::events::{AdminChanged, Initialized};
+use crate::events::{AdminChanged, Initialized, OracleUpdated, PoolUpdated, VaultUpdated};
 use crate::storage;
 
 fn assert_distinct(candidate: &Address, others: &[Option<Address>]) -> Result<(), EngineError> {
@@ -93,7 +93,15 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
 
     assert_distinct(&vault, &[Some(admin.clone()), current_pool, current_oracle])?;
 
+    let old_vault = storage::get_vault(&env).ok_or(EngineError::NotInitialized)?;
+
     storage::set_vault(&env, &vault);
+
+    VaultUpdated {
+        old_vault,
+        new_vault: vault,
+    }
+    .publish(&env);
 
     Ok(())
 }
@@ -111,7 +119,15 @@ pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
 
     assert_distinct(&pool, &[Some(admin.clone()), current_vault, current_oracle])?;
 
+    let old_pool = storage::get_pool(&env).ok_or(EngineError::NotInitialized)?;
+
     storage::set_pool(&env, &pool);
+
+    PoolUpdated {
+        old_pool,
+        new_pool: pool,
+    }
+    .publish(&env);
 
     Ok(())
 }
@@ -129,7 +145,15 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
 
     assert_distinct(&oracle, &[Some(admin.clone()), current_vault, current_pool])?;
 
+    let old_oracle = storage::get_oracle(&env).ok_or(EngineError::NotInitialized)?;
+
     storage::set_oracle(&env, &oracle);
+
+    OracleUpdated {
+        old_oracle,
+        new_oracle: oracle,
+    }
+    .publish(&env);
 
     Ok(())
 }
