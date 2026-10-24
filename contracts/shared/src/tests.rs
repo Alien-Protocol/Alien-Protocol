@@ -4,6 +4,9 @@ use crate::types::{
     accrue_linear_interest, borrow_limit_from_collateral, ceil_div, health_factor_bps, Debt,
 };
 
+/// Health factor at or above this value is considered healthy (1.0 = 10_000 bps).
+const HEALTHY_HF_BPS: i128 = 10_000;
+
 #[test]
 fn test_accrue_linear_interest_one_year_eight_percent() {
     assert_eq!(
@@ -60,9 +63,50 @@ fn test_health_factor_bps_example_from_arch() {
     assert_eq!(health_factor_bps(10_000, 7_500, 8_000).unwrap(), 10_666);
 }
 
+/// Zero debt is always healthy and reported as the maximum representable value.
 #[test]
 fn test_health_factor_zero_debt_is_max() {
     assert_eq!(health_factor_bps(10_000, 0, 8_000).unwrap(), i128::MAX);
+}
+
+/// HF exactly at the 1.0 boundary must report precisely HEALTHY_HF_BPS.
+#[test]
+fn test_health_factor_at_exactly_one_boundary() {
+    // collateral * liquidation_threshold_bps / 10_000 == debt
+    // 10_000 * 8_000 / 10_000 = 8_000 == debt
+    assert_eq!(
+        health_factor_bps(10_000, 8_000, 8_000).unwrap(),
+        HEALTHY_HF_BPS
+    );
+}
+
+/// A clearly-liquidatable position (HF < 1.0).
+#[test]
+fn test_health_factor_below_one_is_liquidatable() {
+    // 10_000 * 8_000 / 10_000 = 8_000 basis points < HEALTHY_HF_BPS
+    let hf = health_factor_bps(10_000, 10_000, 8_000).unwrap();
+    assert!(hf < HEALTHY_HF_BPS);
+    assert_eq!(hf, 8_000);
+}
+
+/// A clearly-healthy position (HF > 1.0).
+#[test]
+fn test_health_factor_above_one_is_healthy() {
+    // 10_000 * 8_000 / 4_000 = 20_000 basis points > HEALTHY_HF_BPS
+    let hf = health_factor_bps(10_000, 4_000, 8_000).unwrap();
+    assert!(hf > HEALTHY_HF_BPS);
+    assert_eq!(hf, 20_000);
+}
+
+/// A position just below 1.0 must remain below HEALTHY_HF_BPS (no rounding up
+/// past the boundary, which would hide liquidatability).
+#[test]
+fn test_health_factor_rounding_at_boundary() {
+    // collateral * threshold / debt, scaled to bps:
+    // 9_999 * 8_000 / 8_000 = 9_999 basis points
+    let hf = health_factor_bps(9_999, 8_000, 8_000).unwrap();
+    assert_eq!(hf, 9_999);
+    assert!(hf < HEALTHY_HF_BPS);
 }
 
 #[test]
