@@ -1,4 +1,11 @@
 #![no_std]
+
+// RedStone's processor APIs are expressed in terms of `alloc` collections (`alloc::vec::Vec`,
+// `alloc::vec!`) and this crate is `no_std`, so the `alloc` crate must be linked explicitly.
+// It is the only allocator entry point in the crate; Soroban collection types (`soroban_sdk::Vec`)
+// are used everywhere else, which keeps the WASM footprint minimal.
+extern crate alloc;
+
 use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, Symbol, Vec};
 
 mod errors;
@@ -264,6 +271,10 @@ impl OracleContract {
             return Err(OracleError::Unauthorized);
         }
         caller.require_auth();
+
+        if threshold == 0 || threshold > signers.len() || threshold > (u8::MAX as u32) {
+            return Err(OracleError::InvalidThreshold);
+        }
 
         oracle::storage::set_redstone_signers(&env, &signers);
         oracle::storage::set_redstone_threshold(&env, threshold);

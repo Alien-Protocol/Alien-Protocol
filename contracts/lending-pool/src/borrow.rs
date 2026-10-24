@@ -16,8 +16,35 @@ pub trait Vault {
     fn get_asset_config(env: Env, asset: Address) -> shared::AssetConfig;
 }
 
-/// Borrow `amount` of the pool's borrow asset against the caller's
-/// vault collateral. Rejects non-positive amounts with `InvalidAmount`.
+/// Borrow `amount` of the borrow asset from the pool on behalf of
+/// `user`, subject to their vault collateral borrow limit.
+///
+/// ## Authorization
+///
+/// Requires `user` authorization.
+///
+/// ## Transfers
+///
+/// Transfers `amount` of the borrow asset from the pool contract to
+/// `user`.
+///
+/// ## Errors
+///
+/// - `PoolError::InvalidAmount` if `amount` is not positive.
+/// - `PoolError::NotInitialized` if the borrow asset or vault is not
+///   configured.
+/// - `PoolError::UnsupportedAsset` if `asset` is not the borrow asset.
+/// - `PoolError::BorrowPaused` if borrowing is paused.
+/// - `PoolError::InsufficientLiquidity` if the pool has less available
+///   liquidity than `amount`.
+/// - `PoolError::NoCollateral` if `user` has no collateral in the vault.
+/// - `PoolError::ExceedsBorrowLimit` if the resulting debt exceeds the
+///   user's borrow limit.
+/// - `PoolError::Overflow` if debt or total borrowed would overflow.
+///
+/// ## Events
+///
+/// Emits `Borrowed`.
 pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(), PoolError> {
     user.require_auth();
 

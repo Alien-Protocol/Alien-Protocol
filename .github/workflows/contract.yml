@@ -20,6 +20,20 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
 
+      - name: Log and verify Rust version
+        run: |
+          rustc --version
+          PINNED=$(grep 'channel' rust-toolchain.toml | cut -d'"' -f2 | tr -d '[:space:]')
+          echo "Pinned version in rust-toolchain.toml: $PINNED"
+          if [ -z "$PINNED" ]; then
+            echo "::error::Could not determine pinned channel from rust-toolchain.toml"
+            exit 1
+          fi
+          if ! rustc --version | grep -Fq "$PINNED"; then
+            echo "::error::Installed rustc version does not match pinned version ($PINNED)"
+            exit 1
+          fi
+
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
 
@@ -46,9 +60,22 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
 
+      - name: Log and verify Rust version
+        run: |
+          rustc --version
+          PINNED=$(grep 'channel' rust-toolchain.toml | cut -d'"' -f2 | tr -d '[:space:]')
+          echo "Pinned version in rust-toolchain.toml: $PINNED"
+          if [ -z "$PINNED" ]; then
+            echo "::error::Could not determine pinned channel from rust-toolchain.toml"
+            exit 1
+          fi
+          if ! rustc --version | grep -Fq "$PINNED"; then
+            echo "::error::Installed rustc version does not match pinned version ($PINNED)"
+            exit 1
+          fi
+
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
-
 
       - name: Build Soroban contracts
         run: |
@@ -72,11 +99,33 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
 
+      - name: Log and verify Rust version
+        run: |
+          rustc --version
+          PINNED=$(grep 'channel' rust-toolchain.toml | cut -d'"' -f2 | tr -d '[:space:]')
+          echo "Pinned version in rust-toolchain.toml: $PINNED"
+          if [ -z "$PINNED" ]; then
+            echo "::error::Could not determine pinned channel from rust-toolchain.toml"
+            exit 1
+          fi
+          if ! rustc --version | grep -Fq "$PINNED"; then
+            echo "::error::Installed rustc version does not match pinned version ($PINNED)"
+            exit 1
+          fi
+
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
 
       - name: Build collateral-vault WASM for upgrade tests
         run: cargo build --locked -p collateral-vault --target wasm32v1-none --release
+
+      - name: Verify pinned Rust toolchain
+        run: |
+          rustc --version
+          pinned=$(grep -E '^channel' rust-toolchain.toml | sed -E 's/.*"(.*)".*/\1/')
+          actual=$(rustc --version | awk '{print $2}')
+          echo "Pinned: $pinned, Actual: $actual"
+          test "$actual" = "$pinned"
 
       - name: Run Cargo tests
         run: cargo test --locked --workspace --all-features --verbose
