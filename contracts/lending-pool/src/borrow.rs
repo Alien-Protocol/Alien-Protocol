@@ -17,17 +17,14 @@ pub trait Vault {
 }
 
 /// Borrow `amount` of the borrow asset from the pool on behalf of
-[// `user`, subject to their vault collateral borrow limit.
-//
-
+/// `user`, subject to their vault collateral borrow limit.
+///
 /// ## Authorization
 ///
-/// Requires ``user`` authorization.
-//
-
+/// Requires `user` authorization.
+///
 /// ## Transfers
-//
-
+///
 /// Transfers `amount` of the borrow asset from the pool contract to
 /// `user`.
 ///
@@ -105,7 +102,7 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
     }
     .publish(&env);
 
-    Ok(()
+    Ok(())
 }
 
 /// Maximum total debt `user` may carry, computed as their vault collateral
@@ -132,7 +129,7 @@ pub fn calculate_limit(env: Env, user: Address) -> Result<i128, PoolError> {
 
     let collateral_value = vault.get_collateral_value(&user);
 
-    Ok(shared::brow_limit_from_collateral(
+    Ok(shared::borrow_limit_from_collateral(
         collateral_value,
         max_ltv_bps,
     )?)

@@ -1,5 +1,5 @@
 use shared::HEALTHY_HF_BPS;
-use soroban_sdk:{token, Address, Env};
+use soroban_sdk::{token, Address, Env};
 
 use crate::borrow::VaultClient;
 use crate::debt;
@@ -81,24 +81,23 @@ fn apply_repay(
     }
     .publish(&env);
 
-    Ok()
+    Ok(())
 }
 
 /// Applies `amount` of `borrow_asset` to `user`'s debt, interest first, then
 /// principal. Pulls `min(amount, total_debt)` from `user`.
-//
-
+///
 /// ## Authorization
 ///
-/// Requires ``user`` authorization.
-//
-
+/// Requires `user` authorization.
+///
+/// Documented entry point: `repay`.
+///
 /// ## Transfers
-//
-
+///
 /// Transfers `min(amount, total_debt)` of the borrow asset from `user`
 /// to the pool contract.
-//
+///
 /// ## Errors
 ///
 /// - `PoolError::InvalidAmount` if `amount` is not positive.

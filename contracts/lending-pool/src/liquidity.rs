@@ -6,19 +6,22 @@ use crate::storage;
 use crate::types::PauseFlag;
 
 /// Supply `amount` of the borrow asset into the pool, increasing
-|// `user`'s supply balance and the pool's total supply.
-//
-
+/// `user`'s supply balance and the pool's total supply.
+///
 /// ## Authorization
 ///
-/// Requires ``user`` authorization.
-//
-
+/// Requires `user` authorization.
+///
 /// ## Transfers
-//
-
+///
 /// Transfers `amount` of the borrow asset from `user` to the pool
 /// contract.
+///
+/// ## Notes
+///
+/// Entry point for the supply side of the pool. Withdrawals, borrows,
+/// and repayments are handled by `withdraw_liquidity` and the borrow
+/// module respectively.
 ///
 /// ## Errors
 ///
@@ -27,10 +30,8 @@ use crate::types::PauseFlag;
 /// - `PoolError::NotInitialized` if the borrow asset is not configured.
 /// - `PoolError::Overflow` if the supply balance or total supply
 ///   would overflow.
-//
-
+///
 /// ## Events
-
 ///
 /// Emits `Supplied`.
 pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
@@ -64,7 +65,7 @@ pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
 
     events::Supplied { user, amount }.publish(&env);
 
-    Ok()
+    Ok(())
 }
 
 /// Withdraw `amount` of supplied liquidity from the pool back to
@@ -132,7 +133,7 @@ pub fn withdraw_liquidity(env: Env, user: Address, amount: i128) -> Result<(), P
 
     events::LiquidityWithdrawn { user, amount }.publish(&env);
 
-    Ok()
+    Ok(())
 }
 
 pub fn get_user_supply(env: Env, user: Address) -> i128 {
