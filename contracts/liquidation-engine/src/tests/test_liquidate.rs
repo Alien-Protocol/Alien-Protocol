@@ -1,6 +1,6 @@
-#`![cfg(test)]
+#![cfg(test)]
 
-use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
 use super::super::*;
@@ -226,7 +226,7 @@ fn expected_bonus(repay: i128) -> i128 {
     .unwrap()
 }
 
-#[allow_dead_code]
+#[allow(dead_code)]
 struct Env_ {
     env: Env,
     engine: LiquidationContractClient<'static>,
@@ -285,7 +285,7 @@ fn setup() -> Env_ {
         .address();
     let borrow_token = token::Client::new(&env, &borrow_asset);
     let borrow_token_admin_client = token::StellarAssetClient::new(&env, &borrow_asset);
-    borrow_token_admin_client.mint(&liquidator, &d1_000_000_000_000);
+    borrow_token_admin_client.mint(&liquidator, &1_000_000_000_000);
     pool.set_borrow_asset(&borrow_asset);
 
     let collateral_token_admin = Address::generate(&env);
@@ -378,13 +378,9 @@ fn test_is_liquidatable_false_when_healthy_or_no_debt() {
 fn test_liquidate_success_repays_seizes_and_pays_bonus() {
     let ctx = setup();
 
-    let result = ctx.engine.liquidate(
-        &ctx.liquidator,
-        &ctx.user,
-        &ctx.collateral_asset,
-        &ctx.borrow_asset,
-        &EXPECTED_PARTIAL_REPAY,
-    );
+    let result = ctx
+        .engine
+        .try_liquidate(&ctx.liquidator, &ctx.user, &EXPECTED_PARTIAL_REPAY);
 
     assert!(result.is_ok());
 
@@ -394,7 +390,10 @@ fn test_liquidate_success_repays_seizes_and_pays_bonus() {
         1_000_000_000_000 - EXPECTED_PARTIAL_REPAY
     );
     // Pool received the repayment.
-    assert_eq!(ctx.borrow_token.balance(&ctx.pool_addr), EXPECTED_PARTIAL_REPAY);
+    assert_eq!(
+        ctx.borrow_token.balance(&ctx.pool_addr),
+        EXPECTED_PARTIAL_REPAY
+    );
     // Remaining debt is reduced.
     assert_eq!(
         ctx.pool.get_user_debt(&ctx.user),
@@ -423,18 +422,11 @@ fn test_liquidate_rejects_self_liquidation() {
     let ctx = setup();
 
     // Liquidator == user must be rejected with Unauthorized.
-    let result = ctx.engine.liquidate(
-        &ctx.user,
-        &ctx.user,
-        &ctx.collateral_asset,
-        &ctx.borrow_asset,
-        &EXPECTED_PARTIAL_REPAY,
-    );
+    let result = ctx
+        .engine
+        .try_liquidate(&ctx.user, &ctx.user, &EXPECTED_PARTIAL_REPAY);
 
-    assert_eq(
-        result,
-        Err(EngineError::Unauthorized),
-    );
+    assert_eq!(result, Err(Ok(EngineError::Unauthorized)));
 
     // No state change: debt and collateral balances are untouched.
     assert_eq!(ctx.pool.get_user_debt(&ctx.user), DEBT);
