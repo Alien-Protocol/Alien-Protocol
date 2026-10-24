@@ -255,7 +255,6 @@ pub fn liquidate(
     }
 
     events::Liquidated {
-        user: user.clone(),
         liquidator: liquidator.clone(),
         repaid: repay,
         seized: seized_value,
