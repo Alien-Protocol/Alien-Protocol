@@ -4,7 +4,7 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env};
 
 use crate::errors::EngineError;
-use crate::{admin, storage, LiquidationContract};
+use crate::{admin, storage, LiquidationContract, LiquidationContractClient};
 
 fn create_test_env_and_contract() -> (Env, Address) {
     let env = Env::default();
@@ -256,26 +256,14 @@ fn test_set_admin_same_address_fails() {
 fn test_getters_match_initialize_args() {
     let (env, contract_id) = create_test_env_and_contract();
     let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let client = LiquidationContractClient::new(&env, &contract_id);
 
-    // Initialize with specific addresses
-    let result = env.as_contract(&contract_id, || {
-        admin::initialize(
-            env.clone(),
-            admin.clone(),
-            vault.clone(),
-            pool.clone(),
-            oracle.clone(),
-        )
-    });
-    assert_eq!(result, Ok(()));
+    client.initialize(&admin, &vault, &pool, &oracle);
 
-    // Verify getters return exactly what was initialized
-    env.as_contract(&contract_id, || {
-        assert_eq!(storage::get_admin(&env), Some(admin));
-        assert_eq!(storage::get_vault(&env), Some(vault));
-        assert_eq!(storage::get_pool(&env), Some(pool));
-        assert_eq!(storage::get_oracle(&env), Some(oracle));
-    });
+    assert_eq!(client.get_admin(), Some(admin));
+    assert_eq!(client.get_vault(), Some(vault));
+    assert_eq!(client.get_pool(), Some(pool));
+    assert_eq!(client.get_oracle(), Some(oracle));
 }
 
 #[test]
@@ -433,5 +421,71 @@ fn test_set_oracle_distinct_reflects_getter() {
     assert_eq!(result, Ok(()));
     env.as_contract(&contract_id, || {
         assert_eq!(storage::get_oracle(&env), Some(new_oracle));
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Authorization ordering: auth must run before address-collision validation.
+// These environments deliberately do not call `mock_all_auths`, so a missing
+// authorization panics. If validation ran first, the call would instead return
+// `Err(EngineError::InvalidAddress)` and the test would fail (no panic).
+// ---------------------------------------------------------------------------
+
+fn seed_contract_without_mocked_auth() -> (Env, Address, Address, Address, Address, Address) {
+    let env = Env::default();
+    let contract_id = env.register(LiquidationContract, ());
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+
+    env.as_contract(&contract_id, || {
+        storage::set_admin(&env, &admin);
+        storage::set_vault(&env, &vault);
+        storage::set_pool(&env, &pool);
+        storage::set_oracle(&env, &oracle);
+    });
+
+    (env, contract_id, admin, vault, pool, oracle)
+}
+
+#[test]
+#[should_panic]
+fn test_set_admin_authorizes_before_collision_validation() {
+    let (env, contract_id, _admin, vault, _pool, _oracle) = seed_contract_without_mocked_auth();
+
+    env.as_contract(&contract_id, || {
+        // vault collides with the stored vault; auth must panic first.
+        let _ = admin::set_admin(env.clone(), vault.clone());
+    });
+}
+
+#[test]
+#[should_panic]
+fn test_set_vault_authorizes_before_collision_validation() {
+    let (env, contract_id, admin, _vault, _pool, _oracle) = seed_contract_without_mocked_auth();
+
+    env.as_contract(&contract_id, || {
+        // admin collides with the stored admin; auth must panic first.
+        let _ = admin::set_vault(env.clone(), admin.clone());
+    });
+}
+
+#[test]
+#[should_panic]
+fn test_set_pool_authorizes_before_collision_validation() {
+    let (env, contract_id, admin, _vault, _pool, _oracle) = seed_contract_without_mocked_auth();
+
+    env.as_contract(&contract_id, || {
+        // admin collides with the stored admin; auth must panic first.
+        let _ = admin::set_pool(env.clone(), admin.clone());
+    });
+}
+
+#[test]
+#[should_panic]
+fn test_set_oracle_authorizes_before_collision_validation() {
+    let (env, contract_id, admin, _vault, _pool, _oracle) = seed_contract_without_mocked_auth();
+
+    env.as_contract(&contract_id, || {
+        // admin collides with the stored admin; auth must panic first.
+        let _ = admin::set_oracle(env.clone(), admin.clone());
     });
 }

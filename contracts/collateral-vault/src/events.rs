@@ -116,3 +116,12 @@ pub struct StorageMigrated {
     pub old_storage_schema_version: u32,
     pub new_storage_schema_version: u32,
 }
+
+#[contractevent]
+pub struct AssetConfigUpdated {
+    pub asset: Address,
+    pub token_decimals: u32,
+    pub oracle_price_decimals: u32,
+    pub max_ltv_bps: u32,
+    pub liquidation_threshold_bps: u32,
+}

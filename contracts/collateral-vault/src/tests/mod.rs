@@ -1,3 +1,4 @@
+pub(super) mod helpers;
 mod test_admin;
 mod test_assets;
 mod test_deposit;

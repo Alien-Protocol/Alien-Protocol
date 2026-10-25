@@ -4,6 +4,13 @@ use crate::errors::EngineError;
 use crate::events::{AdminChanged, Initialized};
 use crate::storage;
 
+fn assert_distinct(candidate: &Address, others: &[Option<Address>]) -> Result<(), EngineError> {
+    if others.iter().any(|other| other.as_ref() == Some(candidate)) {
+        return Err(EngineError::InvalidAddress);
+    }
+    Ok(())
+}
+
 pub fn initialize(
     env: Env,
     admin: Address,
@@ -16,15 +23,16 @@ pub fn initialize(
     }
 
     admin.require_auth();
-    if admin == vault
-        || admin == pool
-        || admin == oracle
-        || vault == pool
-        || vault == oracle
-        || pool == oracle
-    {
-        return Err(EngineError::InvalidAddress);
-    }
+    assert_distinct(
+        &admin,
+        &[
+            Some(vault.clone()),
+            Some(pool.clone()),
+            Some(oracle.clone()),
+        ],
+    )?;
+    assert_distinct(&vault, &[Some(pool.clone()), Some(oracle.clone())])?;
+    assert_distinct(&pool, &[Some(oracle.clone())])?;
 
     // Store all four addresses
     storage::set_admin(&env, &admin);
@@ -46,6 +54,10 @@ pub fn initialize(
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
     let current_admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
 
+    // Authorize before any validation so an unauthenticated caller cannot
+    // probe which inputs collide with the stored addresses.
+    current_admin.require_auth();
+
     if current_admin == new_admin {
         return Err(EngineError::AlreadyAdmin);
     }
@@ -55,14 +67,7 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
     let pool = storage::get_pool(&env);
     let oracle = storage::get_oracle(&env);
 
-    if (vault.is_some() && new_admin == vault.unwrap())
-        || (pool.is_some() && new_admin == pool.unwrap())
-        || (oracle.is_some() && new_admin == oracle.unwrap())
-    {
-        return Err(EngineError::InvalidAddress);
-    }
-
-    current_admin.require_auth();
+    assert_distinct(&new_admin, &[vault, pool, oracle])?;
 
     storage::set_admin(&env, &new_admin);
 
@@ -78,18 +83,15 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
 pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
     let admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
 
+    // Authorize before any validation so an unauthenticated caller cannot
+    // probe which inputs collide with the stored addresses.
+    admin.require_auth();
+
     // Validate vault doesn't collide with admin, pool, or oracle
     let current_pool = storage::get_pool(&env);
     let current_oracle = storage::get_oracle(&env);
 
-    if vault == admin
-        || (current_pool.is_some() && vault == current_pool.unwrap())
-        || (current_oracle.is_some() && vault == current_oracle.unwrap())
-    {
-        return Err(EngineError::InvalidAddress);
-    }
-
-    admin.require_auth();
+    assert_distinct(&vault, &[Some(admin.clone()), current_pool, current_oracle])?;
 
     storage::set_vault(&env, &vault);
 
@@ -99,18 +101,15 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
 pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
     let admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
 
+    // Authorize before any validation so an unauthenticated caller cannot
+    // probe which inputs collide with the stored addresses.
+    admin.require_auth();
+
     // Validate pool doesn't collide with admin, vault, or oracle
     let current_vault = storage::get_vault(&env);
     let current_oracle = storage::get_oracle(&env);
 
-    if pool == admin
-        || (current_vault.is_some() && pool == current_vault.unwrap())
-        || (current_oracle.is_some() && pool == current_oracle.unwrap())
-    {
-        return Err(EngineError::InvalidAddress);
-    }
-
-    admin.require_auth();
+    assert_distinct(&pool, &[Some(admin.clone()), current_vault, current_oracle])?;
 
     storage::set_pool(&env, &pool);
 
@@ -120,18 +119,15 @@ pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
 pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
     let admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
 
+    // Authorize before any validation so an unauthenticated caller cannot
+    // probe which inputs collide with the stored addresses.
+    admin.require_auth();
+
     // Validate oracle doesn't collide with admin, vault, or pool
     let current_vault = storage::get_vault(&env);
     let current_pool = storage::get_pool(&env);
 
-    if oracle == admin
-        || (current_vault.is_some() && oracle == current_vault.unwrap())
-        || (current_pool.is_some() && oracle == current_pool.unwrap())
-    {
-        return Err(EngineError::InvalidAddress);
-    }
-
-    admin.require_auth();
+    assert_distinct(&oracle, &[Some(admin.clone()), current_vault, current_pool])?;
 
     storage::set_oracle(&env, &oracle);
 
