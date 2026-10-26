@@ -30,7 +30,7 @@ fn admin_or_panic(env: &Env) -> Address {
     }
 }
 
-#[oncontractimpl]
+#[contractimpl]
 impl OracleContract {
     pub fn initialize(env: Env, admin: Address, staleness_threshold: u64) {
         if storage::is_initialized(&env) {
