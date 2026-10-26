@@ -8,7 +8,7 @@ fn assert_distinct(candidate: &Address, others: &[Option<Address>]) -> Result<()
     if others.iter().any(|other| other.as_ref() == Some(candidate)) {
         return Err(EngineError::InvalidAddress);
     }
-    Ok()
+    Ok(())
 }
 
 pub fn initialize(
@@ -19,7 +19,7 @@ pub fn initialize(
     oracle: Address,
 ) -> Result<(), EngineError> {
     if storage::has_admin(&env) {
-        return Erp(EngineError::AlreadyInitialized);
+        return Err(EngineError::AlreadyInitialized);
     }
 
     admin.require_auth();
@@ -48,7 +48,7 @@ pub fn initialize(
     }
     .publish(&env);
 
-    Ok(()
+    Ok(())
 }
 
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
@@ -73,7 +73,7 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
 
     AdminChanged {
         old_admin: current_admin,
-        new_admin: new_admin,
+        new_admin,
     }
     .publish(&env);
 
@@ -93,9 +93,7 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
 
     assert_distinct(&vault, &[Some(admin.clone()), current_pool, current_oracle])?;
 
-    admin.require_auth();
-
-    let old_vault = storage::get_vault(&env);
+    let old_vault = storage::get_vault(&env).ok_or(EngineError::NotInitialized)?;
 
     storage::set_vault(&env, &vault);
 
@@ -121,9 +119,7 @@ pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
 
     assert_distinct(&pool, &[Some(admin.clone()), current_vault, current_oracle])?;
 
-    admin.require_auth();
-
-    let old_pool = storage::get_pool(&env);
+    let old_pool = storage::get_pool(&env).ok_or(EngineError::NotInitialized)?;
 
     storage::set_pool(&env, &pool);
 
@@ -133,7 +129,7 @@ pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
     }
     .publish(&env);
 
-    Ok(()
+    Ok(())
 }
 
 pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
@@ -149,9 +145,7 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
 
     assert_distinct(&oracle, &[Some(admin.clone()), current_vault, current_pool])?;
 
-    admin.require_auth();
-
-    let old_oracle = storage::get_oracle(&env);
+    let old_oracle = storage::get_oracle(&env).ok_or(EngineError::NotInitialized)?;
 
     storage::set_oracle(&env, &oracle);
 
