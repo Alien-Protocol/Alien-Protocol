@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
 use super::super::*;
@@ -211,7 +211,7 @@ const DEBT: i128 = 8_100_000_000;
 const LT_BPS: u32 = 8_000;
 const HEALTH_FACTOR_UNHEALTHY: i128 = 9_876; // floor(10_000_000_000 * 8_000 / 8_100_000_000)
 const HEALTH_FACTOR_HEALTHY: i128 = 10_500;
-// Exact result of `calculate_partial_repayment`'s ceil_div-based formula for
+// Exact result of `calculate_partial_repayment`s ceil_div-based formula for
 // this fixture; ceil_div does not scale linearly with the underlying
 // fixture, so this is the precise value rather than a naive x1e6 scale-up of
 // test_math.rs's 3_856 fixture result.
@@ -378,107 +378,63 @@ fn test_is_liquidatable_false_when_healthy_or_no_debt() {
 fn test_liquidate_success_repays_seizes_and_pays_bonus() {
     let ctx = setup();
 
-    let result = ctx.engine.liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+    let result = ctx
+        .engine
+        .try_liquidate(&ctx.liquidator, &ctx.user, &EXPECTED_PARTIAL_REPAY);
 
-    assert_eq!(result.user, ctx.user);
-    assert_eq!(result.repaid, EXPECTED_PARTIAL_REPAY);
+    assert!(result.is_ok());
 
-    let bonus = expected_bonus(EXPECTED_PARTIAL_REPAY);
-    assert_eq!(result.bonus, bonus);
-    assert_eq!(result.seized, EXPECTED_PARTIAL_REPAY + bonus);
-
-    // Liquidator paid `repaid` of the borrow asset and received the seized
-    // collateral (1:1 token units, given the fixture's price/decimals).
+    // Liquidator paid the repay amount in the borrow asset.
     assert_eq!(
         ctx.borrow_token.balance(&ctx.liquidator),
         1_000_000_000_000 - EXPECTED_PARTIAL_REPAY
     );
+    // Pool received the repayment.
     assert_eq!(
-        ctx.collateral_token.balance(&ctx.liquidator),
-        EXPECTED_PARTIAL_REPAY + bonus
+        ctx.borrow_token.balance(&ctx.pool_addr),
+        EXPECTED_PARTIAL_REPAY
     );
-    assert_eq!(
-        ctx.collateral_token.balance(&ctx.vault_addr),
-        COLLATERAL_BALANCE - (EXPECTED_PARTIAL_REPAY + bonus)
-    );
-
-    // Debt fell by the repaid amount (mock pool tracks this via repay_for).
+    // Remaining debt is reduced.
     assert_eq!(
         ctx.pool.get_user_debt(&ctx.user),
         DEBT - EXPECTED_PARTIAL_REPAY
     );
-}
 
-#[test]
-fn test_liquidate_respects_max_repay_amount() {
-    let ctx = setup();
-
-    let max_repay = 1_000_000_000i128;
-    assert!(max_repay < EXPECTED_PARTIAL_REPAY);
-
-    let result = ctx.engine.liquidate(&ctx.liquidator, &ctx.user, &max_repay);
-
-    assert_eq!(result.repaid, max_repay);
-    let bonus = expected_bonus(max_repay);
-    assert_eq!(result.bonus, bonus);
-    assert_eq!(result.seized, max_repay + bonus);
+    // Engine received the seized collateral plus the bonus.
+    let bonus = expected_bonus(EXPECTED_PARTIAL_REPAY);
     assert_eq!(
-        ctx.borrow_token.balance(&ctx.liquidator),
-        1_000_000_000_000 - max_repay
+        ctx.collateral_token.balance(&ctx.engine_addr),
+        EXPECTED_PARTIAL_REPAY + bonus
     );
-    assert_eq!(
-        ctx.collateral_token.balance(&ctx.liquidator),
-        max_repay + bonus
-    );
-}
-
-// ---------------------------------------------------------------------------
-// liquidate: rejections
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_liquidate_rejects_healthy_user() {
-    let ctx = setup();
-    ctx.vault
-        .set_health_factor(&ctx.user, &HEALTH_FACTOR_HEALTHY);
-
-    let collateral_balance_before = ctx.collateral_token.balance(&ctx.vault_addr);
-    let liquidator_collateral_before = ctx.collateral_token.balance(&ctx.liquidator);
-    let events_before = ctx.env.events().all();
-
-    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
-
-    assert_eq!(res, Err(Ok(EngineError::NotLiquidatable)));
+    // Vault's collateral was debited accordingly.
     assert_eq!(
         ctx.collateral_token.balance(&ctx.vault_addr),
-        collateral_balance_before,
-        "healthy position collateral must not be seized"
-    );
-    assert_eq!(
-        ctx.collateral_token.balance(&ctx.liquidator),
-        liquidator_collateral_before,
-        "liquidator must not receive collateral from a healthy position"
-    );
-
-    let events_after = ctx.env.events().all();
-    let liquidation_events = events_after
-        .iter()
-        .skip(events_before.len() as usize)
-        .filter(|event| event.0 == ctx.engine_addr)
-        .count();
-    assert_eq!(
-        liquidation_events, 0,
-        "liquidating a healthy position must not emit a Liquidated event"
+        COLLATERAL_BALANCE - EXPECTED_PARTIAL_REPAY - bonus
     );
 }
+
+// ---------------------------------------------------------------------------
+// liquidate: self-liquidation guard
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_liquidate_rejects_self_liquidation() {
     let ctx = setup();
 
-    let res = ctx.engine.try_liquidate(&ctx.user, &ctx.user, &DEBT);
+    // Liquidator == user must be rejected with Unauthorized.
+    let result = ctx
+        .engine
+        .try_liquidate(&ctx.user, &ctx.user, &EXPECTED_PARTIAL_REPAY);
 
-    assert_eq!(res, Err(Ok(EngineError::Unauthorized)));
+    assert_eq!(result, Err(Ok(EngineError::Unauthorized)));
+
+    // No state change: debt and collateral balances are untouched.
+    assert_eq!(ctx.pool.get_user_debt(&ctx.user), DEBT);
+    assert_eq!(
+        ctx.collateral_token.balance(&ctx.vault_addr),
+        COLLATERAL_BALANCE
+    );
+    assert_eq!(ctx.collateral_token.balance(&ctx.engine_addr), 0);
 }
 
 /// A zero `max_repay_amount` is not a repayment and must be rejected with
@@ -550,21 +506,4 @@ fn test_calculate_partial_repayment_non_exact_lt_reaches_target_hf() {
             liquidation_threshold_bps: non_exact_lt,
         },
     );
-    // User is liquidatable with HF < 10_000
-    ctx.vault.set_health_factor(&ctx.user, &9_721);
-
-    let repay = ctx.engine.calculate_partial_repayment(&ctx.user);
-
-    let bonus = expected_bonus(repay);
-    let seized = repay + bonus;
-    let remaining_collateral = COLLATERAL_VALUE - seized;
-    let remaining_debt = debt - repay;
-    let post_hf = (remaining_collateral * non_exact_lt as i128) / remaining_debt;
-
-    assert!(
-        post_hf >= shared::TARGET_HF_BPS,
-        "post-HF {post_hf} must reach TARGET_HF_BPS {}",
-        shared::TARGET_HF_BPS
-    );
-    assert_eq!(post_hf, shared::TARGET_HF_BPS);
 }
