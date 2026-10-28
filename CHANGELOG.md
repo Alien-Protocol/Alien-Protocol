@@ -11,7 +11,7 @@ for published contract releases.
 ### Added
 
 - A changelog for tracking user-visible contract, interface, and storage changes.
-- `lending-pool` public interface implemented: `supply`, `borrow`,
+- "lending-pool" public interface implemented: `supply`, `borrow`,
   `repay`/`repay_for`, and per-position interest accrual via `accrue_interest`,
   together with liquidity accounting (total/available supply and utilization).
 - `liquidation-engine` public interface implemented: `liquidate`, the partial
@@ -25,6 +25,21 @@ for published contract releases.
   math helpers with their `shared` equivalents.
 - Unified the oracle price type on `shared::PriceData` so the vault, pool, and
   liquidation engine decode `get_price`/`get_price_or_fail` consistently.
+- Bumped all contract crates to `0.1.0` at ABI freeze.
+
+### Versioning Policy
+
+Contract crates follow Semantic Versionling with the following policy:
+
+- `<Major>.<Minor>.<Patch>` reflects the contract ABI surface: error codes,
+  `DataKey` layout, and event topics.
+- `Major` is incremented for breaking ABI changes (e.g. renumbering error codes,
+  reordering or removing `DataKey` variants, or renaming event topics).
+- `Minor` is incremented for backward-compatible additions (e.g. new entry
+  points or new `DataKey` variants appended without renumbering existing ones).
+- `Patch` is incremented for bug fixes that do not change the ABI.
+- `0.1.0` is the first testnet release and marks the ABI freeze: error codes,
+  `DataKey` layout, and event topics are stable from this point forward.
 
 ## [2.0.0]
 
