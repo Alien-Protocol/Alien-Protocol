@@ -2,8 +2,10 @@ private
 target
 
 # Test snapshots
+temp_auto_push.bat
 **/test_snapshots/
 **/__snapshots__/
 *.snap
 *.snapshot
-.cursor/
+.cursor/.gitignore
+branch_structure.json
