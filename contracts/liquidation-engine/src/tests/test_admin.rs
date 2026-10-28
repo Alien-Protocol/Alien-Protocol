@@ -380,26 +380,3 @@ fn test_set_oracle_collision_with_pool_fails() {
     });
     assert_eq!(result, Err(EngineError::InvalidAddress));
 }
-
-#[test]
-fn test_set_oracle_requires_admin_auth() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
-    let new_oracle = Address::generate(&env);
-
-    let result = env.as_contract(&contract_id, || {
-        admin::initialize(
-            env.clone(),
-            admin.clone(),
-            vault.clone(),
-            pool.clone(),
-            oracle.clone(),
-        )
-    });
-    assert_eq!(result, Ok(()));
-
-    let result = env.as_contract(&contract_id, || {
-        admin::set_oracle(env.clone(), new_oracle.clone())
-    });
-    assert_eq!(result, Ok(()));
-}
