@@ -3,6 +3,7 @@ use soroban_sdk::{Address, Env};
 use crate::errors::EngineError;
 use crate::events::{AdminChanged, Initialized};
 use crate::storage;
+use shared::access::{ensure_new_admin, require_admin};
 
 fn assert_distinct(candidate: &Address, others: &[Option<Address>]) -> Result<(), EngineError> {
     if others.iter().any(|other| other.as_ref() == Some(candidate)) {
@@ -52,15 +53,8 @@ pub fn initialize(
 }
 
 pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
-    let current_admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
-
-    // Authorize before any validation so an unauthenticated caller cannot
-    // probe which inputs collide with the stored addresses.
-    current_admin.require_auth();
-
-    if current_admin == new_admin {
-        return Err(EngineError::AlreadyAdmin);
-    }
+    let current_admin = require_admin(storage::get_admin(&env), EngineError::NotInitialized)?;
+    ensure_new_admin(&current_admin, &new_admin, EngineError::AlreadyAdmin)?;
 
     // Validate new_admin doesn't collide with vault, pool, or oracle
     let vault = storage::get_vault(&env);
@@ -81,11 +75,7 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EngineError> {
 }
 
 pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
-    let admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
-
-    // Authorize before any validation so an unauthenticated caller cannot
-    // probe which inputs collide with the stored addresses.
-    admin.require_auth();
+    let admin = require_admin(storage::get_admin(&env), EngineError::NotInitialized)?;
 
     // Validate vault doesn't collide with admin, pool, or oracle
     let current_pool = storage::get_pool(&env);
@@ -99,11 +89,7 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), EngineError> {
 }
 
 pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
-    let admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
-
-    // Authorize before any validation so an unauthenticated caller cannot
-    // probe which inputs collide with the stored addresses.
-    admin.require_auth();
+    let admin = require_admin(storage::get_admin(&env), EngineError::NotInitialized)?;
 
     // Validate pool doesn't collide with admin, vault, or oracle
     let current_vault = storage::get_vault(&env);
@@ -117,11 +103,7 @@ pub fn set_pool(env: Env, pool: Address) -> Result<(), EngineError> {
 }
 
 pub fn set_oracle(env: Env, oracle: Address) -> Result<(), EngineError> {
-    let admin = storage::get_admin(&env).ok_or(EngineError::NotInitialized)?;
-
-    // Authorize before any validation so an unauthenticated caller cannot
-    // probe which inputs collide with the stored addresses.
-    admin.require_auth();
+    let admin = require_admin(storage::get_admin(&env), EngineError::NotInitialized)?;
 
     // Validate oracle doesn't collide with admin, vault, or pool
     let current_vault = storage::get_vault(&env);
