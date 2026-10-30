@@ -1,7 +1,8 @@
 #![cfg(test)]
 
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env};
+use soroban_sdk::testutils::Events;
+use soroban_sdk::{Address, Env, Map, Symbol, TryFromVal};
 
 use crate::errors::EngineError;
 use crate::{admin, storage, LiquidationContract, LiquidationContractClient};
@@ -488,4 +489,89 @@ fn test_set_oracle_authorizes_before_collision_validation() {
         // admin collides with the stored admin; auth must panic first.
         let _ = admin::set_oracle(env.clone(), admin.clone());
     });
+}
+
+#[test]
+fn test_set_vault_emits_vault_updated_event() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let client = LiquidationContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &vault, &pool, &oracle);
+
+    let new_vault = Address::generate(&env);
+    client.set_vault(&new_vault);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, contract_id);
+
+    let topics = last_event.1;
+    let event_name = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
+    assert_eq!(event_name, Symbol::new(&env, "vault_updated"));
+
+    let data_map: Map<Symbol, soroban_sdk::Val> = Map::try_from_val(&env, &last_event.2).unwrap();
+    let old_v: Option<Address> =
+        Option::try_from_val(&env, &data_map.get(Symbol::new(&env, "old_vault")).unwrap()).unwrap();
+    let new_v: Address =
+        Address::try_from_val(&env, &data_map.get(Symbol::new(&env, "new_vault")).unwrap())
+            .unwrap();
+    assert_eq!(old_v, Some(vault));
+    assert_eq!(new_v, new_vault);
+}
+
+#[test]
+fn test_set_pool_emits_pool_updated_event() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let client = LiquidationContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &vault, &pool, &oracle);
+
+    let new_pool = Address::generate(&env);
+    client.set_pool(&new_pool);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, contract_id);
+
+    let topics = last_event.1;
+    let event_name = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
+    assert_eq!(event_name, Symbol::new(&env, "pool_updated"));
+
+    let data_map: Map<Symbol, soroban_sdk::Val> = Map::try_from_val(&env, &last_event.2).unwrap();
+    let old_p: Option<Address> =
+        Option::try_from_val(&env, &data_map.get(Symbol::new(&env, "old_pool")).unwrap()).unwrap();
+    let new_p: Address =
+        Address::try_from_val(&env, &data_map.get(Symbol::new(&env, "new_pool")).unwrap()).unwrap();
+    assert_eq!(old_p, Some(pool));
+    assert_eq!(new_p, new_pool);
+}
+
+#[test]
+fn test_set_oracle_emits_oracle_updated_event() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let client = LiquidationContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &vault, &pool, &oracle);
+
+    let new_oracle = Address::generate(&env);
+    client.set_oracle(&new_oracle);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, contract_id);
+
+    let topics = last_event.1;
+    let event_name = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
+    assert_eq!(event_name, Symbol::new(&env, "oracle_updated"));
+
+    let data_map: Map<Symbol, soroban_sdk::Val> = Map::try_from_val(&env, &last_event.2).unwrap();
+    let old_o: Option<Address> = Option::try_from_val(
+        &env,
+        &data_map.get(Symbol::new(&env, "old_oracle")).unwrap(),
+    )
+    .unwrap();
+    let new_o: Address = Address::try_from_val(
+        &env,
+        &data_map.get(Symbol::new(&env, "new_oracle")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(old_o, Some(oracle));
+    assert_eq!(new_o, new_oracle);
 }
