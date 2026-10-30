@@ -44,6 +44,11 @@ impl PoolContract {
         admin::unpause_operation(env, operation)
     }
 
+    /// Returns true if the given operation is currently paused.
+    pub fn is_operation_paused(env: Env, operation: PauseFlag) -> bool {
+        storage::is_operation_paused(&env, &operation)
+    }
+
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
     }
