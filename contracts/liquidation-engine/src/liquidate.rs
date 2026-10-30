@@ -173,10 +173,10 @@ pub fn liquidate(
 
     let borrow_asset = pool.get_borrow_asset().ok_or(EngineError::NotInitialized)?;
 
-    // Pull the repayment from the liquidator into the engine, then forward it
-    // to the pool on the engine's own behalf.
+    // Pull the repayment from the liquidator into the engine. Repayment is forwarded
+    // to the pool after collateral seizure, ensuring vault's pre-seizure liquidation
+    // check sees the unreduced debt.
     token::Client::new(&env, &borrow_asset).transfer(&liquidator, &engine_address, &repay);
-    pool.repay_for(&engine_address, &user, &borrow_asset, &repay);
 
     let bonus = calculate_bonus(env.clone(), repay)?;
     let seized_value = repay.checked_add(bonus).ok_or(EngineError::Overflow)?;
@@ -253,6 +253,8 @@ pub fn liquidate(
     if remaining_value > 0 {
         return Err(EngineError::InvalidAmount);
     }
+
+    pool.repay_for(&engine_address, &user, &borrow_asset, &repay);
 
     events::Liquidated {
         user: user.clone(),

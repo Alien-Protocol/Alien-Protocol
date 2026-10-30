@@ -4,7 +4,7 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol, V
 use errors::VaultError;
 use types::{PauseFlag, Position};
 
-mod risk;
+pub mod risk;
 
 #[soroban_sdk::contractclient(name = "OracleClient")]
 pub trait Oracle {
