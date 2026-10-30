@@ -26,7 +26,7 @@
 //! the instance alive does not extend those entries. No keys, values, or storage
 //! scopes are changed by this documentation decision.
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Symbol};
 
 use crate::types::{DataKey, PriceData};
 
@@ -98,4 +98,25 @@ pub fn remove_authorized_feeder(env: &Env, feeder: &Address) {
     env.storage()
         .persistent()
         .remove(&DataKey::AuthorizedFeeder(feeder.clone()));
+}
+
+pub fn get_asset_feed(env: &Env, asset: &Address) -> Option<Symbol> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::AssetFeed(asset.clone()))
+}
+
+pub fn set_asset_feed(env: &Env, asset: &Address, feed_id: &Symbol) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::AssetFeed(asset.clone()), feed_id);
+    env.storage()
+        .persistent()
+        .set(&DataKey::FeedAsset(feed_id.clone()), asset);
+}
+
+pub fn get_feed_asset(env: &Env, feed_id: &Symbol) -> Option<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::FeedAsset(feed_id.clone()))
 }

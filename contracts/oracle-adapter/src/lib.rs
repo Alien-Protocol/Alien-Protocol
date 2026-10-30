@@ -48,11 +48,16 @@ impl OracleContract {
     }
 
     pub fn get_price(env: Env, asset: Address) -> Option<PriceData> {
+        if let Some(feed_id) = storage::get_asset_feed(&env, &asset) {
+            if let Some(feed_price) = oracle::storage::get_feed_price(&env, &feed_id) {
+                return Some(feed_price);
+            }
+        }
         storage::get_price(&env, &asset)
     }
 
     pub fn is_price_fresh(env: Env, asset: Address) -> bool {
-        let price_data = match storage::get_price(&env, &asset) {
+        let price_data = match Self::get_price(env.clone(), asset) {
             Some(data) => data,
             None => return false,
         };
@@ -61,7 +66,12 @@ impl OracleContract {
             None => return false,
         };
         let ledger_time = env.ledger().timestamp();
-        match ledger_time.checked_sub(price_data.timestamp) {
+        let price_ts_seconds = if price_data.timestamp > 100_000_000_000 {
+            price_data.timestamp / 1_000
+        } else {
+            price_data.timestamp
+        };
+        match ledger_time.checked_sub(price_ts_seconds) {
             Some(delta) => delta <= threshold,
             None => false,
         }
@@ -276,6 +286,29 @@ impl OracleContract {
         let signers = oracle::storage::get_redstone_signers(&env).unwrap_or(Vec::new(&env));
         let threshold = oracle::storage::get_redstone_threshold(&env).unwrap_or(0);
         Ok((signers, threshold))
+    }
+
+    pub fn set_asset_feed(
+        env: Env,
+        caller: Address,
+        asset: Address,
+        feed_id: Symbol,
+    ) -> Result<(), OracleError> {
+        let admin = match storage::get_admin(&env) {
+            Some(addr) => addr,
+            None => return Err(OracleError::NotInitialized),
+        };
+        if caller != admin {
+            return Err(OracleError::Unauthorized);
+        }
+        caller.require_auth();
+
+        storage::set_asset_feed(&env, &asset, &feed_id);
+        Ok(())
+    }
+
+    pub fn get_asset_feed(env: Env, asset: Address) -> Option<Symbol> {
+        storage::get_asset_feed(&env, &asset)
     }
 }
 
