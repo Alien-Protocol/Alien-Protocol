@@ -21,12 +21,20 @@ impl MockVaultContract {
         0
     }
 
-    pub fn get_position(_env: Env, _user: Address) -> shared::Position {
-        unimplemented!()
+    pub fn get_position(env: Env, user: Address) -> shared::Position {
+        shared::Position {
+            user,
+            collateral: soroban_sdk::Vec::new(&env),
+        }
     }
 
     pub fn get_asset_config(_env: Env, _asset: Address) -> shared::AssetConfig {
-        unimplemented!()
+        shared::AssetConfig {
+            token_decimals: 7,
+            oracle_price_decimals: 7,
+            max_ltv_bps: shared::DEFAULT_MAX_LTV_BPS,
+            liquidation_threshold_bps: shared::DEFAULT_LIQUIDATION_THRESHOLD_BPS,
+        }
     }
 }
 
@@ -287,4 +295,32 @@ fn test_repay_still_requires_borrower_auth() {
     env.set_auths(&[]);
     let res = client.try_repay(&user, &token_id, &20_000_000);
     assert!(res.is_err());
+}
+
+#[test]
+fn test_repay_for_mock_vault_stubs_return_valid_defaults() {
+    let (
+        _env,
+        _client,
+        _admin,
+        user,
+        vault_client,
+        _vault_id,
+        token_id,
+        _token_client,
+        _token_admin,
+    ) = setup_env();
+
+    let pos = vault_client.get_position(&user);
+    assert_eq!(pos.user, user);
+    assert_eq!(pos.collateral.len(), 0);
+
+    let config = vault_client.get_asset_config(&token_id);
+    assert_eq!(config.token_decimals, 7);
+    assert_eq!(config.oracle_price_decimals, 7);
+    assert_eq!(config.max_ltv_bps, shared::DEFAULT_MAX_LTV_BPS);
+    assert_eq!(
+        config.liquidation_threshold_bps,
+        shared::DEFAULT_LIQUIDATION_THRESHOLD_BPS
+    );
 }
