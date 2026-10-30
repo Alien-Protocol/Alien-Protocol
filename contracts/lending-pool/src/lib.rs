@@ -92,10 +92,18 @@ impl PoolContract {
         debt::accrue_interest(env, user)
     }
 
+    /// Returns the user's `Debt` record.
+    ///
+    /// Note: This function has the side effect of accruing and persisting interest
+    /// up to the current ledger timestamp via `accrue_interest`.
     pub fn get_debt(env: Env, user: Address) -> Result<Debt, PoolError> {
         debt::get_debt(env, user)
     }
 
+    /// Returns the total debt amount (principal + accrued interest) for `user`.
+    ///
+    /// Note: This function has the side effect of accruing and persisting interest
+    /// up to the current ledger timestamp via `accrue_interest`.
     pub fn get_user_debt(env: Env, user: Address) -> i128 {
         match debt::get_user_debt(env.clone(), user) {
             Ok(total) => total,
