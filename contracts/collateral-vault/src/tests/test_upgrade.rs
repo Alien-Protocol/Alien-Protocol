@@ -171,3 +171,41 @@ fn test_migration_rejects_repeated_and_out_of_order_versions() {
     let skipped = VaultContractClient::new(&env, &contract_id).try_migrate(&3);
     assert!(matches!(skipped, Err(Ok(VaultError::MigrationSkipped))));
 }
+
+#[test]
+fn test_migrate_preserves_state_native() {
+    let (env, contract_id, client, admin, user, oracle, token_id, token_client, token_admin) =
+        setup_env();
+
+    token_admin.mint(&user, &1_000);
+    client.deposit(&user, &token_id, &500);
+
+    // Set schema version to 1 in storage to exercise migration without uploading WASM
+    env.as_contract(&contract_id, || {
+        storage::set_contract_version(&env, 1);
+        storage::set_storage_schema_version(&env, 1);
+    });
+
+    assert_eq!(client.get_contract_version(), 1);
+    assert_eq!(client.get_storage_schema_version(), 1);
+    assert_eq!(client.get_position_balance(&user, &token_id), 500);
+    assert_eq!(client.get_admin(), Some(admin.clone()));
+
+    // Migrate from schema version 1 to 2 natively
+    let res = client.try_migrate(&2);
+    assert!(res.is_ok());
+
+    // Schema version updated
+    assert_eq!(client.get_storage_schema_version(), 2);
+
+    // All balances, admin, and configuration state preserved intact
+    assert_eq!(client.get_admin(), Some(admin));
+    env.as_contract(&contract_id, || {
+        assert_eq!(storage::get_oracle(&env), Some(oracle));
+    });
+    assert!(client.is_supported_asset(&token_id));
+    assert_eq!(client.get_position_balance(&user, &token_id), 500);
+    assert_eq!(token_client.balance(&user), 500);
+    assert_eq!(token_client.balance(&contract_id), 500);
+    assert_eq!(client.get_position(&user).collateral.len(), 1);
+}
