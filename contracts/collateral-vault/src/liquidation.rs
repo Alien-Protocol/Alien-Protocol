@@ -38,11 +38,16 @@ pub fn execute_seize(
     let _new_balance = checked_debit(env, &user, &asset, amount)?;
 
     let token_client = token::Client::new(env, &asset);
-    token_client.transfer(
-        &env.current_contract_address(),
-        &liquidation_engine,
-        &amount,
-    );
+    if !matches!(
+        token_client.try_transfer(
+            &env.current_contract_address(),
+            &liquidation_engine,
+            &amount,
+        ),
+        Ok(Ok(()))
+    ) {
+        return Err(VaultError::TransferFailed);
+    }
 
     events::CollateralSeized {
         user,

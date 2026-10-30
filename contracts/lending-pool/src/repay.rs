@@ -50,7 +50,12 @@ fn apply_repay(
     }
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    token_client.transfer(&payer, env.current_contract_address(), &payment);
+    if !matches!(
+        token_client.try_transfer(&payer, env.current_contract_address(), &payment),
+        Ok(Ok(()))
+    ) {
+        return Err(PoolError::TransferFailed);
+    }
 
     user_debt.accrued_interest = user_debt
         .accrued_interest

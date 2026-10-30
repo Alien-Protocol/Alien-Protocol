@@ -194,12 +194,16 @@ impl VaultContract {
             soroban_sdk::panic_with_error!(&env, VaultError::UnsupportedAsset);
         }
 
-        // Checks and state updates (effects via checked_credit) before token pull
+        let token_client = token::Client::new(&env, &asset);
+        if !matches!(
+            token_client.try_transfer(&user, env.current_contract_address(), &amount),
+            Ok(Ok(()))
+        ) {
+            soroban_sdk::panic_with_error!(&env, VaultError::TransferFailed);
+        }
+
         position::checked_credit(&env, &user, &asset, amount)
             .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
-
-        let token_client = token::Client::new(&env, &asset);
-        token_client.transfer(&user, env.current_contract_address(), &amount);
 
         events::Deposited {
             user,
@@ -236,7 +240,12 @@ impl VaultContract {
             .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
 
         let token_client = token::Client::new(&env, &asset);
-        token_client.transfer(&env.current_contract_address(), &user, &amount);
+        if !matches!(
+            token_client.try_transfer(&env.current_contract_address(), &user, &amount),
+            Ok(Ok(()))
+        ) {
+            soroban_sdk::panic_with_error!(&env, VaultError::TransferFailed);
+        }
 
         events::Withdrawn {
             user,
