@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "collateral-vault"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "lending-pool",
  "shared",
@@ -854,7 +854,7 @@ dependencies = [
 
 [[package]]
 name = "lending-pool"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "shared",
  "soroban-sdk",
@@ -874,7 +874,7 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "liquidation-engine"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "shared",
  "soroban-sdk",
@@ -956,7 +956,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "oracle-adapter"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "redstone",
  "soroban-sdk",
@@ -1285,7 +1285,7 @@ dependencies = [
 
 [[package]]
 name = "shared"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "soroban-sdk",
 ]

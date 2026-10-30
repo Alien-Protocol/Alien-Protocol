@@ -26,6 +26,27 @@ for published contract releases.
 - Unified the oracle price type on `shared::PriceData` so the vault, pool, and
   liquidation engine decode `get_price`/`get_price_or_fail` consistently.
 
+## [0.1.0]
+
+### Added
+
+- Contract ABIs frozen for first testnet release: error codes, `DataKey` layout,
+  and event topics are stabilized across all contract crates.
+- Bumped workspace package version to `0.1.0`.
+
+### Versioning Policy
+
+Contract crates follow Semantic Versioning with the following policy:
+
+- `<Major>.<Minor>.<Patch>` reflects the contract ABI surface: error codes,
+  `DataKey` layout, and event topics.
+- `Major` is incremented for breaking ABI changes (e.g. renumbering error codes,
+  reordering or removing `DataKey` variants, or renaming event topics).
+- `Minor` is incremented for backward-compatible additions (e.g. new entry
+  points or new `DataKey` variants appended without renumbering existing ones).
+- `Patch` is incremented for bug fixes that do not change the ABI.
+- `0.1.0` marks the ABI freeze for the first testnet release.
+
 ## [2.0.0]
 
 ### Added
@@ -44,5 +65,6 @@ for published contract releases.
   explicit no-op. Existing state is preserved because version 2 introduces
   migration bookkeeping and invariants without transforming stored values.
 
-[Unreleased]: https://github.com/Alien-Protocol/Alien-Protocol/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/Alien-Protocol/Alien-Protocol/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Alien-Protocol/Alien-Protocol/releases/tag/v0.1.0
 [2.0.0]: https://github.com/Alien-Protocol/Alien-Protocol/releases/tag/v2.0.0
