@@ -250,6 +250,14 @@ impl VaultContract {
         storage::get_all_positions(&env)
     }
 
+    pub fn get_positions_page(env: Env, start: u32, limit: u32) -> Vec<Position> {
+        storage::get_positions_page(&env, start, limit)
+    }
+
+    pub fn get_position_index_len(env: Env) -> u32 {
+        storage::get_position_index_len(&env)
+    }
+
     pub fn seize_collateral(
         env: Env,
         liquidation_engine: Address,

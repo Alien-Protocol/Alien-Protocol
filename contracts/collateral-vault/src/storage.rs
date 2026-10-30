@@ -248,6 +248,41 @@ pub fn get_position(env: &Env, user: &Address) -> Option<Position> {
     })
 }
 
+/// Maximum allowed limit for `get_positions_page` to prevent resource exhaustion.
+pub const MAX_POSITIONS_PAGE_LIMIT: u32 = 50;
+
+/// Returns the total number of tracked accounts in the position index.
+pub fn get_position_index_len(env: &Env) -> u32 {
+    get_position_index(env).len()
+}
+
+/// Returns a paginated slice of active positions.
+///
+/// Limits: `limit` is capped at `MAX_POSITIONS_PAGE_LIMIT` (50).
+/// Returns an empty `Vec` if `start >= total` or `limit == 0`.
+pub fn get_positions_page(env: &Env, start: u32, limit: u32) -> Vec<Position> {
+    let index = get_position_index(env);
+    let total = index.len();
+    let mut positions: Vec<Position> = Vec::new(env);
+
+    if start >= total || limit == 0 {
+        return positions;
+    }
+
+    let capped_limit = limit.min(MAX_POSITIONS_PAGE_LIMIT);
+    let end = start.saturating_add(capped_limit).min(total);
+
+    for i in start..end {
+        if let Some(user) = index.get(i) {
+            if let Some(position) = get_position(env, &user) {
+                positions.push_back(position);
+            }
+        }
+    }
+
+    positions
+}
+
 /// Returns all active positions (users with at least one non-zero balance).
 pub fn get_all_positions(env: &Env) -> Vec<Position> {
     let index = get_position_index(env);
