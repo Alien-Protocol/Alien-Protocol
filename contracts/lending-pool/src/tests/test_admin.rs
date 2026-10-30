@@ -2,7 +2,8 @@
 
 use super::super::*;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::testutils::Events;
+use soroban_sdk::{token, Address, Env, Map, Symbol, TryFromVal};
 
 fn setup_env() -> (
     Env,
@@ -284,4 +285,63 @@ fn test_getters_match_initialize_args() {
     assert_eq!(client.get_oracle(), Some(oracle.clone()));
     assert_eq!(client.get_borrow_asset(), Some(token_id.clone()));
     assert_eq!(client.get_interest_rate_bps(), interest_rate_bps);
+}
+
+#[test]
+fn test_set_vault_emits_vault_updated_event() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let new_vault = Address::generate(&env);
+    client.set_vault(&new_vault);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+
+    let topics = last_event.1;
+    let event_name = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
+    assert_eq!(event_name, Symbol::new(&env, "vault_updated"));
+
+    let data_map: Map<Symbol, soroban_sdk::Val> = Map::try_from_val(&env, &last_event.2).unwrap();
+    let old_v: Option<Address> =
+        Option::try_from_val(&env, &data_map.get(Symbol::new(&env, "old_vault")).unwrap()).unwrap();
+    let new_v: Address =
+        Address::try_from_val(&env, &data_map.get(Symbol::new(&env, "new_vault")).unwrap())
+            .unwrap();
+    assert_eq!(old_v, Some(vault));
+    assert_eq!(new_v, new_vault);
+}
+
+#[test]
+fn test_set_oracle_emits_oracle_updated_event() {
+    let (env, client, admin, _user, vault, token_id, _token_client, _token_admin) = setup_env();
+    let oracle = Address::generate(&env);
+
+    client.initialize(&admin, &vault, &oracle, &token_id, &500);
+
+    let new_oracle = Address::generate(&env);
+    client.set_oracle(&new_oracle);
+
+    let last_event = env.events().all().last().unwrap();
+    assert_eq!(last_event.0, client.address);
+
+    let topics = last_event.1;
+    let event_name = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
+    assert_eq!(event_name, Symbol::new(&env, "oracle_updated"));
+
+    let data_map: Map<Symbol, soroban_sdk::Val> = Map::try_from_val(&env, &last_event.2).unwrap();
+    let old_o: Option<Address> = Option::try_from_val(
+        &env,
+        &data_map.get(Symbol::new(&env, "old_oracle")).unwrap(),
+    )
+    .unwrap();
+    let new_o: Address = Address::try_from_val(
+        &env,
+        &data_map.get(Symbol::new(&env, "new_oracle")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(old_o, Some(oracle));
+    assert_eq!(new_o, new_oracle);
 }

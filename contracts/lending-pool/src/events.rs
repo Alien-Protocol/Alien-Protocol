@@ -77,3 +77,17 @@ pub struct Repaid {
     pub interest_paid: i128,
     pub principal_paid: i128,
 }
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct VaultUpdated {
+    pub old_vault: Option<Address>,
+    pub new_vault: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OracleUpdated {
+    pub old_oracle: Option<Address>,
+    pub new_oracle: Address,
+}
