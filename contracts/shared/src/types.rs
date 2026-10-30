@@ -78,6 +78,9 @@ pub fn health_factor_bps(
     debt: i128,
     liquidation_threshold_bps: u32,
 ) -> Result<i128, SharedError> {
+    if liquidation_threshold_bps > BPS_DENOMINATOR as u32 {
+        return Err(SharedError::InvalidBps);
+    }
     if collateral_value < 0 {
         return Err(SharedError::InvalidAmount);
     }
@@ -97,6 +100,9 @@ pub fn borrow_limit_from_collateral(
     collateral_value: i128,
     max_ltv_bps: u32,
 ) -> Result<i128, SharedError> {
+    if max_ltv_bps > BPS_DENOMINATOR as u32 {
+        return Err(SharedError::InvalidBps);
+    }
     if collateral_value < 0 {
         return Err(SharedError::InvalidAmount);
     }

@@ -119,7 +119,10 @@ pub fn calculate_limit(env: Env, user: Address) -> Result<i128, PoolError> {
 
     let mut max_ltv_bps: Option<u32> = None;
     for item in position.collateral.iter() {
-        let config = vault.get_asset_config(&item.asset);
+        let config = match vault.try_get_asset_config(&item.asset) {
+            Ok(Ok(cfg)) => cfg,
+            _ => return Err(PoolError::NoCollateral),
+        };
         max_ltv_bps = Some(match max_ltv_bps {
             Some(current) => current.min(config.max_ltv_bps),
             None => config.max_ltv_bps,
@@ -127,7 +130,10 @@ pub fn calculate_limit(env: Env, user: Address) -> Result<i128, PoolError> {
     }
     let max_ltv_bps = max_ltv_bps.ok_or(PoolError::NoCollateral)?;
 
-    let collateral_value = vault.get_collateral_value(&user);
+    let collateral_value = match vault.try_get_collateral_value(&user) {
+        Ok(Ok(val)) => val,
+        _ => return Err(PoolError::NoCollateral),
+    };
 
     Ok(shared::borrow_limit_from_collateral(
         collateral_value,

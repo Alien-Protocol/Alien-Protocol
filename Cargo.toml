@@ -14,6 +14,7 @@ description = "Alien Protocol Smart Contracts"
 
 [workspace.dependencies]
 soroban-sdk = "23"
+proptest = "1.12.0"
 
 [profile.release]
 opt-level = "z"

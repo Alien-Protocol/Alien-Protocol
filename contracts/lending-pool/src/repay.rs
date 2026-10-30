@@ -165,5 +165,10 @@ pub fn is_liquidatable(env: Env, user: Address) -> Result<bool, PoolError> {
     let vault_addr = storage::get_vault(&env).ok_or(PoolError::NotInitialized)?;
     let vault = VaultClient::new(&env, &vault_addr);
 
-    Ok(vault.get_health_factor(&user) < HEALTHY_HF_BPS)
+    let hf = match vault.try_get_health_factor(&user) {
+        Ok(Ok(val)) => val,
+        _ => return Ok(false),
+    };
+
+    Ok(hf < HEALTHY_HF_BPS)
 }

@@ -1,0 +1,48 @@
+[workspace]
+
+[package]
+name = "alien-protocol-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+soroban-sdk = { version = "23", features = ["testutils"] }
+collateral-vault = { path = "../contracts/collateral-vault" }
+lending-pool = { path = "../contracts/lending-pool" }
+liquidation-engine = { path = "../contracts/liquidation-engine" }
+shared = { path = "../contracts/shared" }
+
+[[bin]]
+name = "fuzz_deposit"
+path = "fuzz_targets/fuzz_deposit.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_borrow"
+path = "fuzz_targets/fuzz_borrow.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_repay"
+path = "fuzz_targets/fuzz_repay.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_liquidate"
+path = "fuzz_targets/fuzz_liquidate.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_withdraw"
+path = "fuzz_targets/fuzz_withdraw.rs"
+test = false
+doc = false
