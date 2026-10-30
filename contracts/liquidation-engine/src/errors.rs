@@ -13,4 +13,6 @@ pub enum EngineError {
     NotLiquidatable = 7,
     NoPosition = 8,
     Overflow = 9,
+    VaultPaused = 10,
+    PoolPaused = 11,
 }
