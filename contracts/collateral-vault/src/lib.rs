@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol, Vec};
 
-use errors::VaultError;
+pub use errors::VaultError;
 use types::{PauseFlag, Position};
 
 mod risk;
