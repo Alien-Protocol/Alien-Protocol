@@ -214,3 +214,112 @@ fn test_ceiling_rounding_does_not_understate_required_collateral() {
     // 3 * 11_000 / 10_000 = 3.3 → 4.
     assert_eq!(required_collateral_for_debt(3, 11_000), 4);
 }
+
+#[test]
+fn test_normalize_token_amount_standard_and_boundaries() {
+    // Standard 7-decimal token -> quote precision (7 decimals) preserves 1:1
+    let standard = risk::normalize_token_amount(10_000_000, 7).unwrap();
+    assert_eq!(standard, 10_000_000);
+
+    // 18-decimal token boundary (1.0 * 10^18 -> 10^7)
+    let eighteen_decimals = risk::normalize_token_amount(1_000_000_000_000_000_000, 18).unwrap();
+    assert_eq!(eighteen_decimals, 10_000_000);
+
+    // 6-decimal token (USDC: 1_000_000 -> 10_000_000)
+    let six_decimals = risk::normalize_token_amount(1_000_000, 6).unwrap();
+    assert_eq!(six_decimals, 10_000_000);
+
+    // 0 decimals boundary (1 unit -> 10_000_000)
+    let zero_decimals = risk::normalize_token_amount(1, 0).unwrap();
+    assert_eq!(zero_decimals, 10_000_000);
+}
+
+#[test]
+fn test_normalize_oracle_price_standard_and_boundaries() {
+    // Standard 7-decimal oracle price ($2.00)
+    let standard = risk::normalize_oracle_price(20_000_000, 7).unwrap();
+    assert_eq!(standard, 20_000_000);
+
+    // 18-decimal oracle boundary ($1.00 encoded with 18 decimals)
+    let eighteen_decimals = risk::normalize_oracle_price(1_000_000_000_000_000_000, 18).unwrap();
+    assert_eq!(eighteen_decimals, 10_000_000);
+
+    // 8-decimal oracle price (60,000 * 10^8 -> 60,000 * 10^7)
+    let chainlink = risk::normalize_oracle_price(6_000_000_000_000, 8).unwrap();
+    assert_eq!(chainlink, 600_000_000_000);
+
+    // 6-decimal oracle price ($5.00 -> 50_000_000)
+    let six_decimals = risk::normalize_oracle_price(5_000_000, 6).unwrap();
+    assert_eq!(six_decimals, 50_000_000);
+}
+
+#[test]
+fn test_normalize_zero_amount() {
+    assert_eq!(risk::normalize_token_amount(0, 7).unwrap(), 0);
+    assert_eq!(risk::normalize_token_amount(0, 18).unwrap(), 0);
+    assert_eq!(risk::normalize_token_amount(0, 0).unwrap(), 0);
+    assert_eq!(risk::normalize_oracle_price(0, 7).unwrap(), 0);
+    assert_eq!(risk::normalize_oracle_price(0, 18).unwrap(), 0);
+    assert_eq!(risk::normalize_debt_amount(0, 7).unwrap(), 0);
+    assert_eq!(risk::normalize_debt_amount(0, 18).unwrap(), 0);
+}
+
+#[test]
+fn test_normalize_near_overflow_returns_error() {
+    // i128::MAX cannot be multiplied by TOKEN_AMOUNT_PRECISION (10^7) without overflow
+    let token_overflow = risk::normalize_token_amount(i128::MAX, 7);
+    assert_eq!(token_overflow, Err(VaultError::InvalidInputs));
+
+    let oracle_overflow = risk::normalize_oracle_price(i128::MAX, 7);
+    assert_eq!(oracle_overflow, Err(VaultError::InvalidInputs));
+
+    let debt_overflow = risk::normalize_debt_amount(i128::MAX, 7);
+    assert_eq!(debt_overflow, Err(VaultError::InvalidInputs));
+
+    // Near-overflow positive check: (i128::MAX / 10^7) should succeed
+    let max_safe = i128::MAX / risk::PROTOCOL_QUOTE_PRECISION;
+    let safe_result = risk::normalize_token_amount(max_safe, 7);
+    assert!(safe_result.is_ok());
+}
+
+#[test]
+fn test_normalize_rounding_direction_floor() {
+    // 8-decimal scale down to 7-decimal quote precision: scale = 10^8, precision = 10^7.
+    // Factor is 1/10.
+    // 15 * 10^7 / 10^8 = 150 / 100 = 1 (floor, not 2)
+    assert_eq!(risk::normalize_token_amount(15, 8).unwrap(), 1);
+    // 19 * 10^7 / 10^8 = 190 / 100 = 1 (floor, not 2)
+    assert_eq!(risk::normalize_token_amount(19, 8).unwrap(), 1);
+    // 9 * 10^7 / 10^8 = 90 / 100 = 0 (floor, not 1)
+    assert_eq!(risk::normalize_token_amount(9, 8).unwrap(), 0);
+
+    // Oracle price rounding direction
+    assert_eq!(risk::normalize_oracle_price(29, 8).unwrap(), 2);
+
+    // Debt amount rounding direction
+    assert_eq!(risk::normalize_debt_amount(99, 8).unwrap(), 9);
+}
+
+#[test]
+fn test_normalize_debt_amount() {
+    // Case 1: Standard 7-decimal debt (500 units)
+    let standard = risk::normalize_debt_amount(5_000_000_000, 7).unwrap();
+    assert_eq!(standard, 5_000_000_000);
+
+    // Case 2: 18-decimal debt boundary (1 unit)
+    let eighteen = risk::normalize_debt_amount(1_000_000_000_000_000_000, 18).unwrap();
+    assert_eq!(eighteen, 10_000_000);
+
+    // Case 3: 6-decimal debt (e.g. USDC 250 units = 250_000_000 base units -> 2_500_000_000 in quote)
+    let usdc_debt = risk::normalize_debt_amount(250_000_000, 6).unwrap();
+    assert_eq!(usdc_debt, 2_500_000_000);
+
+    // Case 4: Zero debt amount
+    assert_eq!(risk::normalize_debt_amount(0, 6).unwrap(), 0);
+
+    // Case 5: Overflow returns error
+    assert_eq!(
+        risk::normalize_debt_amount(i128::MAX, 18),
+        Err(VaultError::InvalidInputs)
+    );
+}
