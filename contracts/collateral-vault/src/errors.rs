@@ -30,4 +30,5 @@ pub enum VaultError {
     NotImplemented = 24,
     AssetHasOpenPositions = 25,
     NotLiquidatable = 26,
+    TransferFailed = 27,
 }

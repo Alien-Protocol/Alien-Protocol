@@ -87,13 +87,18 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
         .ok_or(PoolError::Overflow)?;
     debt::store_debt(&env, &user, &user_debt);
 
+    let token_client = token::Client::new(&env, &borrow_asset);
+    if !matches!(
+        token_client.try_transfer(&env.current_contract_address(), &user, &amount),
+        Ok(Ok(()))
+    ) {
+        return Err(PoolError::TransferFailed);
+    }
+
     let new_total_borrowed = storage::get_total_borrowed(&env)
         .checked_add(amount)
         .ok_or(PoolError::Overflow)?;
     storage::set_total_borrowed(&env, new_total_borrowed);
-
-    let token_client = token::Client::new(&env, &borrow_asset);
-    token_client.transfer(&env.current_contract_address(), &user, &amount);
 
     events::Borrowed {
         user,
