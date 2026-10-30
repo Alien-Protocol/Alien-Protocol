@@ -10,3 +10,5 @@ mod test_read_functions;
 mod test_risk;
 mod test_upgrade;
 mod test_withdraw;
+
+mod test_auth;
