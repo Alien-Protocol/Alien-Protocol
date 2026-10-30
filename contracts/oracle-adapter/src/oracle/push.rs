@@ -59,6 +59,10 @@ pub fn write_prices(
         };
         storage::set_feed_price(&env, &sym, &price_data);
 
+        if let Some(mapped_asset) = crate::storage::get_feed_asset(&env, &sym) {
+            crate::storage::set_price(&env, &mapped_asset, &price_data);
+        }
+
         FeedPriceUpdated {
             feed_id: sym.clone(),
             price,

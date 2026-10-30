@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::{contracttype, Address, Symbol};
 
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
@@ -21,4 +21,8 @@ pub enum DataKey {
     Paused,
     /// Authorization flag for a price feeder, stored in persistent storage and keyed by the feeder address.
     AuthorizedFeeder(Address),
+    /// Mapping from asset address to RedStone feed ID, stored in persistent storage.
+    AssetFeed(Address),
+    /// Mapping from RedStone feed ID to asset address, stored in persistent storage.
+    FeedAsset(Symbol),
 }
