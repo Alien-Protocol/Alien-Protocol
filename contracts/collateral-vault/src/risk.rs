@@ -9,6 +9,8 @@ pub const PROTOCOL_QUOTE_PRECISION: i128 = 10_000_000;
 pub const TOKEN_AMOUNT_PRECISION: i128 = PROTOCOL_QUOTE_PRECISION;
 /// Standardized precision used when normalizing oracle prices.
 pub const ORACLE_PRICE_PRECISION: i128 = PROTOCOL_QUOTE_PRECISION;
+/// Standardized precision used when normalizing debt amounts.
+pub const DEBT_AMOUNT_PRECISION: i128 = PROTOCOL_QUOTE_PRECISION;
 
 /// Rounding policy for risk calculations.
 /// - collateral valuation and debt comparisons use floor rounding
@@ -56,6 +58,13 @@ pub fn normalize_token_amount(amount: i128, token_decimals: u32) -> Result<i128,
 pub fn normalize_oracle_price(price: i128, oracle_price_decimals: u32) -> Result<i128, VaultError> {
     Ok(rounded_quote_amount(
         normalize_with_precision(price, oracle_price_decimals, ORACLE_PRICE_PRECISION)?,
+        RoundingMode::Floor,
+    ))
+}
+
+pub fn normalize_debt_amount(debt: i128, debt_decimals: u32) -> Result<i128, VaultError> {
+    Ok(rounded_quote_amount(
+        normalize_with_precision(debt, debt_decimals, DEBT_AMOUNT_PRECISION)?,
         RoundingMode::Floor,
     ))
 }
