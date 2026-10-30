@@ -72,3 +72,37 @@ fn test_unpause_when_not_paused_fails() {
     let res = client.try_unpause_operation(&PauseFlag::Borrow);
     assert!(res.is_err());
 }
+
+#[test]
+fn test_pool_is_operation_paused_matches_mask() {
+    let (env, client, _admin, _user, _vault, _token_id, _token_client, _token_admin) = setup_env();
+
+    // Initially, all operations should report not paused via public client getter
+    assert!(!client.is_operation_paused(&PauseFlag::Supply));
+    assert!(!client.is_operation_paused(&PauseFlag::Borrow));
+    assert!(!client.is_operation_paused(&PauseFlag::Repay));
+    assert!(!client.is_operation_paused(&PauseFlag::WithdrawLiquidity));
+
+    // Pause Supply and Borrow
+    client.pause_operation(&PauseFlag::Supply, &Symbol::new(&env, "sup_halt"));
+    client.pause_operation(&PauseFlag::Borrow, &Symbol::new(&env, "bor_halt"));
+
+    // Verify public getter returns true for paused operations and false for unpaused
+    assert!(client.is_operation_paused(&PauseFlag::Supply));
+    assert!(client.is_operation_paused(&PauseFlag::Borrow));
+    assert!(!client.is_operation_paused(&PauseFlag::Repay));
+    assert!(!client.is_operation_paused(&PauseFlag::WithdrawLiquidity));
+
+    // Unpause Supply
+    client.unpause_operation(&PauseFlag::Supply);
+    assert!(!client.is_operation_paused(&PauseFlag::Supply));
+    assert!(client.is_operation_paused(&PauseFlag::Borrow));
+
+    // Pause Repay and WithdrawLiquidity
+    client.pause_operation(&PauseFlag::Repay, &Symbol::new(&env, "rep_halt"));
+    client.pause_operation(&PauseFlag::WithdrawLiquidity, &Symbol::new(&env, "wd_halt"));
+
+    assert!(client.is_operation_paused(&PauseFlag::Borrow));
+    assert!(client.is_operation_paused(&PauseFlag::Repay));
+    assert!(client.is_operation_paused(&PauseFlag::WithdrawLiquidity));
+}
