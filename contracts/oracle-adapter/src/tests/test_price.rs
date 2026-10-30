@@ -326,3 +326,19 @@ fn test_set_price_first_write_succeeds() {
     assert_eq!(stored.price, 500);
     assert_eq!(stored.timestamp, 1_000);
 }
+
+/// Issue #751: Assert that oracle-adapter's PriceData type is unified with shared::PriceData.
+#[test]
+fn test_oracle_price_data_is_shared_price_data() {
+    let price_data: shared::PriceData = crate::types::PriceData {
+        price: 1_000_000_000,
+        timestamp: 100,
+        write_timestamp: 105,
+    };
+    assert_eq!(price_data.price, 1_000_000_000);
+    assert_eq!(price_data.timestamp, 100);
+    assert_eq!(price_data.write_timestamp, 105);
+
+    let oracle_data: crate::PriceData = price_data;
+    assert_eq!(oracle_data.price, 1_000_000_000);
+}
