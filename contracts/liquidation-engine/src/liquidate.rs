@@ -157,9 +157,10 @@ pub fn liquidate(
 
     let engine_address = env.current_contract_address();
 
-    let registered_engine = vault
-        .get_liquidation_engine()
-        .ok_or(EngineError::Unauthorized)?;
+    let registered_engine = match vault.try_get_liquidation_engine() {
+        Ok(Ok(Some(engine))) => engine,
+        _ => return Err(EngineError::Unauthorized),
+    };
     if registered_engine != engine_address {
         return Err(EngineError::Unauthorized);
     }
@@ -171,7 +172,10 @@ pub fn liquidate(
     let max_partial_repay = calculate_partial_repayment(env.clone(), user.clone())?;
     let repay = max_repay_amount.min(max_partial_repay);
 
-    let borrow_asset = pool.get_borrow_asset().ok_or(EngineError::NotInitialized)?;
+    let borrow_asset = match pool.try_get_borrow_asset() {
+        Ok(Ok(Some(ba))) => ba,
+        _ => return Err(EngineError::NotInitialized),
+    };
 
     // Pull the repayment from the liquidator into the engine, then forward it
     // to the pool on the engine's own behalf.
@@ -185,7 +189,10 @@ pub fn liquidate(
     // Seize collateral starting from the user's largest-balance asset (ties
     // broken by order in `get_position`), moving to the next asset whenever
     // one balance is insufficient to cover the remaining seized value.
-    let position = vault.get_position(&user);
+    let position = match vault.try_get_position(&user) {
+        Ok(Ok(pos)) => pos,
+        _ => return Err(EngineError::NoPosition),
+    };
     let mut collateral = position.collateral.clone();
     let len = collateral.len();
 
@@ -209,8 +216,14 @@ pub fn liquidate(
         let asset = candidate.asset.clone();
         let balance = candidate.amount;
 
-        let asset_config = vault.get_asset_config(&asset);
-        let price_data = oracle.get_price_or_fail(&asset);
+        let asset_config = match vault.try_get_asset_config(&asset) {
+            Ok(Ok(cfg)) => cfg,
+            _ => return Err(EngineError::NotInitialized),
+        };
+        let price_data = match oracle.try_get_price_or_fail(&asset) {
+            Ok(Ok(p)) => p,
+            _ => return Err(EngineError::NotInitialized),
+        };
 
         let token_amount_needed = value_to_token_amount(
             remaining_value,
@@ -379,7 +392,10 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
     }
 
     // Get position to determine liquidation threshold
-    let position = vault.get_position(&user);
+    let position = match vault.try_get_position(&user) {
+        Ok(Ok(pos)) => pos,
+        _ => return Err(EngineError::NoPosition),
+    };
 
     // Recover liquidation threshold as the minimum LT among non-zero assets.
     // Iterate through collateral assets and find the minimum liquidation_threshold_bps.

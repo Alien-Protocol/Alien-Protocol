@@ -176,3 +176,49 @@ fn test_ceil_div_negative_numerator_and_denominator_rounds_up() {
     // ceil(-1 / -2) = ceil(0.5) = 1
     assert_eq!(ceil_div(-1, -2).unwrap(), 1);
 }
+
+use proptest::prelude::*;
+
+proptest! {
+    #[test]
+    fn prop_zero_debt_health_factor_is_max(
+        collateral in 0..=i128::MAX,
+        liquidation_threshold_bps in 1u32..=10_000u32,
+    ) {
+        let res = health_factor_bps(collateral, 0, liquidation_threshold_bps).unwrap();
+        prop_assert_eq!(res, i128::MAX);
+    }
+
+    #[test]
+    fn prop_accrual_monotonic_in_elapsed(
+        principal in 0..=100_000_000_000_i128,
+        rate_bps in 0..=10_000u32,
+        t1 in 0..=100_000_000u64,
+        delta in 0..=100_000_000u64,
+    ) {
+        let t2 = t1 + delta;
+        let a1 = accrue_linear_interest(principal, rate_bps, t1).unwrap();
+        let a2 = accrue_linear_interest(principal, rate_bps, t2).unwrap();
+        prop_assert!(a2 >= a1);
+    }
+
+    #[test]
+    fn prop_ceil_div_satisfies_inequality(
+        a in 0..=1_000_000_000_i128,
+        b in 1..=1_000_000_000_i128,
+    ) {
+        let q = ceil_div(a, b).unwrap();
+        prop_assert!(q * b >= a);
+        prop_assert!((q - 1) * b < a);
+    }
+
+    #[test]
+    fn prop_borrow_limit_from_collateral_bounds(
+        collateral in 0..=100_000_000_000_i128,
+        max_ltv_bps in 0u32..=10_000u32,
+    ) {
+        let limit = borrow_limit_from_collateral(collateral, max_ltv_bps).unwrap();
+        prop_assert!(limit <= collateral);
+        prop_assert!(limit >= 0);
+    }
+}
