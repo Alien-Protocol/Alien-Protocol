@@ -44,10 +44,21 @@ pub fn accrue_interest(env: Env, user: Address) -> Result<Debt, PoolError> {
     Ok(debt)
 }
 
+/// Accrues and persists interest on `user`'s debt up to the current ledger
+/// timestamp, returning the updated `Debt` record.
+///
+/// Note: Unlike typical read-only getters, this function has a side effect:
+/// it invokes `accrue_interest`, writing updated `accrued_interest` and
+/// `last_accrual_at` to storage when time has elapsed.
 pub fn get_debt(env: Env, user: Address) -> Result<Debt, PoolError> {
     accrue_interest(env, user)
 }
 
+/// Computes and returns the total debt balance (principal + accrued interest)
+/// for `user` after accruing interest up to the current ledger timestamp.
+///
+/// Note: This function mutates state as a side effect by calling `accrue_interest`,
+/// persisting updated interest and timestamps to storage when time has elapsed.
 pub fn get_user_debt(env: Env, user: Address) -> Result<i128, PoolError> {
     let debt = accrue_interest(env, user)?;
     Ok(debt.total()?)
