@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::testutils::{Address as _, Events, Ledger as _};
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
 use super::super::*;
@@ -172,6 +172,7 @@ impl MockPoolContract {
 #[derive(Clone)]
 enum OracleKey {
     Price(Address),
+    StalenessThreshold,
 }
 
 #[contract]
@@ -185,15 +186,38 @@ impl MockOracleContract {
             .set(&OracleKey::Price(asset), &price);
     }
 
+    pub fn set_staleness_threshold(env: Env, threshold: u64) {
+        env.storage()
+            .persistent()
+            .set(&OracleKey::StalenessThreshold, &threshold);
+    }
+
     pub fn get_price(env: Env, asset: Address) -> Option<shared::types::PriceData> {
         env.storage().persistent().get(&OracleKey::Price(asset))
     }
 
     pub fn get_price_or_fail(env: Env, asset: Address) -> shared::types::PriceData {
-        env.storage()
+        let price_data: shared::types::PriceData = env
+            .storage()
             .persistent()
             .get(&OracleKey::Price(asset))
-            .expect("no price")
+            .expect("no price");
+
+        let threshold: u64 = env
+            .storage()
+            .persistent()
+            .get(&OracleKey::StalenessThreshold)
+            .unwrap_or(0);
+
+        if threshold > 0 {
+            let current_time = env.ledger().timestamp();
+            let age = current_time.saturating_sub(price_data.timestamp);
+            if age > threshold {
+                panic!("stale price");
+            }
+        }
+
+        price_data
     }
 }
 
@@ -567,4 +591,57 @@ fn test_calculate_partial_repayment_non_exact_lt_reaches_target_hf() {
         shared::TARGET_HF_BPS
     );
     assert_eq!(post_hf, shared::TARGET_HF_BPS);
+}
+
+#[test]
+fn test_liquidate_fails_on_stale_oracle_price() {
+    let ctx = setup();
+    ctx.env.ledger().set_timestamp(2000);
+
+    // Staleness threshold is 300 seconds (5 minutes)
+    ctx.oracle.set_staleness_threshold(&300);
+
+    // Price timestamp is 1000 (age 1000s > 300s threshold)
+    ctx.oracle.set_price(
+        &ctx.collateral_asset,
+        &shared::types::PriceData {
+            price: shared::PROTOCOL_QUOTE_PRECISION,
+            timestamp: 1000,
+            write_timestamp: 1000,
+        },
+    );
+
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+
+    assert!(res.is_err(), "liquidate must fail on stale oracle price");
+}
+
+#[test]
+fn test_liquidate_stale_price_leaves_debt_unchanged() {
+    let ctx = setup();
+    ctx.env.ledger().set_timestamp(2000);
+
+    let initial_debt = ctx.pool.get_user_debt(&ctx.user);
+    assert_eq!(initial_debt, DEBT);
+
+    // Staleness threshold is 300 seconds; price timestamp is 1000 (age 1000s > 300s)
+    ctx.oracle.set_staleness_threshold(&300);
+    ctx.oracle.set_price(
+        &ctx.collateral_asset,
+        &shared::types::PriceData {
+            price: shared::PROTOCOL_QUOTE_PRECISION,
+            timestamp: 1000,
+            write_timestamp: 1000,
+        },
+    );
+
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+    assert!(res.is_err());
+
+    // User debt must remain completely unchanged after failed liquidation
+    let post_debt = ctx.pool.get_user_debt(&ctx.user);
+    assert_eq!(
+        post_debt, initial_debt,
+        "debt must remain unchanged after stale price abort"
+    );
 }
