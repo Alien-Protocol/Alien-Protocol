@@ -298,3 +298,55 @@ fn test_set_asset_config_emits_event() {
     let first_topic: Symbol = last_event.1.get(0).unwrap().into_val(&env);
     assert_eq!(first_topic, Symbol::new(&env, "asset_config_updated"));
 }
+
+#[test]
+fn test_get_positions_page_empty() {
+    let (_env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
+
+    assert_eq!(client.get_position_index_len(), 0);
+    let page = client.get_positions_page(&0, &10);
+    assert!(page.is_empty());
+}
+
+#[test]
+fn test_get_positions_page_respects_limit_cap() {
+    let (env, client, _admin, user1, token_id, _token_client, token_admin) = setup_env();
+
+    token_admin.mint(&user1, &1000);
+    client.deposit(&user1, &token_id, &100);
+
+    let user2 = Address::generate(&env);
+    token_admin.mint(&user2, &1000);
+    client.deposit(&user2, &token_id, &200);
+
+    let user3 = Address::generate(&env);
+    token_admin.mint(&user3, &1000);
+    client.deposit(&user3, &token_id, &300);
+
+    assert_eq!(client.get_position_index_len(), 3);
+
+    let page1 = client.get_positions_page(&0, &2);
+    assert_eq!(page1.len(), 2);
+
+    let page2 = client.get_positions_page(&2, &2);
+    assert_eq!(page2.len(), 1);
+
+    let page_capped = client.get_positions_page(&0, &100);
+    assert_eq!(page_capped.len(), 3);
+}
+
+#[test]
+fn test_get_positions_page_start_past_end_is_empty() {
+    let (_env, client, _admin, user1, token_id, _token_client, token_admin) = setup_env();
+
+    token_admin.mint(&user1, &1000);
+    client.deposit(&user1, &token_id, &100);
+
+    assert_eq!(client.get_position_index_len(), 1);
+
+    let page = client.get_positions_page(&1, &10);
+    assert!(page.is_empty());
+
+    let page_far = client.get_positions_page(&100, &10);
+    assert!(page_far.is_empty());
+}
