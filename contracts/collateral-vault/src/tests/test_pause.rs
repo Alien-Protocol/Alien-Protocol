@@ -647,3 +647,41 @@ fn test_all_operations_independent() {
     client.deposit(&user, &token_id, &100);
     assert_eq!(client.get_position_balance(&user, &token_id), 600);
 }
+
+#[test]
+fn test_is_operation_paused_matches_pause_mask() {
+    let (env, client, _admin, _user, _token_client, _token_admin, _token_id) = setup_env();
+
+    // Initially, all operations should report not paused via public client getter
+    assert!(!client.is_operation_paused(&PauseFlag::Deposit));
+    assert!(!client.is_operation_paused(&PauseFlag::Borrow));
+    assert!(!client.is_operation_paused(&PauseFlag::Withdraw));
+    assert!(!client.is_operation_paused(&PauseFlag::Liquidation));
+    assert!(!client.is_operation_paused(&PauseFlag::Recovery));
+
+    // Pause Deposit and Liquidation
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "dep_halt"));
+    client.pause_operation(&PauseFlag::Liquidation, &Symbol::new(&env, "liq_halt"));
+
+    // Verify public getter returns true for paused operations and false for unpaused
+    assert!(client.is_operation_paused(&PauseFlag::Deposit));
+    assert!(!client.is_operation_paused(&PauseFlag::Borrow));
+    assert!(!client.is_operation_paused(&PauseFlag::Withdraw));
+    assert!(client.is_operation_paused(&PauseFlag::Liquidation));
+    assert!(!client.is_operation_paused(&PauseFlag::Recovery));
+
+    // Unpause Deposit
+    client.unpause_operation(&PauseFlag::Deposit);
+    assert!(!client.is_operation_paused(&PauseFlag::Deposit));
+    assert!(client.is_operation_paused(&PauseFlag::Liquidation));
+
+    // Pause remaining flags
+    client.pause_operation(&PauseFlag::Borrow, &Symbol::new(&env, "bor_halt"));
+    client.pause_operation(&PauseFlag::Withdraw, &Symbol::new(&env, "wd_halt"));
+    client.pause_operation(&PauseFlag::Recovery, &Symbol::new(&env, "rec_halt"));
+
+    assert!(client.is_operation_paused(&PauseFlag::Borrow));
+    assert!(client.is_operation_paused(&PauseFlag::Withdraw));
+    assert!(client.is_operation_paused(&PauseFlag::Liquidation));
+    assert!(client.is_operation_paused(&PauseFlag::Recovery));
+}
