@@ -25,6 +25,7 @@ enum VaultKey {
     AssetConfig(Address),
     HealthFactor(Address),
     CollateralValue(Address),
+    Pause(crate::liquidate::vault_types::PauseFlag),
 }
 
 #[contract]
@@ -78,6 +79,22 @@ impl MockVaultContract {
             .expect("no asset config")
     }
 
+    pub fn pause_operation(env: Env, operation: crate::liquidate::vault_types::PauseFlag) {
+        env.storage()
+            .persistent()
+            .set(&VaultKey::Pause(operation), &true);
+    }
+
+    pub fn is_operation_paused(
+        env: Env,
+        operation: crate::liquidate::vault_types::PauseFlag,
+    ) -> bool {
+        env.storage()
+            .persistent()
+            .get(&VaultKey::Pause(operation))
+            .unwrap_or(false)
+    }
+
     pub fn get_health_factor(env: Env, user: Address) -> i128 {
         env.storage()
             .persistent()
@@ -114,6 +131,7 @@ enum PoolKey {
     BorrowAsset,
     Debt(Address),
     LastRepay,
+    Pause(crate::liquidate::pool_types::PauseFlag),
 }
 
 #[contract]
@@ -165,6 +183,22 @@ impl MockPoolContract {
         env.storage()
             .persistent()
             .set(&PoolKey::LastRepay, &(payer, amount));
+    }
+
+    pub fn pause_operation(env: Env, operation: crate::liquidate::pool_types::PauseFlag) {
+        env.storage()
+            .persistent()
+            .set(&PoolKey::Pause(operation), &true);
+    }
+
+    pub fn is_operation_paused(
+        env: Env,
+        operation: crate::liquidate::pool_types::PauseFlag,
+    ) -> bool {
+        env.storage()
+            .persistent()
+            .get(&PoolKey::Pause(operation))
+            .unwrap_or(false)
     }
 }
 
@@ -567,4 +601,52 @@ fn test_calculate_partial_repayment_non_exact_lt_reaches_target_hf() {
         shared::TARGET_HF_BPS
     );
     assert_eq!(post_hf, shared::TARGET_HF_BPS);
+}
+
+#[test]
+fn test_liquidate_fails_when_vault_liquidation_paused() {
+    let ctx = setup();
+    let initial_debt = ctx.pool.get_user_debt(&ctx.user);
+
+    ctx.vault
+        .pause_operation(&crate::liquidate::vault_types::PauseFlag::Liquidation);
+
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+    assert_eq!(res, Err(Ok(EngineError::VaultPaused)));
+
+    assert_eq!(
+        ctx.pool.get_user_debt(&ctx.user),
+        initial_debt,
+        "debt must remain unchanged when vault liquidation is paused"
+    );
+}
+
+#[test]
+fn test_liquidate_fails_when_pool_repay_paused() {
+    let ctx = setup();
+    let initial_debt = ctx.pool.get_user_debt(&ctx.user);
+
+    ctx.pool
+        .pause_operation(&crate::liquidate::pool_types::PauseFlag::Repay);
+
+    let res = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+    assert_eq!(res, Err(Ok(EngineError::PoolPaused)));
+
+    assert_eq!(
+        ctx.pool.get_user_debt(&ctx.user),
+        initial_debt,
+        "debt must remain unchanged when pool repay is paused"
+    );
+}
+
+#[test]
+fn test_liquidate_succeeds_when_unpaused() {
+    let ctx = setup();
+    let result = ctx.engine.liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+    assert_eq!(result.user, ctx.user);
+    assert_eq!(result.repaid, EXPECTED_PARTIAL_REPAY);
+    assert_eq!(
+        ctx.pool.get_user_debt(&ctx.user),
+        DEBT - EXPECTED_PARTIAL_REPAY
+    );
 }

@@ -9,6 +9,33 @@ use shared::{
     LIQUIDATION_BONUS_BPS, MIN_REMAINING_DEBT, PROTOCOL_QUOTE_PRECISION, TARGET_HF_BPS,
 };
 
+pub mod vault_types {
+    use soroban_sdk::contracttype;
+
+    #[contracttype]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum PauseFlag {
+        Deposit,
+        Borrow,
+        Withdraw,
+        Liquidation,
+        Recovery,
+    }
+}
+
+pub mod pool_types {
+    use soroban_sdk::contracttype;
+
+    #[contracttype]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum PauseFlag {
+        Supply,
+        Borrow,
+        Repay,
+        WithdrawLiquidity,
+    }
+}
+
 #[soroban_sdk::contractclient(name = "VaultClient")]
 #[allow(dead_code)]
 pub trait Vault {
@@ -24,6 +51,7 @@ pub trait Vault {
     fn get_position(env: Env, user: Address) -> shared::Position;
     fn get_asset_config(env: Env, asset: Address) -> shared::AssetConfig;
     fn get_liquidation_engine(env: Env) -> Option<Address>;
+    fn is_operation_paused(env: Env, operation: vault_types::PauseFlag) -> bool;
 }
 
 #[soroban_sdk::contractclient(name = "PoolClient")]
@@ -33,6 +61,7 @@ pub trait Pool {
     fn is_liquidatable(env: Env, user: Address) -> bool;
     fn repay_for(env: Env, payer: Address, user: Address, asset: Address, amount: i128);
     fn get_borrow_asset(env: Env) -> Option<Address>;
+    fn is_operation_paused(env: Env, operation: pool_types::PauseFlag) -> bool;
 }
 
 /// Oracle client for the liquidation engine, matching `oracle-adapter`'s
@@ -162,6 +191,14 @@ pub fn liquidate(
         .ok_or(EngineError::Unauthorized)?;
     if registered_engine != engine_address {
         return Err(EngineError::Unauthorized);
+    }
+
+    if vault.is_operation_paused(&vault_types::PauseFlag::Liquidation) {
+        return Err(EngineError::VaultPaused);
+    }
+
+    if pool.is_operation_paused(&pool_types::PauseFlag::Repay) {
+        return Err(EngineError::PoolPaused);
     }
 
     if !is_liquidatable(env.clone(), user.clone())? {
