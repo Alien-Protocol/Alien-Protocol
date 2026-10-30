@@ -210,10 +210,10 @@ fn test_repay_zero_or_negative_fails() {
     token_admin.mint(&user, &1000);
 
     let res_zero = client.try_repay(&user, &token_id, &0);
-    assert!(res_zero.is_err());
+    assert_eq!(res_zero, Err(Ok(PoolError::InvalidAmount)));
 
     let res_neg = client.try_repay(&user, &token_id, &-100);
-    assert!(res_neg.is_err());
+    assert_eq!(res_neg, Err(Ok(PoolError::InvalidAmount)));
 }
 
 #[test]

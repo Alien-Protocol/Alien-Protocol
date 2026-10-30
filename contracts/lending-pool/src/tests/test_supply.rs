@@ -98,10 +98,24 @@ fn test_supply_zero_or_negative_fails() {
     token_admin.mint(&user, &1000);
 
     let res = client.try_supply(&user, &0);
-    assert!(res.is_err());
+    assert_eq!(res, Err(Ok(PoolError::InvalidAmount)));
 
     let res = client.try_supply(&user, &-100);
-    assert!(res.is_err());
+    assert_eq!(res, Err(Ok(PoolError::InvalidAmount)));
+}
+
+#[test]
+fn test_withdraw_liquidity_zero_or_negative_fails() {
+    let (_env, client, _admin, user, _vault, _token_id, _token_client, token_admin) = setup_env();
+
+    token_admin.mint(&user, &1000);
+    client.supply(&user, &500);
+
+    let res_zero = client.try_withdraw_liquidity(&user, &0);
+    assert_eq!(res_zero, Err(Ok(PoolError::InvalidAmount)));
+
+    let res_neg = client.try_withdraw_liquidity(&user, &-100);
+    assert_eq!(res_neg, Err(Ok(PoolError::InvalidAmount)));
 }
 
 #[test]
