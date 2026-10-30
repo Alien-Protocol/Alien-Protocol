@@ -15,12 +15,11 @@ pub fn execute_seize(
     asset: Address,
     amount: i128,
 ) -> Result<(), VaultError> {
-    liquidation_engine.require_auth();
-
     let registered_engine = storage::get_liquidation_engine(env).ok_or(VaultError::Unauthorized)?;
     if liquidation_engine != registered_engine {
         return Err(VaultError::Unauthorized);
     }
+    registered_engine.require_auth();
 
     if storage::is_operation_paused(env, &PauseFlag::Liquidation) {
         return Err(VaultError::VaultPaused);
