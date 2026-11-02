@@ -1,4 +1,5 @@
 mod test_admin;
+mod test_borrow;
 mod test_pause;
 
 mod test_repay;
