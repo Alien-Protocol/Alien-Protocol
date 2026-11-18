@@ -21,12 +21,20 @@ impl MockVaultContract {
         0
     }
 
-    pub fn get_position(_env: Env, _user: Address) -> shared::Position {
-        unimplemented!()
+    pub fn get_position(env: Env, user: Address) -> shared::Position {
+        shared::Position {
+            user,
+            collateral: soroban_sdk::Vec::new(&env),
+        }
     }
 
     pub fn get_asset_config(_env: Env, _asset: Address) -> shared::AssetConfig {
-        unimplemented!()
+        shared::AssetConfig {
+            token_decimals: 0,
+            oracle_price_decimals: 0,
+            max_ltv_bps: 0,
+            liquidation_threshold_bps: 0,
+        }
     }
 }
 
@@ -260,6 +268,22 @@ fn test_repay_dust_remaining_fails_unless_full_close() {
 
     let res_full = client.try_repay(&user, &token_id, &total_debt);
     assert!(res_full.is_ok());
+}
+
+#[test]
+fn test_repay_below_min_remaining_debt_fails() {
+    let (env, client, _admin, user, _vault, _vault_id, token_id, _token_client, token_admin) =
+        setup_env();
+
+    // Repaying 100 leaves MIN_REMAINING_DEBT - 50 outstanding: non-zero but
+    // below the minimum, so the repay must fail with BelowMinDebt.
+    let total_debt = shared::MIN_REMAINING_DEBT + 50;
+    let now = env.ledger().timestamp();
+    set_user_debt(&env, &client.address, &user, total_debt, 0, 1000, now);
+    token_admin.mint(&user, &total_debt);
+
+    let res = client.try_repay(&user, &token_id, &100);
+    assert_eq!(res, Err(Ok(crate::errors::PoolError::BelowMinDebt)));
 }
 
 #[test]
