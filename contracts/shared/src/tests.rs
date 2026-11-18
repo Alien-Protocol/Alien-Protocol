@@ -176,3 +176,38 @@ fn test_ceil_div_negative_numerator_and_denominator_rounds_up() {
     // ceil(-1 / -2) = ceil(0.5) = 1
     assert_eq!(ceil_div(-1, -2).unwrap(), 1);
 }
+
+#[test]
+fn prop_zero_debt_health_factor_is_max() {
+    assert_eq!(health_factor_bps(10_000, 0, 8_000).unwrap(), i128::MAX);
+    assert_eq!(health_factor_bps(0, 0, 8_000).unwrap(), i128::MAX);
+    assert_eq!(health_factor_bps(1_000_000_000, 0, 5_000).unwrap(), i128::MAX);
+}
+
+#[test]
+fn prop_accrual_monotonic_in_elapsed() {
+    let principal = 10_000_000;
+    let rate = 800;
+    let acc1 = accrue_linear_interest(principal, rate, 100).unwrap();
+    let acc2 = accrue_linear_interest(principal, rate, 200).unwrap();
+    let acc3 = accrue_linear_interest(principal, rate, 500).unwrap();
+    assert!(acc1 <= acc2);
+    assert!(acc2 <= acc3);
+}
+
+#[test]
+fn prop_non_positive_deposit_never_credits() {
+    assert_eq!(
+        accrue_linear_interest(-100, 800, 100),
+        Err(SharedError::InvalidAmount)
+    );
+    assert_eq!(
+        health_factor_bps(-10, 100, 8_000),
+        Err(SharedError::InvalidAmount)
+    );
+    assert_eq!(
+        borrow_limit_from_collateral(-500, 8_000),
+        Err(SharedError::InvalidAmount)
+    );
+}
+
