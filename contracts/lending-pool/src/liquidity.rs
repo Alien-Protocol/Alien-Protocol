@@ -5,6 +5,35 @@ use crate::events;
 use crate::storage;
 use crate::types::PauseFlag;
 
+/// Supply `amount` of the borrow asset into the pool, increasing
+/// `user`'s supply balance and the pool's total supply.
+///
+/// ## Authorization
+///
+/// Requires `user` authorization.
+///
+/// ## Transfers
+///
+/// Transfers `amount` of the borrow asset from `user` to the pool
+/// contract.
+///
+/// ## Notes
+///
+/// Entry point for the supply side of the pool. Withdrawals, borrows,
+/// and repayments are handled by `withdraw_liquidity` and the borrow
+/// module respectively.
+///
+/// ## Errors
+///
+/// - `PoolError::InvalidAmount` if `amount` is not positive.
+/// - `PoolError::PoolPaused` if supply is paused.
+/// - `PoolError::NotInitialized` if the borrow asset is not configured.
+/// - `PoolError::Overflow` if the supply balance or total supply
+///   would overflow.
+///
+/// ## Events
+///
+/// Emits `Supplied`.
 pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
     user.require_auth();
 
@@ -19,7 +48,6 @@ pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
     let borrow_asset = storage::get_borrow_asset(&env).ok_or(PoolError::NotInitialized)?;
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    #[allow(clippy::needless_borrows_for_generic_args)]
     token_client.transfer(&user, env.current_contract_address(), &amount);
 
     let current_supply = storage::get_user_supply(&env, &user);
@@ -39,6 +67,33 @@ pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
     Ok(())
 }
 
+/// Withdraw `amount` of supplied liquidity from the pool back to
+/// `user`, decreasing their supply balance and the pool's total supply.
+///
+/// ## Authorization
+///
+/// Requires `user` authorization.
+///
+/// ## Transfers
+///
+/// Transfers `amount` of the borrow asset from the pool contract to
+/// `user`.
+///
+/// ## Errors
+///
+/// - `PoolError::InvalidAmount` if `amount` is not positive.
+/// - `PoolError::PoolPaused` if withdrawing liquidity is paused.
+/// - `PoolError::InsufficientSupply` if `user` has less than `amount`
+///   supplied.
+/// - `PoolError::InsufficientLiquidity` if the pool has less available
+///   liquidity than `amount`.
+/// - `PoolError::NotInitialized` if the borrow asset is not configured.
+/// - `PoolError::Overflow` if the supply balance or total supply
+///   would underflow.
+///
+/// ## Events
+///
+/// Emits `LiquidityWithdrawn`.
 pub fn withdraw_liquidity(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
     user.require_auth();
 
@@ -63,7 +118,6 @@ pub fn withdraw_liquidity(env: Env, user: Address, amount: i128) -> Result<(), P
     let borrow_asset = storage::get_borrow_asset(&env).ok_or(PoolError::NotInitialized)?;
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    #[allow(clippy::needless_borrows_for_generic_args)]
     token_client.transfer(&env.current_contract_address(), &user, &amount);
 
     let new_supply = user_supply.checked_sub(amount).ok_or(PoolError::Overflow)?;
@@ -100,5 +154,15 @@ pub fn get_utilization_bps(env: Env) -> u32 {
         return 0;
     }
     let total_borrowed = storage::get_total_borrowed(&env);
-    (total_borrowed * 10_000 / total_supply) as u32
+
+    // Use checked_mul to avoid overflow when total_borrowed is large.
+    // On overflow, the pool is beyond 100% utilization, so clamp to 10_000 bps.
+    // Then divide and clamp the final result to 10_000 so utilization is
+    // always in [0, 10_000] regardless of the stored values.
+    let numer = match total_borrowed.checked_mul(10_000) {
+        Some(n) => n,
+        None => return 10_000,
+    };
+    let raw = numer / total_supply;
+    raw.min(10_000) as u32
 }

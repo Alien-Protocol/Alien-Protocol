@@ -49,4 +49,8 @@ pub fn is_redstone_initialized(env: &Env) -> bool {
     env.storage()
         .instance()
         .has(&OracleDataKey::RedStoneSigners)
+        && env
+            .storage()
+            .instance()
+            .has(&OracleDataKey::RedStoneSignerThreshold)
 }

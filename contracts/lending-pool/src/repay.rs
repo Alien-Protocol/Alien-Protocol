@@ -86,6 +86,32 @@ fn apply_repay(
 
 /// Applies `amount` of `borrow_asset` to `user`'s debt, interest first, then
 /// principal. Pulls `min(amount, total_debt)` from `user`.
+///
+/// ## Authorization
+///
+/// Requires `user` authorization.
+///
+/// Documented entry point: `repay`.
+///
+/// ## Transfers
+///
+/// Transfers `min(amount, total_debt)` of the borrow asset from `user`
+/// to the pool contract.
+///
+/// ## Errors
+///
+/// - `PoolError::InvalidAmount` if `amount` is not positive.
+/// - `PoolError::NotInitialized` if the borrow asset is not configured.
+/// - `PoolError::UnsupportedAsset` if `asset` is not the borrow asset.
+/// - `PoolError::RepayPaused` if repaying is paused.
+/// - `PoolError::NoDebt` if `user` has no outstanding debt.
+/// - `PoolError::BelowMinDebt` if the remaining debt would be non-zero but
+///   below the minimum remaining debt.
+/// - `PoolError::Overflow` if debt or total borrowed would underflow.
+///
+/// ## Events
+///
+/// Emits `Repaid`.
 pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<(), PoolError> {
     user.require_auth();
     apply_repay(env, user.clone(), user, asset, amount)
@@ -93,6 +119,30 @@ pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<()
 
 /// Applies `amount` of `borrow_asset` to `user`'s debt, interest first, then
 /// principal. Pulls `min(amount, total_debt)` from `payer`.
+///
+/// ## Authorization
+///
+/// Requires `payer` authorization. `user` need not authorize.
+///
+/// ## Transfers
+///
+/// Transfers `min(amount, total_debt)` of the borrow asset from `payer`
+/// to the pool contract.
+///
+/// ## Errors
+///
+/// - `PoolError::InvalidAmount` if `amount` is not positive.
+/// - `PoolError::NotInitialized` if the borrow asset is not configured.
+/// - `PoolError::UnsupportedAsset` if `asset` is not the borrow asset.
+/// - `PoolError::RepayPaused` if repaying is paused.
+/// - `PoolError::NoDebt` if `user` has no outstanding debt.
+/// - `PoolError::BelowMinDebt` if the remaining debt would be non-zero but
+///   below the minimum remaining debt.
+/// - `PoolError::Overflow` if debt or total borrowed would underflow.
+///
+/// ## Events
+///
+/// Emits `Repaid`.
 pub fn repay_for(
     env: Env,
     payer: Address,
