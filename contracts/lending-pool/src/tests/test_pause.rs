@@ -72,3 +72,18 @@ fn test_unpause_when_not_paused_fails() {
     let res = client.try_unpause_operation(&PauseFlag::Borrow);
     assert!(res.is_err());
 }
+
+#[test]
+fn test_is_operation_paused_reflects_repay_flag() {
+    let (env, client, _admin, _user, _vault, _token_id, _token_client, _token_admin) = setup_env();
+
+    assert!(!client.is_operation_paused(&PauseFlag::Repay));
+
+    client.pause_operation(&PauseFlag::Repay, &Symbol::new(&env, "halt_rep"));
+    assert!(client.is_operation_paused(&PauseFlag::Repay));
+    // Other flags are independent.
+    assert!(!client.is_operation_paused(&PauseFlag::Borrow));
+
+    client.unpause_operation(&PauseFlag::Repay);
+    assert!(!client.is_operation_paused(&PauseFlag::Repay));
+}

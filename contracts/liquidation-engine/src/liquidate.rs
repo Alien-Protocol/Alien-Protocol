@@ -1,4 +1,4 @@
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{contracttype, token, Address, Env};
 
 use crate::errors::EngineError;
 use crate::events;
@@ -8,6 +8,32 @@ use shared::{
     ceil_div, CollateralAsset, BPS_DENOMINATOR, CLOSE_FACTOR_BPS, HEALTHY_HF_BPS,
     LIQUIDATION_BONUS_BPS, MIN_REMAINING_DEBT, PROTOCOL_QUOTE_PRECISION, TARGET_HF_BPS,
 };
+
+/// Mirror of `collateral-vault`'s `PauseFlag`.
+///
+/// Unit-variant `contracttype` enums are encoded by variant name, so this
+/// decodes identically on the vault side. Keep the variant names in sync with
+/// `contracts/collateral-vault/src/types.rs`.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultPauseFlag {
+    Deposit,
+    Borrow,
+    Withdraw,
+    Liquidation,
+    Recovery,
+}
+
+/// Mirror of `lending-pool`'s `PauseFlag`. Keep the variant names in sync with
+/// `contracts/lending-pool/src/types.rs`.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PoolPauseFlag {
+    Supply,
+    Borrow,
+    Repay,
+    WithdrawLiquidity,
+}
 
 #[soroban_sdk::contractclient(name = "VaultClient")]
 #[allow(dead_code)]
@@ -24,6 +50,7 @@ pub trait Vault {
     fn get_position(env: Env, user: Address) -> shared::Position;
     fn get_asset_config(env: Env, asset: Address) -> shared::AssetConfig;
     fn get_liquidation_engine(env: Env) -> Option<Address>;
+    fn is_operation_paused(env: Env, operation: VaultPauseFlag) -> bool;
 }
 
 #[soroban_sdk::contractclient(name = "PoolClient")]
@@ -33,6 +60,7 @@ pub trait Pool {
     fn is_liquidatable(env: Env, user: Address) -> bool;
     fn repay_for(env: Env, payer: Address, user: Address, asset: Address, amount: i128);
     fn get_borrow_asset(env: Env) -> Option<Address>;
+    fn is_operation_paused(env: Env, operation: PoolPauseFlag) -> bool;
 }
 
 /// Oracle client for the liquidation engine, matching `oracle-adapter`'s
@@ -154,6 +182,16 @@ pub fn liquidate(
     let vault = VaultClient::new(&env, &vault_addr);
     let pool = PoolClient::new(&env, &pool_addr);
     let oracle = OracleClient::new(&env, &oracle_addr);
+
+    // Respect operator circuit breakers before touching any balances: a
+    // liquidation seizes vault collateral and repays pool debt, so it must not
+    // run while either of those paths is paused.
+    if vault.is_operation_paused(&VaultPauseFlag::Liquidation) {
+        return Err(EngineError::VaultPaused);
+    }
+    if pool.is_operation_paused(&PoolPauseFlag::Repay) {
+        return Err(EngineError::PoolPaused);
+    }
 
     let engine_address = env.current_contract_address();
 

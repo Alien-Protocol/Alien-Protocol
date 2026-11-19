@@ -109,6 +109,14 @@ impl VaultContract {
         admin::unpause_operation(env, operation)
     }
 
+    /// Returns `true` if `operation` is currently paused on this vault.
+    ///
+    /// Read-only and callable by anyone; the liquidation engine uses it to
+    /// refuse liquidations while `PauseFlag::Liquidation` is set.
+    pub fn is_operation_paused(env: Env, operation: PauseFlag) -> bool {
+        storage::is_operation_paused(&env, &operation)
+    }
+
     pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
         assets::add_supported_asset(env, asset)
     }
