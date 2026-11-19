@@ -64,13 +64,7 @@ fn setup_env() -> (
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
     let interest_rate_bps = 1_000; // 10%
-    client.initialize(
-        &admin,
-        &vault_id,
-        &oracle,
-        &token_id,
-        &interest_rate_bps,
-    );
+    client.initialize(&admin, &vault_id, &oracle, &token_id, &interest_rate_bps);
 
     // Seed pool with deep liquidity for borrows
     let liquidity_provider = Address::generate(&env);

@@ -101,7 +101,17 @@ fn setup_env() -> (
 
 #[test]
 fn prop_deposit_withdraw_round_trip_zero_debt() {
-    let (_env, client, _admin, user, asset, token_client, token_admin, _pool_client, _oracle_client) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        user,
+        asset,
+        token_client,
+        token_admin,
+        _pool_client,
+        _oracle_client,
+    ) = setup_env();
 
     let test_amounts = [1i128, 100, 10_000, 500_000, 1_000_000_000, 10_000_000_000];
 
@@ -121,7 +131,10 @@ fn prop_deposit_withdraw_round_trip_zero_debt() {
         assert!(res_wd.is_ok(), "Withdraw failed for amount {}", amount);
 
         let final_vault_bal = client.get_position_balance(&user, &asset);
-        assert_eq!(final_vault_bal, 0, "Position not cleared after full withdraw");
+        assert_eq!(
+            final_vault_bal, 0,
+            "Position not cleared after full withdraw"
+        );
 
         let final_token_bal = token_client.balance(&user);
         assert_eq!(final_token_bal, initial_token_bal);
@@ -130,15 +143,41 @@ fn prop_deposit_withdraw_round_trip_zero_debt() {
 
 #[test]
 fn prop_non_positive_deposit_never_credits() {
-    let (_env, client, _admin, user, asset, _token_client, _token_admin, _pool_client, _oracle_client) = setup_env();
+    let (
+        _env,
+        client,
+        _admin,
+        user,
+        asset,
+        _token_client,
+        _token_admin,
+        _pool_client,
+        _oracle_client,
+    ) = setup_env();
 
-    let test_amounts = [0i128, -1, -100, -10_000, -1_000_000_000, i128::MIN + 1, i128::MIN];
+    let test_amounts = [
+        0i128,
+        -1,
+        -100,
+        -10_000,
+        -1_000_000_000,
+        i128::MIN + 1,
+        i128::MIN,
+    ];
 
     for amount in test_amounts {
         let res = client.try_deposit(&user, &asset, &amount);
-        assert!(res.is_err(), "Deposit must fail for non-positive amount {}", amount);
+        assert!(
+            res.is_err(),
+            "Deposit must fail for non-positive amount {}",
+            amount
+        );
 
         let vault_bal = client.get_position_balance(&user, &asset);
-        assert_eq!(vault_bal, 0, "Balance must never credit for non-positive amount {}", amount);
+        assert_eq!(
+            vault_bal, 0,
+            "Balance must never credit for non-positive amount {}",
+            amount
+        );
     }
 }

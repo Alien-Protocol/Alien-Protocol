@@ -39,19 +39,7 @@ fn prop_bonus_strictly_monotonic_in_repayment() {
 fn prop_bonus_within_expected_bounds() {
     let env = Env::default();
     let amounts = [
-        1i128,
-        2,
-        3,
-        7,
-        13,
-        100,
-        101,
-        999,
-        1_000,
-        10_000,
-        123_456,
-        1_000_000,
-        99_999_999,
+        1i128, 2, 3, 7, 13, 100, 101, 999, 1_000, 10_000, 123_456, 1_000_000, 99_999_999,
     ];
 
     for amount in amounts {

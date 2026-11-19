@@ -181,7 +181,10 @@ fn test_ceil_div_negative_numerator_and_denominator_rounds_up() {
 fn prop_zero_debt_health_factor_is_max() {
     assert_eq!(health_factor_bps(10_000, 0, 8_000).unwrap(), i128::MAX);
     assert_eq!(health_factor_bps(0, 0, 8_000).unwrap(), i128::MAX);
-    assert_eq!(health_factor_bps(1_000_000_000, 0, 5_000).unwrap(), i128::MAX);
+    assert_eq!(
+        health_factor_bps(1_000_000_000, 0, 5_000).unwrap(),
+        i128::MAX
+    );
 }
 
 #[test]
@@ -210,4 +213,3 @@ fn prop_non_positive_deposit_never_credits() {
         Err(SharedError::InvalidAmount)
     );
 }
-
