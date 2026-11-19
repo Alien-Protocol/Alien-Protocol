@@ -137,7 +137,7 @@ pub fn calculate_limit(env: Env, user: Address) -> Result<i128, PoolError> {
 
     let collateral_value = match vault.try_get_collateral_value(&user) {
         Ok(Ok(val)) => val,
-        _ => return Err(PoolError::NoCollateral),
+        _ => return Err(PoolError::Overflow),
     };
 
     Ok(shared::borrow_limit_from_collateral(

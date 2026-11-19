@@ -54,7 +54,7 @@ fn apply_repay(
         .try_transfer(&payer, env.current_contract_address(), &payment)
         .is_err()
     {
-        return Err(PoolError::InvalidAmount);
+        return Err(PoolError::InsufficientLiquidity);
     }
 
     user_debt.accrued_interest = user_debt
@@ -112,6 +112,7 @@ fn apply_repay(
 /// - `PoolError::NoDebt` if `user` has no outstanding debt.
 /// - `PoolError::BelowMinDebt` if the remaining debt would be non-zero but
 ///   below the minimum remaining debt.
+/// - `PoolError::InsufficientLiquidity` if token transfer from `user` fails.
 /// - `PoolError::Overflow` if debt or total borrowed would underflow.
 ///
 /// ## Events
@@ -143,6 +144,7 @@ pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<()
 /// - `PoolError::NoDebt` if `user` has no outstanding debt.
 /// - `PoolError::BelowMinDebt` if the remaining debt would be non-zero but
 ///   below the minimum remaining debt.
+/// - `PoolError::InsufficientLiquidity` if token transfer from `payer` fails.
 /// - `PoolError::Overflow` if debt or total borrowed would underflow.
 ///
 /// ## Events

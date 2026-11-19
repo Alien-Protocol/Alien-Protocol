@@ -189,13 +189,23 @@ fn prop_zero_debt_health_factor_is_max() {
 
 #[test]
 fn prop_accrual_monotonic_in_elapsed() {
-    let principal = 10_000_000;
-    let rate = 800;
-    let acc1 = accrue_linear_interest(principal, rate, 100).unwrap();
-    let acc2 = accrue_linear_interest(principal, rate, 200).unwrap();
-    let acc3 = accrue_linear_interest(principal, rate, 500).unwrap();
-    assert!(acc1 <= acc2);
-    assert!(acc2 <= acc3);
+    let principals = [1, 100, 10_000, 10_000_000, 1_000_000_000, 100_000_000_000];
+    let rates = [1, 100, 800, 2_000, 10_000];
+    let elapsed_steps = [0, 1, 10, 100, 1_000, 86_400, 31_536_000];
+
+    for &principal in &principals {
+        for &rate in &rates {
+            let mut prev = 0i128;
+            for &elapsed in &elapsed_steps {
+                let acc = accrue_linear_interest(principal, rate, elapsed).unwrap();
+                assert!(
+                    acc >= prev,
+                    "accrual must be monotonic: prev {prev}, acc {acc} (principal {principal}, rate {rate}, elapsed {elapsed})"
+                );
+                prev = acc;
+            }
+        }
+    }
 }
 
 #[test]
