@@ -95,8 +95,7 @@ fn prop_borrow_never_exceeds_calculate_limit() {
         let res = client.try_borrow(&user, &token_id, &amount);
         assert!(
             res.is_err(),
-            "Borrow exceeding limit must fail for amount {}",
-            amount
+            "Borrow exceeding limit must fail for amount {amount}"
         );
         let debt = client.get_user_debt(&user);
         assert!(
@@ -113,9 +112,7 @@ fn prop_borrow_never_exceeds_calculate_limit() {
     let debt = client.get_user_debt(&user);
     assert!(
         debt <= limit,
-        "Total debt must stay within limit: debt={}, limit={}",
-        debt,
-        limit
+        "Total debt must stay within limit: debt={debt}, limit={limit}"
     );
 
     // A second borrow that would push total debt over limit must fail
@@ -141,7 +138,7 @@ fn prop_full_repay_clears_debt() {
     for amount in borrow_amounts {
         // Borrow amount
         let res_borrow = client.try_borrow(&user, &token_id, &amount);
-        assert!(res_borrow.is_ok(), "Borrow must succeed for {}", amount);
+        assert!(res_borrow.is_ok(), "Borrow must succeed for {amount}");
 
         let debt_before = client.get_user_debt(&user);
         assert!(debt_before >= amount);
@@ -151,13 +148,12 @@ fn prop_full_repay_clears_debt() {
 
         // Repay full debt
         let res_repay = client.try_repay(&user, &token_id, &debt_before);
-        assert!(res_repay.is_ok(), "Repay must succeed for {}", debt_before);
+        assert!(res_repay.is_ok(), "Repay must succeed for {debt_before}");
 
         let debt_after = client.get_user_debt(&user);
         assert_eq!(
             debt_after, 0,
-            "Full repay must completely clear debt for amount {}",
-            amount
+            "Full repay must completely clear debt for amount {amount}"
         );
     }
 }

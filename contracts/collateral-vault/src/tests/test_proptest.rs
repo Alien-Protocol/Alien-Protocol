@@ -121,14 +121,14 @@ fn prop_deposit_withdraw_round_trip_zero_debt() {
 
         // Deposit
         let res_dep = client.try_deposit(&user, &asset, &amount);
-        assert!(res_dep.is_ok(), "Deposit failed for amount {}", amount);
+        assert!(res_dep.is_ok(), "Deposit failed for amount {amount}");
 
         let vault_bal = client.get_position_balance(&user, &asset);
         assert_eq!(vault_bal, amount);
 
         // Withdraw round-trip when debt is 0
         let res_wd = client.try_withdraw(&user, &asset, &amount);
-        assert!(res_wd.is_ok(), "Withdraw failed for amount {}", amount);
+        assert!(res_wd.is_ok(), "Withdraw failed for amount {amount}");
 
         let final_vault_bal = client.get_position_balance(&user, &asset);
         assert_eq!(
@@ -169,15 +169,13 @@ fn prop_non_positive_deposit_never_credits() {
         let res = client.try_deposit(&user, &asset, &amount);
         assert!(
             res.is_err(),
-            "Deposit must fail for non-positive amount {}",
-            amount
+            "Deposit must fail for non-positive amount {amount}"
         );
 
         let vault_bal = client.get_position_balance(&user, &asset);
         assert_eq!(
             vault_bal, 0,
-            "Balance must never credit for non-positive amount {}",
-            amount
+            "Balance must never credit for non-positive amount {amount}"
         );
     }
 }

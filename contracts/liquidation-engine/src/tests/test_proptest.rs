@@ -53,8 +53,7 @@ fn prop_bonus_within_expected_bounds() {
 
         assert_eq!(
             bonus, expected_ceil,
-            "Bonus for {} must match exact ceil_div calculation",
-            amount
+            "Bonus for {amount} must match exact ceil_div calculation"
         );
         assert!(
             bonus >= floor_val,
@@ -73,8 +72,7 @@ fn prop_non_positive_repay_rejected() {
         assert_eq!(
             res,
             Err(EngineError::InvalidAmount),
-            "Non-positive amount {} must return InvalidAmount",
-            amount
+            "Non-positive amount {amount} must return InvalidAmount"
         );
     }
 }

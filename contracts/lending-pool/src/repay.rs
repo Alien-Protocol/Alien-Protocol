@@ -51,7 +51,7 @@ fn apply_repay(
 
     let token_client = token::Client::new(&env, &borrow_asset);
     if token_client
-        .try_transfer(&payer, &env.current_contract_address(), &payment)
+        .try_transfer(&payer, env.current_contract_address(), &payment)
         .is_err()
     {
         return Err(PoolError::InvalidAmount);
