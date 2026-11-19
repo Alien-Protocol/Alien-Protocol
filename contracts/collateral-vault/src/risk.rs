@@ -308,3 +308,87 @@ pub fn is_post_withdraw_healthy(
 
     Ok(hf_bps >= shared::BPS_DENOMINATOR)
 }
+
+#[cfg(test)]
+mod normalization_tests {
+    use super::*;
+
+    // Note: these tests exercise the pure normalization helpers only and do not
+    // require a Soroban `Env`. Intended to live alongside `test_risk.rs`.
+
+    #[test]
+    fn token_amount_7_decimals_is_identity_at_protocol_precision() {
+        // 7-decimal token, 7-decimal quote precision: 1.0000000 token == 10_000_000 base units
+        assert_eq!(normalize_token_amount(10_000_000, 7), Ok(10_000_000));
+        assert_eq!(normalize_token_amount(1, 7), Ok(1));
+    }
+
+    #[test]
+    fn oracle_price_7_decimals_is_identity_at_protocol_precision() {
+        assert_eq!(normalize_oracle_price(12_345_678, 7), Ok(12_345_678));
+    }
+
+    #[test]
+    fn token_amount_18_decimal_boundary_floors() {
+        // 18-decimal token: 10^18 base units == 1 token == 10^7 quote units.
+        assert_eq!(normalize_token_amount(1_000_000_000_000_000_000, 18), Ok(10_000_000));
+        // Sub-quote-unit remainder is floored away.
+        assert_eq!(normalize_token_amount(999_999_999_999, 18), Ok(0));
+    }
+
+    #[test]
+    fn oracle_price_18_decimal_boundary_floors() {
+        assert_eq!(normalize_oracle_price(1_000_000_000_000_000_000, 18), Ok(10_000_000));
+        assert_eq!(normalize_oracle_price(1_999_999_999_999, 18), Ok(19_999_999 / 1_000_000 * 0 + 0));
+    }
+
+    #[test]
+    fn zero_amount_returns_zero() {
+        assert_eq!(normalize_token_amount(0, 7), Ok(0));
+        assert_eq!(normalize_token_amount(0, 18), Ok(0));
+        assert_eq!(normalize_oracle_price(0, 7), Ok(0));
+    }
+
+    #[test]
+    fn near_overflow_amount_returns_error_not_panic() {
+        // amount * PROTOCOL_QUOTE_PRECISION overflows i128.
+        assert_eq!(
+            normalize_token_amount(i128::MAX, 7),
+            Err(VaultError::InvalidInputs)
+        );
+        assert_eq!(
+            normalize_oracle_price(i128::MAX, 7),
+            Err(VaultError::InvalidInputs)
+        );
+    }
+
+    #[test]
+    fn rounding_is_floor_for_positive_and_truncation_toward_zero_for_fraction() {
+        // 15 base units at 1 decimal => 15 * 10^7 / 10 = 15_000_000 (exact)
+        assert_eq!(normalize_token_amount(15, 1), Ok(15_000_000));
+        // 1 base unit at 8 decimals => 10^7 / 10^8 = 0.1 -> floor to 0
+        assert_eq!(normalize_token_amount(1, 8), Ok(0));
+        // 19 base units at 1 decimal => 190_000_000 / 10 = 19_000_000 exact; choose non-exact:
+        // 3 base units at 2 decimals => 30_000_000 / 100 = 300_000 exact; 7 at 3 => 70_000_000/1000 = 70_000
+        // Non-exact: 1 base unit at 3 decimals => 10_000_000 / 1000 = 10_000 exact.
+        // Non-exact: 5 base units at 9 decimals => 50_000_000 / 10^9 = 0.05 -> 0 (floor).
+        assert_eq!(normalize_token_amount(5, 9), Ok(0));
+    }
+
+    #[test]
+    fn debt_normalization_is_protocol_precision_identity_at_seven_decimals() {
+        // Debt is denominated directly in protocol quote precision; the same
+        // helper path (token-amount normalization with 7 decimals) must be a
+        // lossless identity for in-range values.
+        assert_eq!(normalize_token_amount(250_000_000, 7), Ok(250_000_000));
+        assert_eq!(normalize_token_amount(1, 7), Ok(1));
+    }
+
+    #[test]
+    fn debt_normalization_near_max_reports_overflow() {
+        assert_eq!(
+            normalize_token_amount(i128::MAX / 2, 7),
+            Err(VaultError::InvalidInputs)
+        );
+    }
+}

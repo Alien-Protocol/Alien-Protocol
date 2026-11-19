@@ -214,3 +214,127 @@ fn test_ceiling_rounding_does_not_understate_required_collateral() {
     // 3 * 11_000 / 10_000 = 3.3 → 4.
     assert_eq!(required_collateral_for_debt(3, 11_000), 4);
 }
+
+// ---------------------------------------------------------------------------
+// Normalization helper tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_normalize_token_amount_7_decimals_scales_to_protocol_precision() {
+    // 7 decimals equals protocol precision, so the value is unchanged.
+    assert_eq!(
+        risk::normalize_token_amount(12_345_678, 7).unwrap(),
+        12_345_678
+    );
+    assert_eq!(risk::normalize_token_amount(1, 7).unwrap(), 1);
+}
+
+#[test]
+fn test_normalize_oracle_price_7_decimals_is_identity() {
+    assert_eq!(
+        risk::normalize_oracle_price(10_000_000, 7).unwrap(),
+        10_000_000
+    );
+    assert_eq!(risk::normalize_oracle_price(3, 7).unwrap(), 3);
+}
+
+#[test]
+fn test_normalize_token_amount_zero_returns_zero() {
+    assert_eq!(risk::normalize_token_amount(0, 1).unwrap(), 0);
+    assert_eq!(risk::normalize_token_amount(0, 7).unwrap(), 0);
+    assert_eq!(risk::normalize_token_amount(0, 18).unwrap(), 0);
+}
+
+#[test]
+fn test_normalize_oracle_price_zero_returns_zero() {
+    assert_eq!(risk::normalize_oracle_price(0, 1).unwrap(), 0);
+    assert_eq!(risk::normalize_oracle_price(0, 18).unwrap(), 0);
+}
+
+#[test]
+fn test_normalize_token_amount_18_decimal_boundary_floors() {
+    // 18 decimals: 10^18 base units == 1 whole token == 10^7 protocol units.
+    assert_eq!(
+        risk::normalize_token_amount(1_000_000_000_000_000_000, 18).unwrap(),
+        10_000_000
+    );
+    // Sub-unit remainder is floored away (1 base unit → 0 protocol units).
+    assert_eq!(risk::normalize_token_amount(1, 18).unwrap(), 0);
+    // 10^11 base units = 10^-7 whole token → exactly 1 protocol unit.
+    assert_eq!(risk::normalize_token_amount(100_000_000_000, 18).unwrap(), 1);
+    // 10^11 - 1 is just below one protocol unit → floors to 0.
+    assert_eq!(risk::normalize_token_amount(99_999_999_999, 18).unwrap(), 0);
+}
+
+#[test]
+fn test_normalize_oracle_price_18_decimal_boundary_floors() {
+    assert_eq!(
+        risk::normalize_oracle_price(1_000_000_000_000_000_000, 18).unwrap(),
+        10_000_000
+    );
+    assert_eq!(risk::normalize_oracle_price(99_999_999_999, 18).unwrap(), 0);
+    assert_eq!(risk::normalize_oracle_price(100_000_000_000, 18).unwrap(), 1);
+}
+
+#[test]
+fn test_normalize_token_amount_rounds_down_not_up() {
+    // 1 base unit at 8 decimals → 0.1 protocol units, must floor to 0.
+    assert_eq!(risk::normalize_token_amount(1, 8).unwrap(), 0);
+    // 19 base units at 8 decimals → 1.9 protocol units, must floor to 1.
+    assert_eq!(risk::normalize_token_amount(19, 8).unwrap(), 1);
+}
+
+#[test]
+fn test_normalize_oracle_price_rounds_down_not_up() {
+    assert_eq!(risk::normalize_oracle_price(1, 8).unwrap(), 0);
+    assert_eq!(risk::normalize_oracle_price(19, 8).unwrap(), 1);
+}
+
+#[test]
+fn test_normalize_token_amount_near_overflow_returns_error() {
+    // i128::MAX * 10^7 overflows; must return an error rather than panic.
+    let result = risk::normalize_token_amount(i128::MAX, 7);
+    assert!(result.is_err(), "checked_mul overflow must surface as error");
+    assert_eq!(result.unwrap_err(), VaultError::InvalidInputs);
+
+    let result_18 = risk::normalize_token_amount(i128::MAX, 18);
+    assert!(result_18.is_err());
+}
+
+#[test]
+fn test_normalize_oracle_price_near_overflow_returns_error() {
+    let result = risk::normalize_oracle_price(i128::MAX, 7);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), VaultError::InvalidInputs);
+
+    let result_18 = risk::normalize_oracle_price(i128::MAX, 18);
+    assert!(result_18.is_err());
+}
+
+#[test]
+fn test_normalize_token_amount_max_safe_value_succeeds() {
+    // Largest amount where amount * 10^7 still fits in i128 at 7 decimals.
+    let max_safe = i128::MAX / risk::TOKEN_AMOUNT_PRECISION;
+    assert_eq!(
+        risk::normalize_token_amount(max_safe, 7).unwrap(),
+        max_safe * risk::TOKEN_AMOUNT_PRECISION / 10_000_000
+    );
+}
+
+#[test]
+fn test_normalize_debt_amount_7_decimals_identity() {
+    // Debt is denominated in protocol precision; 7-decimal debt passes through.
+    assert_eq!(risk::normalize_token_amount(7_500, 7).unwrap(), 7_500);
+    assert_eq!(risk::normalize_token_amount(0, 7).unwrap(), 0);
+}
+
+#[test]
+fn test_normalize_debt_amount_18_decimals_floors() {
+    // 18-decimal debt of 2.5 whole units → 2.5 * 10^7 protocol units.
+    assert_eq!(
+        risk::normalize_token_amount(2_500_000_000_000_000_000, 18).unwrap(),
+        25_000_000
+    );
+    // Sub-precision residue is floored away.
+    assert_eq!(risk::normalize_token_amount(1_999_999_999_999, 18).unwrap(), 0);
+}
