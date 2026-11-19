@@ -1,6 +1,7 @@
 use crate::{errors::VaultError, events, storage, types::AssetConfig};
 use soroban_sdk::{Address, Env};
 
+/// Registers an asset with default configuration. Only the administrator may call it; panics with already-supported for duplicates.
 pub fn add_supported_asset(env: Env, asset: Address) {
     let admin = storage::get_admin(&env).expect("not initialized");
     admin.require_auth();
@@ -15,6 +16,7 @@ pub fn add_supported_asset(env: Env, asset: Address) {
     events::AssetAdded { asset }.publish(&env);
 }
 
+/// Updates a supported asset’s risk configuration. Only the administrator may call it; returns unsupported-asset, immutable-metadata, or validation errors.
 pub fn set_asset_config(
     env: Env,
     asset: Address,
@@ -61,6 +63,7 @@ pub fn set_asset_config(
     Ok(())
 }
 
+/// Returns a supported asset’s configuration. Returns unsupported-asset when the asset is not registered.
 pub fn get_asset_config(env: Env, asset: Address) -> Result<AssetConfig, VaultError> {
     if !storage::is_supported_asset(&env, &asset) {
         return Err(VaultError::UnsupportedAsset);
@@ -68,6 +71,7 @@ pub fn get_asset_config(env: Env, asset: Address) -> Result<AssetConfig, VaultEr
     Ok(storage::get_asset_config_or_default(&env, &asset))
 }
 
+/// Removes an unused supported asset. Only the administrator may call it; returns asset-not-found or asset-has-open-positions errors.
 pub fn remove_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).expect("not initialized");
     admin.require_auth();
@@ -86,6 +90,7 @@ pub fn remove_supported_asset(env: Env, asset: Address) -> Result<(), VaultError
     Ok(())
 }
 
+/// Reports whether an asset is registered as supported.
 pub fn is_supported_asset(env: Env, asset: Address) -> bool {
     storage::is_supported_asset(&env, &asset)
 }

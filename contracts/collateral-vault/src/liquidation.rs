@@ -6,6 +6,7 @@ use crate::position::checked_debit;
 use crate::storage;
 use crate::types::PauseFlag;
 
+/// Transfers seized collateral after authenticating the registered liquidation engine. Returns unauthorized, vault-paused, or debit errors without transferring funds.
 pub fn execute_seize(
     env: &Env,
     liquidation_engine: Address,
@@ -13,15 +14,26 @@ pub fn execute_seize(
     asset: Address,
     amount: i128,
 ) -> Result<(), VaultError> {
-    liquidation_engine.require_auth();
+    let registered_engine =
+        storage::get_liquidation_engine(env).ok_or(VaultError::Unauthorized)?;
 
-    let registered_engine = storage::get_liquidation_engine(env).ok_or(VaultError::Unauthorized)?;
     if liquidation_engine != registered_engine {
         return Err(VaultError::Unauthorized);
     }
 
+    registered_engine.require_auth();
+
     if storage::is_operation_paused(env, &PauseFlag::Liquidation) {
         return Err(VaultError::VaultPaused);
+    }
+
+    if let Some(pool_addr) = storage::get_lending_pool(env) {
+        let pool_client = LendingPoolClient::new(env, &pool_addr);
+        if !pool_client.is_liquidatable(&user) {
+            return Err(VaultError::NotLiquidatable);
+        }
+    } else {
+        return Err(VaultError::NotLiquidatable);
     }
 
     let _new_balance = checked_debit(env, &user, &asset, amount)?;
