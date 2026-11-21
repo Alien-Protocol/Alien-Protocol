@@ -65,7 +65,8 @@ pub fn accrue_linear_interest(
     let annual = principal
         .checked_mul(rate_bps as i128)
         .ok_or(SharedError::Overflow)?
-        / BPS_DENOMINATOR;
+        .checked_div(BPS_DENOMINATOR)
+        .ok_or(SharedError::DivisionByZero)?;
     annual
         .checked_mul(elapsed_seconds as i128)
         .ok_or(SharedError::Overflow)?
@@ -90,7 +91,9 @@ pub fn health_factor_bps(
     let numerator = collateral_value
         .checked_mul(liquidation_threshold_bps as i128)
         .ok_or(SharedError::Overflow)?;
-    Ok(numerator / debt)
+    numerator
+        .checked_div(debt)
+        .ok_or(SharedError::DivisionByZero)
 }
 
 pub fn borrow_limit_from_collateral(
@@ -111,8 +114,12 @@ pub fn ceil_div(numerator: i128, denominator: i128) -> Result<i128, SharedError>
     if denominator == 0 {
         return Err(SharedError::DivisionByZero);
     }
-    let quotient = numerator / denominator;
-    let remainder = numerator % denominator;
+    let quotient = numerator
+        .checked_div(denominator)
+        .ok_or(SharedError::Overflow)?;
+    let remainder = numerator
+        .checked_rem(denominator)
+        .ok_or(SharedError::Overflow)?;
     if remainder != 0 && ((remainder > 0) == (denominator > 0)) {
         quotient.checked_add(1).ok_or(SharedError::Overflow)
     } else {

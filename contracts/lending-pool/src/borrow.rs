@@ -93,7 +93,12 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
     storage::set_total_borrowed(&env, new_total_borrowed);
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    token_client.transfer(&env.current_contract_address(), &user, &amount);
+    if token_client
+        .try_transfer(&env.current_contract_address(), &user, &amount)
+        .is_err()
+    {
+        return Err(PoolError::InsufficientLiquidity);
+    }
 
     events::Borrowed {
         user,
@@ -119,7 +124,10 @@ pub fn calculate_limit(env: Env, user: Address) -> Result<i128, PoolError> {
 
     let mut max_ltv_bps: Option<u32> = None;
     for item in position.collateral.iter() {
-        let config = vault.get_asset_config(&item.asset);
+        let config = match vault.try_get_asset_config(&item.asset) {
+            Ok(Ok(cfg)) => cfg,
+            _ => return Err(PoolError::UnsupportedAsset),
+        };
         max_ltv_bps = Some(match max_ltv_bps {
             Some(current) => current.min(config.max_ltv_bps),
             None => config.max_ltv_bps,
@@ -127,7 +135,10 @@ pub fn calculate_limit(env: Env, user: Address) -> Result<i128, PoolError> {
     }
     let max_ltv_bps = max_ltv_bps.ok_or(PoolError::NoCollateral)?;
 
-    let collateral_value = vault.get_collateral_value(&user);
+    let collateral_value = match vault.try_get_collateral_value(&user) {
+        Ok(Ok(val)) => val,
+        _ => return Err(PoolError::Overflow),
+    };
 
     Ok(shared::borrow_limit_from_collateral(
         collateral_value,

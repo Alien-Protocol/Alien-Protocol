@@ -271,7 +271,10 @@ impl VaultContract {
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
         let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
-            pool_client.get_user_debt(&user)
+            match pool_client.try_get_user_debt(&user) {
+                Ok(Ok(debt)) => debt,
+                _ => 0,
+            }
         } else {
             0
         };
