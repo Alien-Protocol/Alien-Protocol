@@ -5,6 +5,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
 use super::super::*;
 use crate::errors::EngineError;
+use crate::liquidate::{PoolPauseFlag, VaultPauseFlag};
 
 // ---------------------------------------------------------------------------
 // Minimal mock Vault / Pool / Oracle contracts.
@@ -25,6 +26,7 @@ enum VaultKey {
     AssetConfig(Address),
     HealthFactor(Address),
     CollateralValue(Address),
+    Paused(VaultPauseFlag),
 }
 
 #[contract]
@@ -58,6 +60,19 @@ impl MockVaultContract {
         env.storage()
             .persistent()
             .set(&VaultKey::CollateralValue(user), &value);
+    }
+
+    pub fn set_operation_paused(env: Env, operation: VaultPauseFlag, paused: bool) {
+        env.storage()
+            .persistent()
+            .set(&VaultKey::Paused(operation), &paused);
+    }
+
+    pub fn is_operation_paused(env: Env, operation: VaultPauseFlag) -> bool {
+        env.storage()
+            .persistent()
+            .get(&VaultKey::Paused(operation))
+            .unwrap_or(false)
     }
 
     pub fn get_liquidation_engine(env: Env) -> Option<Address> {
@@ -114,6 +129,7 @@ enum PoolKey {
     BorrowAsset,
     Debt(Address),
     LastRepay,
+    Paused(PoolPauseFlag),
 }
 
 #[contract]
@@ -129,6 +145,19 @@ impl MockPoolContract {
 
     pub fn set_debt(env: Env, user: Address, debt: i128) {
         env.storage().persistent().set(&PoolKey::Debt(user), &debt);
+    }
+
+    pub fn set_operation_paused(env: Env, operation: PoolPauseFlag, paused: bool) {
+        env.storage()
+            .persistent()
+            .set(&PoolKey::Paused(operation), &paused);
+    }
+
+    pub fn is_operation_paused(env: Env, operation: PoolPauseFlag) -> bool {
+        env.storage()
+            .persistent()
+            .get(&PoolKey::Paused(operation))
+            .unwrap_or(false)
     }
 
     pub fn get_borrow_asset(env: Env) -> Option<Address> {
@@ -567,4 +596,79 @@ fn test_calculate_partial_repayment_non_exact_lt_reaches_target_hf() {
         shared::TARGET_HF_BPS
     );
     assert_eq!(post_hf, shared::TARGET_HF_BPS);
+}
+
+// ---------------------------------------------------------------------------
+// liquidate: pause gate (vault `Liquidation`, pool `Repay`)
+// ---------------------------------------------------------------------------
+
+/// Snapshot of every balance a liquidation could move, so the pause tests can
+/// prove a rejected call left state untouched.
+fn balances(ctx: &Env_) -> (i128, i128, i128, i128) {
+    (
+        ctx.pool.get_user_debt(&ctx.user),
+        ctx.borrow_token.balance(&ctx.liquidator),
+        ctx.collateral_token.balance(&ctx.liquidator),
+        ctx.collateral_token.balance(&ctx.vault_addr),
+    )
+}
+
+#[test]
+fn test_liquidate_fails_when_vault_liquidation_paused() {
+    let ctx = setup();
+    ctx.vault
+        .set_operation_paused(&VaultPauseFlag::Liquidation, &true);
+    let before = balances(&ctx);
+
+    let result = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+
+    assert_eq!(result, Err(Ok(EngineError::VaultPaused)));
+    assert_eq!(balances(&ctx), before);
+    assert_eq!(ctx.pool.get_user_debt(&ctx.user), DEBT);
+}
+
+#[test]
+fn test_liquidate_fails_when_pool_repay_paused() {
+    let ctx = setup();
+    ctx.pool.set_operation_paused(&PoolPauseFlag::Repay, &true);
+    let before = balances(&ctx);
+
+    let result = ctx.engine.try_liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+
+    assert_eq!(result, Err(Ok(EngineError::PoolPaused)));
+    assert_eq!(balances(&ctx), before);
+    assert_eq!(ctx.pool.get_user_debt(&ctx.user), DEBT);
+}
+
+#[test]
+fn test_liquidate_succeeds_when_unpaused() {
+    let ctx = setup();
+    // Explicitly unpaused on both sides, not just defaulted.
+    ctx.vault
+        .set_operation_paused(&VaultPauseFlag::Liquidation, &false);
+    ctx.pool.set_operation_paused(&PoolPauseFlag::Repay, &false);
+
+    let result = ctx.engine.liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+
+    assert_eq!(result.repaid, EXPECTED_PARTIAL_REPAY);
+    assert_eq!(
+        ctx.pool.get_user_debt(&ctx.user),
+        DEBT - EXPECTED_PARTIAL_REPAY
+    );
+}
+
+#[test]
+fn test_liquidate_ignores_unrelated_pause_flags() {
+    let ctx = setup();
+    // Pausing other operations must not block liquidations.
+    ctx.vault
+        .set_operation_paused(&VaultPauseFlag::Deposit, &true);
+    ctx.vault
+        .set_operation_paused(&VaultPauseFlag::Withdraw, &true);
+    ctx.pool.set_operation_paused(&PoolPauseFlag::Borrow, &true);
+    ctx.pool.set_operation_paused(&PoolPauseFlag::Supply, &true);
+
+    let result = ctx.engine.liquidate(&ctx.liquidator, &ctx.user, &DEBT);
+
+    assert_eq!(result.repaid, EXPECTED_PARTIAL_REPAY);
 }
