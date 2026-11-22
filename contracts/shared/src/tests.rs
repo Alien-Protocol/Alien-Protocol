@@ -176,3 +176,50 @@ fn test_ceil_div_negative_numerator_and_denominator_rounds_up() {
     // ceil(-1 / -2) = ceil(0.5) = 1
     assert_eq!(ceil_div(-1, -2).unwrap(), 1);
 }
+
+#[test]
+fn prop_zero_debt_health_factor_is_max() {
+    assert_eq!(health_factor_bps(10_000, 0, 8_000).unwrap(), i128::MAX);
+    assert_eq!(health_factor_bps(0, 0, 8_000).unwrap(), i128::MAX);
+    assert_eq!(
+        health_factor_bps(1_000_000_000, 0, 5_000).unwrap(),
+        i128::MAX
+    );
+}
+
+#[test]
+fn prop_accrual_monotonic_in_elapsed() {
+    let principals = [1, 100, 10_000, 10_000_000, 1_000_000_000, 100_000_000_000];
+    let rates = [1, 100, 800, 2_000, 10_000];
+    let elapsed_steps = [0, 1, 10, 100, 1_000, 86_400, 31_536_000];
+
+    for &principal in &principals {
+        for &rate in &rates {
+            let mut prev = 0i128;
+            for &elapsed in &elapsed_steps {
+                let acc = accrue_linear_interest(principal, rate, elapsed).unwrap();
+                assert!(
+                    acc >= prev,
+                    "accrual must be monotonic: prev {prev}, acc {acc} (principal {principal}, rate {rate}, elapsed {elapsed})"
+                );
+                prev = acc;
+            }
+        }
+    }
+}
+
+#[test]
+fn prop_non_positive_deposit_never_credits() {
+    assert_eq!(
+        accrue_linear_interest(-100, 800, 100),
+        Err(SharedError::InvalidAmount)
+    );
+    assert_eq!(
+        health_factor_bps(-10, 100, 8_000),
+        Err(SharedError::InvalidAmount)
+    );
+    assert_eq!(
+        borrow_limit_from_collateral(-500, 8_000),
+        Err(SharedError::InvalidAmount)
+    );
+}
