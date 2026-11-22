@@ -13,4 +13,8 @@ pub enum EngineError {
     NotLiquidatable = 7,
     NoPosition = 8,
     Overflow = 9,
+    /// The collateral vault has `PauseFlag::Liquidation` set.
+    VaultPaused = 10,
+    /// The lending pool has `PauseFlag::Repay` set.
+    PoolPaused = 11,
 }

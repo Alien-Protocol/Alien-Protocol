@@ -109,6 +109,10 @@ impl VaultContract {
         admin::unpause_operation(env, operation)
     }
 
+    /// Returns `true` if `operation` is currently paused on this vault.
+    ///
+    /// Read-only and callable by anyone; the liquidation engine uses it to
+    /// refuse liquidations while `PauseFlag::Liquidation` is set.
     pub fn is_operation_paused(env: Env, operation: PauseFlag) -> bool {
         storage::is_operation_paused(&env, &operation)
     }
@@ -267,7 +271,10 @@ impl VaultContract {
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
         let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
-            pool_client.get_user_debt(&user)
+            match pool_client.try_get_user_debt(&user) {
+                Ok(Ok(debt)) => debt,
+                _ => 0,
+            }
         } else {
             0
         };

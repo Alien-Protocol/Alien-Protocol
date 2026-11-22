@@ -649,6 +649,21 @@ fn test_all_operations_independent() {
 }
 
 #[test]
+fn test_is_operation_paused_reflects_liquidation_flag() {
+    let (env, client, _admin, _user, _token_client, _token_admin, _token_id) = setup_env();
+
+    assert!(!client.is_operation_paused(&PauseFlag::Liquidation));
+
+    client.pause_operation(&PauseFlag::Liquidation, &Symbol::new(&env, "halt_liq"));
+    assert!(client.is_operation_paused(&PauseFlag::Liquidation));
+    // Other flags are independent.
+    assert!(!client.is_operation_paused(&PauseFlag::Deposit));
+
+    client.unpause_operation(&PauseFlag::Liquidation);
+    assert!(!client.is_operation_paused(&PauseFlag::Liquidation));
+}
+
+#[test]
 fn test_is_operation_paused_matches_pause_mask() {
     let (env, client, _admin, _user, _token_client, _token_admin, _token_id) = setup_env();
 

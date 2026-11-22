@@ -44,6 +44,14 @@ impl PoolContract {
         admin::unpause_operation(env, operation)
     }
 
+    /// Returns `true` if `operation` is currently paused on this pool.
+    ///
+    /// Read-only and callable by anyone; the liquidation engine uses it to
+    /// refuse liquidations while `PauseFlag::Repay` is set.
+    pub fn is_operation_paused(env: Env, operation: PauseFlag) -> bool {
+        storage::is_operation_paused(&env, &operation)
+    }
+
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
     }
