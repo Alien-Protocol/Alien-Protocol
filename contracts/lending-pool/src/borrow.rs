@@ -81,16 +81,13 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
         user_debt.interest_rate_bps = storage::get_interest_rate_bps(&env);
         user_debt.last_accrual_at = env.ledger().timestamp();
     }
-    user_debt.principal = user_debt
+    let new_principal = user_debt
         .principal
         .checked_add(amount)
         .ok_or(PoolError::Overflow)?;
-    debt::store_debt(&env, &user, &user_debt);
-
     let new_total_borrowed = storage::get_total_borrowed(&env)
         .checked_add(amount)
         .ok_or(PoolError::Overflow)?;
-    storage::set_total_borrowed(&env, new_total_borrowed);
 
     let token_client = token::Client::new(&env, &borrow_asset);
     if token_client
@@ -99,6 +96,10 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
     {
         return Err(PoolError::InsufficientLiquidity);
     }
+
+    user_debt.principal = new_principal;
+    debt::store_debt(&env, &user, &user_debt);
+    storage::set_total_borrowed(&env, new_total_borrowed);
 
     events::Borrowed {
         user,
@@ -124,6 +125,9 @@ pub fn calculate_limit(env: Env, user: Address) -> Result<i128, PoolError> {
 
     let mut max_ltv_bps: Option<u32> = None;
     for item in position.collateral.iter() {
+        if item.amount <= 0 {
+            continue;
+        }
         let config = match vault.try_get_asset_config(&item.asset) {
             Ok(Ok(cfg)) => cfg,
             _ => return Err(PoolError::UnsupportedAsset),
