@@ -91,17 +91,16 @@ pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
-    if is_set(storage::get_pause_mask(&env), operation.bit()) {
+    let current_mask = storage::get_pause_mask(&env);
+    if is_set(current_mask, operation.bit()) {
         return Err(VaultError::AlreadyPaused);
     }
 
-    let mask = storage::get_pause_mask(&env);
-    storage::set_pause_mask(&env, set_flag(mask, operation.bit()));
+    let new_mask = set_flag(current_mask, operation.bit());
+    storage::set_pause_mask(&env, new_mask);
 
-    let op_symbol = crate::types::pause_flag_symbol(&env, &operation);
     events::OperationPaused {
-        by: admin,
-        operation: op_symbol,
+        operation,
         reason,
     }
     .publish(&env);
@@ -109,23 +108,21 @@ pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result
     Ok(())
 }
 
-/// Unpause a specific operation. Only callable by the admin (emergency role).
-/// Returns an error if the operation is not currently paused.
-pub fn unpause_operation(env: Env, operation: PauseFlag) -> Result<(), VaultError> {
+/// Resumes a paused operation. Only the administrator may call it; returns not-paused when applicable.
+pub fn resume_operation(env: Env, operation: PauseFlag) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
-    if !is_set(storage::get_pause_mask(&env), operation.bit()) {
+    let current_mask = storage::get_pause_mask(&env);
+    if !is_set(current_mask, operation.bit()) {
         return Err(VaultError::NotPaused);
     }
 
-    let mask = storage::get_pause_mask(&env);
-    storage::set_pause_mask(&env, clear_flag(mask, operation.bit()));
+    let new_mask = clear_flag(current_mask, operation.bit());
+    storage::set_pause_mask(&env, new_mask);
 
-    let op_symbol = crate::types::pause_flag_symbol(&env, &operation);
-    events::OperationUnpaused {
-        by: admin,
-        operation: op_symbol,
+    events::OperationResumed {
+        operation,
     }
     .publish(&env);
 
