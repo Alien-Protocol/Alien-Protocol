@@ -1,3 +1,31 @@
+//! Storage scopes for the oracle adapter.
+//!
+//! Decision: keep `Admin`, `StalenessThreshold`, and `Paused` in instance
+//! storage rather than standardizing on the other contracts' persistent admin
+//! keys. These are a small, bounded set of contract-wide settings used by the
+//! oracle's authorization, freshness, and pause checks. Instance storage embeds
+//! them in the contract instance entry, which is already loaded for an
+//! invocation, avoiding a separate ledger entry for each setting. Keeping this
+//! always-loaded data small is the tradeoff; per-asset prices and per-address
+//! feeder permissions can grow, so they remain in persistent storage.
+//!
+//! # TTL and archival
+//!
+//! Instance keys share the contract instance entry's TTL; they have no
+//! independent per-key lifetime. This is acceptable because the singleton
+//! configuration should live and be restored with the oracle instance, not
+//! expire separately while the oracle is otherwise callable. Archival is not
+//! permanent deletion or permission to reinitialize: restore the archived
+//! instance, including its configuration, before executing contract calls.
+//!
+//! These helpers do not extend TTLs, and ordinary reads/writes are not a TTL
+//! maintenance policy. Deployment operators must maintain the instance and
+//! contract code lifetimes (for example, through explicit TTL extension) and
+//! arrange restoration when needed. Persistent prices and feeder permissions
+//! have their own entry TTLs and need separate maintenance/restoration; keeping
+//! the instance alive does not extend those entries. No keys, values, or storage
+//! scopes are changed by this documentation decision.
+
 use soroban_sdk::{Address, Env};
 
 use crate::types::{DataKey, PriceData};

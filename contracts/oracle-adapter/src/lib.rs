@@ -1,4 +1,11 @@
 #![no_std]
+
+// RedStone's processor APIs are expressed in terms of `alloc` collections (`alloc::vec::Vec`,
+// `alloc::vec!`) and this crate is `no_std`, so the `alloc` crate must be linked explicitly.
+// It is the only allocator entry point in the crate; Soroban collection types (`soroban_sdk::Vec`)
+// are used everywhere else, which keeps the WASM footprint minimal.
+extern crate alloc;
+
 use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, Symbol, Vec};
 
 mod errors;
@@ -13,6 +20,15 @@ pub use types::{DataKey, PriceData};
 
 #[contract]
 pub struct OracleContract;
+
+/// Load the admin address or panic with `NotInitialized` if the contract has not been initialized.
+/// This is the single source of truth for the admin-load block across all panicking entry points.
+fn admin_or_panic(env: &Env) -> Address {
+    match storage::get_admin(env) {
+        Some(addr) => addr,
+        None => soroban_sdk::panic_with_error!(env, OracleError::NotInitialized),
+    }
+}
 
 #[contractimpl]
 impl OracleContract {
@@ -63,10 +79,7 @@ impl OracleContract {
     }
 
     pub fn set_price(env: Env, caller: Address, asset: Address, price: i128, timestamp: u64) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         let is_admin = caller == admin;
         let is_authorized_feeder = storage::is_authorized_feeder(&env, &caller);
 
@@ -128,10 +141,7 @@ impl OracleContract {
     }
 
     pub fn set_staleness_threshold(env: Env, threshold: u64) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if threshold == 0 {
@@ -144,10 +154,7 @@ impl OracleContract {
     }
 
     pub fn set_admin(env: Env, new_admin: Address) {
-        let current_admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let current_admin = admin_or_panic(&env);
         current_admin.require_auth();
 
         if current_admin == new_admin {
@@ -164,10 +171,7 @@ impl OracleContract {
     }
 
     pub fn pause(env: Env) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if storage::is_paused(&env) {
@@ -179,10 +183,7 @@ impl OracleContract {
     }
 
     pub fn unpause(env: Env) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if !storage::is_paused(&env) {
@@ -194,10 +195,7 @@ impl OracleContract {
     }
 
     pub fn add_authorized_feeder(env: Env, feeder: Address) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if storage::is_authorized_feeder(&env, &feeder) {
@@ -210,10 +208,7 @@ impl OracleContract {
     }
 
     pub fn remove_authorized_feeder(env: Env, feeder: Address) {
-        let admin = match storage::get_admin(&env) {
-            Some(addr) => addr,
-            None => soroban_sdk::panic_with_error!(&env, OracleError::NotInitialized),
-        };
+        let admin = admin_or_panic(&env);
         admin.require_auth();
 
         if !storage::has_authorized_feeder(&env, &feeder) {
@@ -264,6 +259,10 @@ impl OracleContract {
             return Err(OracleError::Unauthorized);
         }
         caller.require_auth();
+
+        if threshold == 0 || threshold > signers.len() || threshold > (u8::MAX as u32) {
+            return Err(OracleError::InvalidThreshold);
+        }
 
         oracle::storage::set_redstone_signers(&env, &signers);
         oracle::storage::set_redstone_threshold(&env, threshold);

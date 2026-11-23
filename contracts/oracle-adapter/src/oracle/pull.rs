@@ -1,5 +1,3 @@
-extern crate alloc;
-
 use crate::oracle::processor;
 use crate::OracleError;
 use soroban_sdk::{Bytes, Env, Symbol, Vec};
