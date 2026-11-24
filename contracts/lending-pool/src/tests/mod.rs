@@ -1,7 +1,9 @@
 mod test_accrual;
 mod test_admin;
+mod test_borrow;
 mod test_pause;
 
+mod test_proptest;
 mod test_repay;
 mod test_repay_for;
 mod test_supply;

@@ -1,5 +1,3 @@
-extern crate alloc;
-
 use crate::oracle::{processor, storage};
 use crate::OracleError;
 use soroban_sdk::{contractevent, Address, Bytes, Env, Symbol, Vec};

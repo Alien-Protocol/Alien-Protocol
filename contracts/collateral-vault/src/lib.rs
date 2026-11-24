@@ -109,7 +109,15 @@ impl VaultContract {
         admin::unpause_operation(env, operation)
     }
 
-    pub fn add_supported_asset(env: Env, asset: Address) {
+    /// Returns `true` if `operation` is currently paused on this vault.
+    ///
+    /// Read-only and callable by anyone; the liquidation engine uses it to
+    /// refuse liquidations while `PauseFlag::Liquidation` is set.
+    pub fn is_operation_paused(env: Env, operation: PauseFlag) -> bool {
+        storage::is_operation_paused(&env, &operation)
+    }
+
+    pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
         assets::add_supported_asset(env, asset)
     }
 
@@ -182,6 +190,9 @@ impl VaultContract {
 
     pub fn deposit(env: Env, user: Address, asset: Address, amount: i128) {
         user.require_auth();
+
+        position::validate_positive_amount(amount)
+            .unwrap_or_else(|e| soroban_sdk::panic_with_error!(&env, e));
 
         if storage::is_operation_paused(&env, &PauseFlag::Deposit) {
             soroban_sdk::panic_with_error!(&env, VaultError::VaultPaused);
@@ -260,7 +271,10 @@ impl VaultContract {
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
         let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
-            pool_client.get_user_debt(&user)
+            match pool_client.try_get_user_debt(&user) {
+                Ok(Ok(debt)) => debt,
+                _ => 0,
+            }
         } else {
             0
         };

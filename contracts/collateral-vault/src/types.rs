@@ -99,9 +99,6 @@ pub fn pause_flag_symbol(env: &soroban_sdk::Env, flag: &PauseFlag) -> soroban_sd
 pub enum DataKey {
     /// Admin address key
     Admin,
-    /// Legacy circuit-breaker flag. Retained for storage-schema backward
-    /// compatibility; new code uses the granular `PauseMask` key instead.
-    Paused,
     /// Canonical lending pool address
     LendingPool,
     /// Supported asset key: stores whether a specific asset is supported
@@ -120,8 +117,6 @@ pub enum DataKey {
     Oracle,
     /// Liquidation engine address
     LiquidationEngine,
-    /// Lending pool address (alternative key)
-    Pool,
     /// Contract version key
     ContractVersion,
     /// Storage schema version key

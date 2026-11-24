@@ -1,10 +1,9 @@
 #![cfg(test)]
 
 use super::super::*;
+use super::helpers::ORACLE_STALE_THRESHOLD;
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol};
-
-const ORACLE_STALE_THRESHOLD: u64 = 300;
 
 #[contract]
 pub struct MockLendingPool;
@@ -20,7 +19,7 @@ impl MockLendingPool {
     }
 
     pub fn is_liquidatable(_env: Env, _user: Address) -> bool {
-        false
+        true
     }
 }
 
@@ -647,4 +646,19 @@ fn test_all_operations_independent() {
     // All unpaused now - verify deposit/withdraw work
     client.deposit(&user, &token_id, &100);
     assert_eq!(client.get_position_balance(&user, &token_id), 600);
+}
+
+#[test]
+fn test_is_operation_paused_reflects_liquidation_flag() {
+    let (env, client, _admin, _user, _token_client, _token_admin, _token_id) = setup_env();
+
+    assert!(!client.is_operation_paused(&PauseFlag::Liquidation));
+
+    client.pause_operation(&PauseFlag::Liquidation, &Symbol::new(&env, "halt_liq"));
+    assert!(client.is_operation_paused(&PauseFlag::Liquidation));
+    // Other flags are independent.
+    assert!(!client.is_operation_paused(&PauseFlag::Deposit));
+
+    client.unpause_operation(&PauseFlag::Liquidation);
+    assert!(!client.is_operation_paused(&PauseFlag::Liquidation));
 }

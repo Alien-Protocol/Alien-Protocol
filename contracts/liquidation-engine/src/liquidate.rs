@@ -1,13 +1,39 @@
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{contracttype, token, Address, Env};
 
 use crate::errors::EngineError;
 use crate::events;
 use crate::storage;
 use crate::types::LiquidationResult;
 use shared::{
-    ceil_div, CollateralAsset, CLOSE_FACTOR_BPS, HEALTHY_HF_BPS, LIQUIDATION_BONUS_BPS,
-    MIN_REMAINING_DEBT, PROTOCOL_QUOTE_PRECISION, TARGET_HF_BPS,
+    ceil_div, CollateralAsset, BPS_DENOMINATOR, CLOSE_FACTOR_BPS, HEALTHY_HF_BPS,
+    LIQUIDATION_BONUS_BPS, MIN_REMAINING_DEBT, PROTOCOL_QUOTE_PRECISION, TARGET_HF_BPS,
 };
+
+/// Mirror of `collateral-vault`'s `PauseFlag`.
+///
+/// Unit-variant `contracttype` enums are encoded by variant name, so this
+/// decodes identically on the vault side. Keep the variant names in sync with
+/// `contracts/collateral-vault/src/types.rs`.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultPauseFlag {
+    Deposit,
+    Borrow,
+    Withdraw,
+    Liquidation,
+    Recovery,
+}
+
+/// Mirror of `lending-pool`'s `PauseFlag`. Keep the variant names in sync with
+/// `contracts/lending-pool/src/types.rs`.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PoolPauseFlag {
+    Supply,
+    Borrow,
+    Repay,
+    WithdrawLiquidity,
+}
 
 #[soroban_sdk::contractclient(name = "VaultClient")]
 #[allow(dead_code)]
@@ -24,6 +50,7 @@ pub trait Vault {
     fn get_position(env: Env, user: Address) -> shared::Position;
     fn get_asset_config(env: Env, asset: Address) -> shared::AssetConfig;
     fn get_liquidation_engine(env: Env) -> Option<Address>;
+    fn is_operation_paused(env: Env, operation: VaultPauseFlag) -> bool;
 }
 
 #[soroban_sdk::contractclient(name = "PoolClient")]
@@ -33,6 +60,7 @@ pub trait Pool {
     fn is_liquidatable(env: Env, user: Address) -> bool;
     fn repay_for(env: Env, payer: Address, user: Address, asset: Address, amount: i128);
     fn get_borrow_asset(env: Env) -> Option<Address>;
+    fn is_operation_paused(env: Env, operation: PoolPauseFlag) -> bool;
 }
 
 /// Oracle client for the liquidation engine, matching `oracle-adapter`'s
@@ -47,8 +75,18 @@ pub trait Oracle {
 }
 
 /// Converts a quote-unit value (`PROTOCOL_QUOTE_PRECISION`-scaled) into base
-/// token units of an asset, given its decimals and oracle price. Rounds up so
-/// the protocol never under-seizes.
+/// token units of an asset, given its decimals and oracle price.
+///
+/// Formula:
+/// ```text
+/// token_amount = ceil(value × 10^(token_decimals + oracle_price_decimals)
+///                     / (PROTOCOL_QUOTE_PRECISION × price))
+/// ```
+///
+/// Rounding: **ceiling** (`ceil_div`). Rounding up means the engine always
+/// requests at least as many tokens as the quote value requires, so the
+/// protocol never under-seizes collateral when converting a target seizure
+/// value back into token units.
 fn value_to_token_amount(
     value: i128,
     price: i128,
@@ -66,10 +104,20 @@ fn value_to_token_amount(
     ceil_div(numerator, denominator).map_err(|_| EngineError::Overflow)
 }
 
-/// Converts base token units of an asset back into a quote-unit value, given
-/// its decimals and oracle price. Rounds down (floor) so that when a full
-/// collateral balance is seized, the value credited toward the seizure target
-/// never exceeds what was actually taken.
+/// Converts base token units of an asset back into a quote-unit value
+/// (`PROTOCOL_QUOTE_PRECISION`-scaled), given its decimals and oracle price.
+///
+/// Formula:
+/// ```text
+/// value = floor(amount × PROTOCOL_QUOTE_PRECISION × price
+///               / 10^(token_decimals + oracle_price_decimals))
+/// ```
+///
+/// Rounding: **floor** (integer division). Rounding down means the value
+/// credited for a seized balance never exceeds what was actually taken, so
+/// when the engine iterates assets and a full balance does not cover the
+/// remaining seizure target, the residual `remaining_value` is never
+/// artificially reduced.
 fn token_amount_to_value(
     amount: i128,
     price: i128,
@@ -88,6 +136,29 @@ fn token_amount_to_value(
     numerator.checked_div(scale).ok_or(EngineError::Overflow)
 }
 
+/// Executes a liquidation: the liquidator repays up to the partial-repayment
+/// cap and receives collateral worth `repay + bonus` from the user's vault
+/// position.
+///
+/// Collateral selection is a greedy largest-first strategy. Each iteration
+/// scans the position's collateral vector and seizes from the asset with the
+/// biggest token balance. Ties are broken by order in `get_position`: the
+/// scan uses a strict `>` comparison, so among equal balances the asset
+/// appearing earliest in the vector always wins. Selection therefore costs
+/// O(n²) in the number of collateral assets — acceptable because positions
+/// carry few assets, but worth knowing when reasoning about gas.
+///
+/// Instead of removing processed assets from the vector, each one is zeroed
+/// in a local copy of the collateral list. A zeroed entry can never win the
+/// `candidate.amount > best_amount` comparison (best starts at 0), so assets
+/// already seized are skipped without changing the vector's length or index
+/// stability. The loop runs at most once per collateral asset and exits early
+/// once `remaining_value` reaches 0.
+///
+/// After the loop, a final `remaining_value > 0` guard reverts with
+/// `EngineError::InvalidAmount` if the position's collateral could not cover
+/// the seizure target — no partial seize is committed on an under-collateralised
+/// liquidation.
 pub fn liquidate(
     env: Env,
     liquidator: Address,
@@ -112,11 +183,22 @@ pub fn liquidate(
     let pool = PoolClient::new(&env, &pool_addr);
     let oracle = OracleClient::new(&env, &oracle_addr);
 
+    // Respect operator circuit breakers before touching any balances: a
+    // liquidation seizes vault collateral and repays pool debt, so it must not
+    // run while either of those paths is paused.
+    if vault.is_operation_paused(&VaultPauseFlag::Liquidation) {
+        return Err(EngineError::VaultPaused);
+    }
+    if pool.is_operation_paused(&PoolPauseFlag::Repay) {
+        return Err(EngineError::PoolPaused);
+    }
+
     let engine_address = env.current_contract_address();
 
-    let registered_engine = vault
-        .get_liquidation_engine()
-        .ok_or(EngineError::Unauthorized)?;
+    let registered_engine = match vault.try_get_liquidation_engine() {
+        Ok(Ok(Some(engine))) => engine,
+        _ => return Err(EngineError::Unauthorized),
+    };
     if registered_engine != engine_address {
         return Err(EngineError::Unauthorized);
     }
@@ -128,12 +210,25 @@ pub fn liquidate(
     let max_partial_repay = calculate_partial_repayment(env.clone(), user.clone())?;
     let repay = max_repay_amount.min(max_partial_repay);
 
-    let borrow_asset = pool.get_borrow_asset().ok_or(EngineError::NotInitialized)?;
+    let borrow_asset = match pool.try_get_borrow_asset() {
+        Ok(Ok(Some(asset))) => asset,
+        _ => return Err(EngineError::NotInitialized),
+    };
 
     // Pull the repayment from the liquidator into the engine, then forward it
     // to the pool on the engine's own behalf.
-    token::Client::new(&env, &borrow_asset).transfer(&liquidator, &engine_address, &repay);
-    pool.repay_for(&engine_address, &user, &borrow_asset, &repay);
+    if token::Client::new(&env, &borrow_asset)
+        .try_transfer(&liquidator, &engine_address, &repay)
+        .is_err()
+    {
+        return Err(EngineError::InvalidAmount);
+    }
+    if pool
+        .try_repay_for(&engine_address, &user, &borrow_asset, &repay)
+        .is_err()
+    {
+        return Err(EngineError::InvalidAmount);
+    }
 
     let bonus = calculate_bonus(env.clone(), repay)?;
     let seized_value = repay.checked_add(bonus).ok_or(EngineError::Overflow)?;
@@ -142,7 +237,10 @@ pub fn liquidate(
     // Seize collateral starting from the user's largest-balance asset (ties
     // broken by order in `get_position`), moving to the next asset whenever
     // one balance is insufficient to cover the remaining seized value.
-    let position = vault.get_position(&user);
+    let position = match vault.try_get_position(&user) {
+        Ok(Ok(pos)) => pos,
+        _ => return Err(EngineError::NoPosition),
+    };
     let mut collateral = position.collateral.clone();
     let len = collateral.len();
 
@@ -166,8 +264,14 @@ pub fn liquidate(
         let asset = candidate.asset.clone();
         let balance = candidate.amount;
 
-        let asset_config = vault.get_asset_config(&asset);
-        let price_data = oracle.get_price_or_fail(&asset);
+        let asset_config = match vault.try_get_asset_config(&asset) {
+            Ok(Ok(config)) => config,
+            _ => return Err(EngineError::NoPosition),
+        };
+        let price_data = match oracle.try_get_price_or_fail(&asset) {
+            Ok(Ok(pd)) => pd,
+            _ => return Err(EngineError::InvalidAmount),
+        };
 
         let token_amount_needed = value_to_token_amount(
             remaining_value,
@@ -202,8 +306,18 @@ pub fn liquidate(
         );
 
         if seize_amount > 0 {
-            vault.seize_collateral(&engine_address, &user, &asset, &seize_amount);
-            token::Client::new(&env, &asset).transfer(&engine_address, &liquidator, &seize_amount);
+            if vault
+                .try_seize_collateral(&engine_address, &user, &asset, &seize_amount)
+                .is_err()
+            {
+                return Err(EngineError::InvalidAmount);
+            }
+            if token::Client::new(&env, &asset)
+                .try_transfer(&engine_address, &liquidator, &seize_amount)
+                .is_err()
+            {
+                return Err(EngineError::InvalidAmount);
+            }
         }
     }
 
@@ -235,12 +349,19 @@ pub fn is_liquidatable(env: Env, user: Address) -> Result<bool, EngineError> {
     let vault = VaultClient::new(&env, &vault_addr);
     let pool = PoolClient::new(&env, &pool_addr);
 
-    let debt = pool.get_user_debt(&user);
+    let debt = match pool.try_get_user_debt(&user) {
+        Ok(Ok(debt)) => debt,
+        _ => return Ok(false),
+    };
     if debt == 0 {
         return Ok(false);
     }
 
-    Ok(vault.get_health_factor(&user) < HEALTHY_HF_BPS)
+    let hf = match vault.try_get_health_factor(&user) {
+        Ok(Ok(hf)) => hf,
+        _ => return Ok(false),
+    };
+    Ok(hf < HEALTHY_HF_BPS)
 }
 
 pub fn calculate_bonus(env: Env, repaid_amount: i128) -> Result<i128, EngineError> {
@@ -251,15 +372,66 @@ pub fn calculate_bonus(env: Env, repaid_amount: i128) -> Result<i128, EngineErro
         return Err(EngineError::InvalidAmount);
     }
 
-    // Calculate bonus: ceil_div(repaid_amount * LIQUIDATION_BONUS_BPS, 10_000)
-    // bonus = ceil_div(repaid_amount * bonus_bps, 10_000)
+    // bonus = ceil_div(repaid_amount * LIQUIDATION_BONUS_BPS, BPS_DENOMINATOR)
+    // Ceiling so the liquidator always receives at least the full 8% bonus
+    // on non-exact amounts — this is intentional and favours the liquidator
+    // by at most 1 unit, keeping the incentive intact.
     let bonus_numerator = repaid_amount
         .checked_mul(LIQUIDATION_BONUS_BPS as i128)
         .ok_or(EngineError::Overflow)?;
 
-    ceil_div(bonus_numerator, 10_000).map_err(|_| EngineError::Overflow)
+    ceil_div(bonus_numerator, BPS_DENOMINATOR).map_err(|_| EngineError::Overflow)
 }
 
+/// Computes the repayment amount `R` that partially liquidates a position
+/// while respecting the close factor, dust limits, and a post-liquidation
+/// health-factor target.
+///
+/// ## Target health-factor equation
+///
+/// After a liquidator repays `R` of debt and the vault seizes
+/// `R × (1 + bonus_bps / 10_000)` worth of collateral value, the
+/// post-liquidation health factor must equal `TARGET_HF_BPS` (1.10 × 10 000):
+///
+/// ```text
+/// post_HF = (collateral_value - R × (1 + bonus_bps/10_000)) × lt_bps
+///           ──────────────────────────────────────────────────────────
+///                            debt - R
+///         = TARGET_HF_BPS
+/// ```
+///
+/// Solving for `R`:
+///
+/// ```text
+///         TARGET_HF_BPS × debt  −  collateral_value × lt_bps
+/// R = ──────────────────────────────────────────────────────────────────
+///      TARGET_HF_BPS  −  (10_000 + bonus_bps) × lt_bps / 10_000
+/// ```
+///
+/// where `lt_bps` is the **minimum** liquidation-threshold (in basis points)
+/// across all non-zero collateral assets, and all quantities are scaled by
+/// their respective BPS denominators so the arithmetic stays in integers.
+///
+/// `R` is computed with **ceiling** division (`ceil_div`) so the result
+/// always rounds up toward the amount that fully restores the target HF.
+///
+/// ## Caps applied to `R` (in order)
+///
+/// 1. **Close-factor cap** — `R` is floored to
+///    `floor(debt × CLOSE_FACTOR_BPS / 10_000)` (50 % of outstanding debt).
+///    Integer division gives the floor, ensuring the liquidator never repays
+///    more than half the debt in a single call.
+///
+/// 2. **Debt cap** — `R` is additionally capped at `debt` so it can never
+///    exceed the total outstanding balance.
+///
+/// ## Fallback branches (each returns `debt` — full liquidation)
+///
+/// | Branch | Condition | Reason |
+/// |--------|-----------|--------|
+/// | **Denominator ≤ 0** | `TARGET_HF_BPS − (1 + bonus) × lt_bps / 10_000 ≤ 0` | The target HF is mathematically unreachable via partial repayment (bonus + LT product overwhelms the target). Full liquidation is the only safe exit. |
+/// | **Unsafe post-HF** | After applying the capped `R`, the simulated post-liquidation HF is still below `HEALTHY_HF_BPS` (1.00 × 10 000) | The close-factor cap cut `R` too far; a partial repay would leave the position unhealthy. Full liquidation is required. |
+/// | **Dust leftover** | `0 < debt − R < MIN_REMAINING_DEBT` | Leaving a sub-dust debt would make the position uneconomic to liquidate later. Full liquidation cleans it up now. |
 pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, EngineError> {
     let vault_addr = storage::get_vault(&env).ok_or(EngineError::NotInitialized)?;
     let pool_addr = storage::get_pool(&env).ok_or(EngineError::NotInitialized)?;
@@ -268,7 +440,10 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
     let pool = PoolClient::new(&env, &pool_addr);
 
     // Load accrued debt via pool.get_user_debt
-    let debt = pool.get_user_debt(&user);
+    let debt = match pool.try_get_user_debt(&user) {
+        Ok(Ok(debt)) => debt,
+        _ => return Err(EngineError::NoPosition),
+    };
 
     // Empty debt handling: return NoPosition if debt is 0
     if debt == 0 {
@@ -276,8 +451,14 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
     }
 
     // Load collateral_value and health_factor_bps from vault
-    let collateral_value = vault.get_collateral_value(&user);
-    let health_factor_bps = vault.get_health_factor(&user);
+    let collateral_value = match vault.try_get_collateral_value(&user) {
+        Ok(Ok(val)) => val,
+        _ => return Err(EngineError::NoPosition),
+    };
+    let health_factor_bps = match vault.try_get_health_factor(&user) {
+        Ok(Ok(hf)) => hf,
+        _ => return Err(EngineError::NotLiquidatable),
+    };
 
     // If HF_bps >= 10_000, position is healthy
     if health_factor_bps >= HEALTHY_HF_BPS {
@@ -285,14 +466,20 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
     }
 
     // Get position to determine liquidation threshold
-    let position = vault.get_position(&user);
+    let position = match vault.try_get_position(&user) {
+        Ok(Ok(pos)) => pos,
+        _ => return Err(EngineError::NoPosition),
+    };
 
     // Recover liquidation threshold as the minimum LT among non-zero assets.
     // Iterate through collateral assets and find the minimum liquidation_threshold_bps.
     let mut min_lt_bps: i128 = i128::MAX;
     for collateral_asset in position.collateral.iter() {
         if collateral_asset.amount > 0 {
-            let asset_config = vault.get_asset_config(&collateral_asset.asset);
+            let asset_config = match vault.try_get_asset_config(&collateral_asset.asset) {
+                Ok(Ok(cfg)) => cfg,
+                _ => return Err(EngineError::NoPosition),
+            };
             let lt_bps = asset_config.liquidation_threshold_bps as i128;
             if lt_bps < min_lt_bps {
                 min_lt_bps = lt_bps;
@@ -325,12 +512,12 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
         )
         .ok_or(EngineError::Overflow)?;
 
-    // Denominator: TARGET_HF_BPS - (10_000 + LIQUIDATION_BONUS_BPS) * lt_bps / 10_000
-    // First compute: (10_000 + LIQUIDATION_BONUS_BPS) * lt_bps / 10_000
-    let temp = (10_000i128 + LIQUIDATION_BONUS_BPS as i128)
+    // Denominator: TARGET_HF_BPS - (BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS) * lt_bps / BPS_DENOMINATOR
+    // First compute: (BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS) * lt_bps / BPS_DENOMINATOR
+    let temp = (BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS as i128)
         .checked_mul(lt_bps)
         .ok_or(EngineError::Overflow)?;
-    let denominator_sub = ceil_div(temp, 10_000).map_err(|_| EngineError::Overflow)?;
+    let denominator_sub = ceil_div(temp, BPS_DENOMINATOR).map_err(|_| EngineError::Overflow)?;
 
     let denominator = TARGET_HF_BPS
         .checked_sub(denominator_sub)
@@ -347,7 +534,7 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
     let close_factor = debt
         .checked_mul(CLOSE_FACTOR_BPS as i128)
         .ok_or(EngineError::Overflow)?
-        / 10_000;
+        / BPS_DENOMINATOR;
 
     if repay > close_factor {
         repay = close_factor;
@@ -361,9 +548,9 @@ pub fn calculate_partial_repayment(env: Env, user: Address) -> Result<i128, Engi
     // Unsafe leftover fallback: if applying the capped R (including the 8% seize)
     // would leave HF_bps < 10_000, return full debt.
     let seized_value = repay
-        .checked_mul(10_000i128 + LIQUIDATION_BONUS_BPS as i128)
+        .checked_mul(BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS as i128)
         .ok_or(EngineError::Overflow)?
-        / 10_000;
+        / BPS_DENOMINATOR;
 
     let remaining_collateral_value = collateral_value
         .checked_sub(seized_value)
