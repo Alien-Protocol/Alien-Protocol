@@ -1,5 +1,5 @@
 #![allow(unused)]
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::{contracttype, Address, Symbol};
 
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
@@ -17,4 +17,6 @@ pub enum DataKey {
     StalenessThreshold,
     Paused,
     AuthorizedFeeder(Address),
+    AssetFeed(Address),
+    FeedAssets(Symbol),
 }

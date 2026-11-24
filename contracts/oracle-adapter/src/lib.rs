@@ -4,9 +4,9 @@ use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, Symbol, Vec};
 mod errors;
 pub use errors::OracleError;
 
-mod events;
+pub(crate) mod events;
 pub mod oracle;
-mod storage;
+pub(crate) mod storage;
 mod types;
 
 pub use types::{DataKey, PriceData};
@@ -31,12 +31,44 @@ impl OracleContract {
         .publish(&env);
     }
 
+    pub fn set_asset_feed(
+        env: Env,
+        caller: Address,
+        asset: Address,
+        feed_id: Symbol,
+    ) -> Result<(), OracleError> {
+        let admin = match storage::get_admin(&env) {
+            Some(addr) => addr,
+            None => return Err(OracleError::NotInitialized),
+        };
+        if caller != admin {
+            return Err(OracleError::Unauthorized);
+        }
+        caller.require_auth();
+
+        storage::set_asset_feed(&env, &asset, &feed_id);
+
+        if let Some(feed_price) = oracle::storage::get_feed_price(&env, &feed_id) {
+            storage::set_price(&env, &asset, &feed_price);
+        }
+
+        Ok(())
+    }
+
+    pub fn get_asset_feed(env: Env, asset: Address) -> Option<Symbol> {
+        storage::get_asset_feed(&env, &asset)
+    }
+
     pub fn get_price(env: Env, asset: Address) -> Option<PriceData> {
-        storage::get_price(&env, &asset)
+        if let Some(feed_id) = storage::get_asset_feed(&env, &asset) {
+            oracle::storage::get_feed_price(&env, &feed_id)
+        } else {
+            storage::get_price(&env, &asset)
+        }
     }
 
     pub fn is_price_fresh(env: Env, asset: Address) -> bool {
-        let price_data = match storage::get_price(&env, &asset) {
+        let price_data = match Self::get_price(env.clone(), asset) {
             Some(data) => data,
             None => return false,
         };
@@ -45,7 +77,18 @@ impl OracleContract {
             None => return false,
         };
         let ledger_time = env.ledger().timestamp();
-        match ledger_time.checked_sub(price_data.timestamp) {
+        let (ledger_sec, price_sec) = if price_data.timestamp > 10_000_000_000 {
+            let p_sec = price_data.timestamp / 1000;
+            let l_sec = if ledger_time > 10_000_000_000 {
+                ledger_time / 1000
+            } else {
+                ledger_time
+            };
+            (l_sec, p_sec)
+        } else {
+            (ledger_time, price_data.timestamp)
+        };
+        match ledger_sec.checked_sub(price_sec) {
             Some(delta) => delta <= threshold,
             None => false,
         }

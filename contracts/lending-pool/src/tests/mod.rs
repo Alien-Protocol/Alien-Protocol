@@ -1,3 +1,4 @@
+mod test_accrual;
 mod test_admin;
 mod test_pause;
 

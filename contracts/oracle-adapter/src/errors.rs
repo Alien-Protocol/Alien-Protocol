@@ -21,4 +21,5 @@ pub enum OracleError {
     InvalidPrice = 15,
     InvalidTimestamp = 16,
     InvalidThreshold = 17,
+    AssetFeedNotFound = 18,
 }
