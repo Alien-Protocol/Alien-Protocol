@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 for published contract releases.
 
+## Contract crate versioning policy
+
+- `0.1.0` marks the first testnet ABI freeze, subject to maintainer approval:
+  contract error codes, persistent `DataKey` layouts, and event topics are part
+  of the compatibility commitment. Do not renumber existing error codes after
+  testnet (see `docs/TODO.md` §1.6).
+- Follow Semantic Versioning for subsequent releases: patch versions cover
+  compatible fixes; pre-1.0 minor versions may introduce breaking changes with
+  documented migration guidance. At and after 1.0.0, use a major version for
+  incompatible changes and a minor version for compatible additions.
+- Workspace crate versions are distinct from on-chain contract and storage
+  schema version counters.
+
 ## [Unreleased]
 
 ### Added
