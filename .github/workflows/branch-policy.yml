@@ -1,0 +1,81 @@
+name: Branch Policy
+
+on:
+  pull_request_target:
+    branches: [main, develop]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  check-branch-policy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate branch flow
+        id: validate
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          echo "PR: $HEAD → $BASE"
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "develop" ]; then
+            echo "::error::PRs to main must come from develop (got $HEAD)"
+            echo "policy_failed=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "Branch policy check passed"
+
+      - name: Post policy failure comment
+        if: failure() && steps.validate.outputs.policy_failed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const commentBody = `## ⚠️ Branch Policy Violation
+
+            @${{ github.event.pull_request.user.login }} — This PR targets \`main\` but does not come from \`develop\`. Per repository policy, **PRs to \`main\` must come from \`develop\`**.
+
+            ### How to Fix
+
+            **Option 1: Retarget this PR** (recommended)
+            1. Edit this PR
+            2. Change the base branch from \`main\` to \`develop\`
+            3. The policy check will re-run automatically
+
+            **Option 2: Close and re-open against \`develop\`**
+            1. Close this PR
+            2. Open a new PR with \`develop\` as the base branch
+
+            ---
+            *This is an automated message from the branch policy check.*`;
+
+            // Check for existing comment to avoid spam
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('## ⚠️ Branch Policy Violation')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              // Post new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }

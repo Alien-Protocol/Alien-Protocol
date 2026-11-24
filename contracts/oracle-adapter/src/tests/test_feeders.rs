@@ -39,6 +39,23 @@ fn test_add_feeder_duplicate_fails() {
 }
 
 #[test]
+fn test_add_feeder_replaces_stale_false_storage_value() {
+    let (env, client, _admin) = setup_env();
+
+    let feeder = Address::generate(&env);
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &crate::types::DataKey::AuthorizedFeeder(feeder.clone()),
+            &false,
+        );
+    });
+
+    assert!(!client.is_authorized_feeder(&feeder));
+    client.add_authorized_feeder(&feeder);
+    assert!(client.is_authorized_feeder(&feeder));
+}
+
+#[test]
 fn test_add_feeder_non_admin_fails() {
     let (env, client, admin) = setup_env();
 
