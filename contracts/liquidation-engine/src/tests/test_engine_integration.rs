@@ -296,7 +296,8 @@ fn test_liquidation_bonus_is_eight_percent_of_repaid_value() {
     assert_eq!(bonus_bps, 800);
 
     // Converted to quote units, collateral received equals `result.seized`
-    let seized_quote_value = (collateral_received * crashed_price) / shared::PROTOCOL_QUOTE_PRECISION;
+    let seized_quote_value =
+        (collateral_received * crashed_price) / shared::PROTOCOL_QUOTE_PRECISION;
     assert_eq!(seized_quote_value, result.seized);
 }
 
