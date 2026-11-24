@@ -1,4 +1,5 @@
 use crate::{errors::VaultError, events, storage, types::PauseFlag};
+use shared::bitmask::{clear_flag, is_set, set_flag};
 use soroban_sdk::{Address, Env, Symbol};
 
 /// Updates the vault administrator. The current administrator must authorize; returns invalid-input or already-admin errors.
@@ -90,12 +91,12 @@ pub fn pause_operation(env: Env, operation: PauseFlag, reason: Symbol) -> Result
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
-    if storage::is_operation_paused(&env, &operation) {
+    if is_set(storage::get_pause_mask(&env), operation.bit()) {
         return Err(VaultError::AlreadyPaused);
     }
 
     let mask = storage::get_pause_mask(&env);
-    storage::set_pause_mask(&env, mask | operation.bit());
+    storage::set_pause_mask(&env, set_flag(mask, operation.bit()));
 
     let op_symbol = crate::types::pause_flag_symbol(&env, &operation);
     events::OperationPaused {
@@ -114,12 +115,12 @@ pub fn unpause_operation(env: Env, operation: PauseFlag) -> Result<(), VaultErro
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
-    if !storage::is_operation_paused(&env, &operation) {
+    if !is_set(storage::get_pause_mask(&env), operation.bit()) {
         return Err(VaultError::NotPaused);
     }
 
     let mask = storage::get_pause_mask(&env);
-    storage::set_pause_mask(&env, mask & !operation.bit());
+    storage::set_pause_mask(&env, clear_flag(mask, operation.bit()));
 
     let op_symbol = crate::types::pause_flag_symbol(&env, &operation);
     events::OperationUnpaused {

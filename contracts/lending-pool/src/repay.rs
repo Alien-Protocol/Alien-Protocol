@@ -50,7 +50,12 @@ fn apply_repay(
     }
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    token_client.transfer(&payer, env.current_contract_address(), &payment);
+    if token_client
+        .try_transfer(&payer, env.current_contract_address(), &payment)
+        .is_err()
+    {
+        return Err(PoolError::InsufficientLiquidity);
+    }
 
     user_debt.accrued_interest = user_debt
         .accrued_interest
@@ -86,6 +91,33 @@ fn apply_repay(
 
 /// Applies `amount` of `borrow_asset` to `user`'s debt, interest first, then
 /// principal. Pulls `min(amount, total_debt)` from `user`.
+///
+/// ## Authorization
+///
+/// Requires `user` authorization.
+///
+/// Documented entry point: `repay`.
+///
+/// ## Transfers
+///
+/// Transfers `min(amount, total_debt)` of the borrow asset from `user`
+/// to the pool contract.
+///
+/// ## Errors
+///
+/// - `PoolError::InvalidAmount` if `amount` is not positive.
+/// - `PoolError::NotInitialized` if the borrow asset is not configured.
+/// - `PoolError::UnsupportedAsset` if `asset` is not the borrow asset.
+/// - `PoolError::RepayPaused` if repaying is paused.
+/// - `PoolError::NoDebt` if `user` has no outstanding debt.
+/// - `PoolError::BelowMinDebt` if the remaining debt would be non-zero but
+///   below the minimum remaining debt.
+/// - `PoolError::InsufficientLiquidity` if token transfer from `user` fails.
+/// - `PoolError::Overflow` if debt or total borrowed would underflow.
+///
+/// ## Events
+///
+/// Emits `Repaid`.
 pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<(), PoolError> {
     user.require_auth();
     apply_repay(env, user.clone(), user, asset, amount)
@@ -93,6 +125,31 @@ pub fn repay(env: Env, user: Address, asset: Address, amount: i128) -> Result<()
 
 /// Applies `amount` of `borrow_asset` to `user`'s debt, interest first, then
 /// principal. Pulls `min(amount, total_debt)` from `payer`.
+///
+/// ## Authorization
+///
+/// Requires `payer` authorization. `user` need not authorize.
+///
+/// ## Transfers
+///
+/// Transfers `min(amount, total_debt)` of the borrow asset from `payer`
+/// to the pool contract.
+///
+/// ## Errors
+///
+/// - `PoolError::InvalidAmount` if `amount` is not positive.
+/// - `PoolError::NotInitialized` if the borrow asset is not configured.
+/// - `PoolError::UnsupportedAsset` if `asset` is not the borrow asset.
+/// - `PoolError::RepayPaused` if repaying is paused.
+/// - `PoolError::NoDebt` if `user` has no outstanding debt.
+/// - `PoolError::BelowMinDebt` if the remaining debt would be non-zero but
+///   below the minimum remaining debt.
+/// - `PoolError::InsufficientLiquidity` if token transfer from `payer` fails.
+/// - `PoolError::Overflow` if debt or total borrowed would underflow.
+///
+/// ## Events
+///
+/// Emits `Repaid`.
 pub fn repay_for(
     env: Env,
     payer: Address,
@@ -115,5 +172,10 @@ pub fn is_liquidatable(env: Env, user: Address) -> Result<bool, PoolError> {
     let vault_addr = storage::get_vault(&env).ok_or(PoolError::NotInitialized)?;
     let vault = VaultClient::new(&env, &vault_addr);
 
-    Ok(vault.get_health_factor(&user) < HEALTHY_HF_BPS)
+    let hf = match vault.try_get_health_factor(&user) {
+        Ok(Ok(hf)) => hf,
+        _ => return Ok(false),
+    };
+
+    Ok(hf < HEALTHY_HF_BPS)
 }

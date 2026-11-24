@@ -1,10 +1,10 @@
 #![cfg(test)]
 
-use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env};
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{Address, Env, Map, Symbol, TryFromVal, Val};
 
 use crate::errors::EngineError;
-use crate::{admin, storage, LiquidationContract};
+use crate::{admin, storage, LiquidationContract, LiquidationContractClient};
 
 fn create_test_env_and_contract() -> (Env, Address) {
     let env = Env::default();
@@ -19,6 +19,92 @@ fn create_test_addresses(env: &Env) -> (Address, Address, Address, Address) {
     let pool = Address::generate(env);
     let oracle = Address::generate(env);
     (admin, vault, pool, oracle)
+}
+
+fn assert_address_update_event(
+    env: &Env,
+    contract_id: &Address,
+    event_name: &str,
+    old_field: &str,
+    new_field: &str,
+    old_address: &Address,
+    new_address: &Address,
+) {
+    let event = env.events().all().last().unwrap();
+    assert_eq!(&event.0, contract_id);
+    let name = Symbol::try_from_val(env, &event.1.get(0).unwrap()).unwrap();
+    assert_eq!(name, Symbol::new(env, event_name));
+    let data = Map::<Symbol, Val>::try_from_val(env, &event.2).unwrap();
+    let old = Address::try_from_val(env, &data.get(Symbol::new(env, old_field)).unwrap()).unwrap();
+    let new = Address::try_from_val(env, &data.get(Symbol::new(env, new_field)).unwrap()).unwrap();
+    assert_eq!(&old, old_address);
+    assert_eq!(&new, new_address);
+}
+
+#[test]
+fn test_set_vault_emits_vault_updated() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let client = LiquidationContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &vault, &pool, &oracle);
+
+    let new_vault = Address::generate(&env);
+    client.set_vault(&new_vault);
+
+    assert_address_update_event(
+        &env,
+        &contract_id,
+        "vault_updated",
+        "old_vault",
+        "new_vault",
+        &vault,
+        &new_vault,
+    );
+    assert_eq!(client.get_vault(), Some(new_vault.clone()));
+}
+
+#[test]
+fn test_set_pool_emits_pool_updated() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let client = LiquidationContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &vault, &pool, &oracle);
+
+    let new_pool = Address::generate(&env);
+    client.set_pool(&new_pool);
+
+    assert_address_update_event(
+        &env,
+        &contract_id,
+        "pool_updated",
+        "old_pool",
+        "new_pool",
+        &pool,
+        &new_pool,
+    );
+    assert_eq!(client.get_pool(), Some(new_pool.clone()));
+}
+
+#[test]
+fn test_set_oracle_emits_oracle_updated() {
+    let (env, contract_id) = create_test_env_and_contract();
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let client = LiquidationContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &vault, &pool, &oracle);
+
+    let new_oracle = Address::generate(&env);
+    client.set_oracle(&new_oracle);
+
+    assert_address_update_event(
+        &env,
+        &contract_id,
+        "oracle_updated",
+        "old_oracle",
+        "new_oracle",
+        &oracle,
+        &new_oracle,
+    );
+    assert_eq!(client.get_oracle(), Some(new_oracle.clone()));
 }
 
 #[test]
@@ -256,26 +342,14 @@ fn test_set_admin_same_address_fails() {
 fn test_getters_match_initialize_args() {
     let (env, contract_id) = create_test_env_and_contract();
     let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let client = LiquidationContractClient::new(&env, &contract_id);
 
-    // Initialize with specific addresses
-    let result = env.as_contract(&contract_id, || {
-        admin::initialize(
-            env.clone(),
-            admin.clone(),
-            vault.clone(),
-            pool.clone(),
-            oracle.clone(),
-        )
-    });
-    assert_eq!(result, Ok(()));
+    client.initialize(&admin, &vault, &pool, &oracle);
 
-    // Verify getters return exactly what was initialized
-    env.as_contract(&contract_id, || {
-        assert_eq!(storage::get_admin(&env), Some(admin));
-        assert_eq!(storage::get_vault(&env), Some(vault));
-        assert_eq!(storage::get_pool(&env), Some(pool));
-        assert_eq!(storage::get_oracle(&env), Some(oracle));
-    });
+    assert_eq!(client.get_admin(), Some(admin));
+    assert_eq!(client.get_vault(), Some(vault));
+    assert_eq!(client.get_pool(), Some(pool));
+    assert_eq!(client.get_oracle(), Some(oracle));
 }
 
 #[test]
@@ -433,5 +507,71 @@ fn test_set_oracle_distinct_reflects_getter() {
     assert_eq!(result, Ok(()));
     env.as_contract(&contract_id, || {
         assert_eq!(storage::get_oracle(&env), Some(new_oracle));
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Authorization ordering: auth must run before address-collision validation.
+// These environments deliberately do not call `mock_all_auths`, so a missing
+// authorization panics. If validation ran first, the call would instead return
+// `Err(EngineError::InvalidAddress)` and the test would fail (no panic).
+// ---------------------------------------------------------------------------
+
+fn seed_contract_without_mocked_auth() -> (Env, Address, Address, Address, Address, Address) {
+    let env = Env::default();
+    let contract_id = env.register(LiquidationContract, ());
+    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+
+    env.as_contract(&contract_id, || {
+        storage::set_admin(&env, &admin);
+        storage::set_vault(&env, &vault);
+        storage::set_pool(&env, &pool);
+        storage::set_oracle(&env, &oracle);
+    });
+
+    (env, contract_id, admin, vault, pool, oracle)
+}
+
+#[test]
+#[should_panic]
+fn test_set_admin_authorizes_before_collision_validation() {
+    let (env, contract_id, _admin, vault, _pool, _oracle) = seed_contract_without_mocked_auth();
+
+    env.as_contract(&contract_id, || {
+        // vault collides with the stored vault; auth must panic first.
+        let _ = admin::set_admin(env.clone(), vault.clone());
+    });
+}
+
+#[test]
+#[should_panic]
+fn test_set_vault_authorizes_before_collision_validation() {
+    let (env, contract_id, admin, _vault, _pool, _oracle) = seed_contract_without_mocked_auth();
+
+    env.as_contract(&contract_id, || {
+        // admin collides with the stored admin; auth must panic first.
+        let _ = admin::set_vault(env.clone(), admin.clone());
+    });
+}
+
+#[test]
+#[should_panic]
+fn test_set_pool_authorizes_before_collision_validation() {
+    let (env, contract_id, admin, _vault, _pool, _oracle) = seed_contract_without_mocked_auth();
+
+    env.as_contract(&contract_id, || {
+        // admin collides with the stored admin; auth must panic first.
+        let _ = admin::set_pool(env.clone(), admin.clone());
+    });
+}
+
+#[test]
+#[should_panic]
+fn test_set_oracle_authorizes_before_collision_validation() {
+    let (env, contract_id, admin, _vault, _pool, _oracle) = seed_contract_without_mocked_auth();
+
+    env.as_contract(&contract_id, || {
+        // admin collides with the stored admin; auth must panic first.
+        let _ = admin::set_oracle(env.clone(), admin.clone());
     });
 }
