@@ -118,6 +118,11 @@ fn setup_env_with_engine() -> (
     let engine = Address::generate(&env);
     client.set_liquidation_engine(&engine);
 
+    let lending_pool = client.get_lending_pool().unwrap();
+    MockLendingPoolClient::new(&env, &lending_pool).set_user_debt(&1_000);
+    let oracle = client.get_oracle().unwrap();
+    MockOracleClient::new(&env, &oracle).set_price(&token_id, &10_000_000, &1_000);
+
     (
         env,
         client,

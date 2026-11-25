@@ -9,8 +9,12 @@ pub struct MockLendingPool;
 
 #[contractimpl]
 impl MockLendingPool {
-    pub fn get_user_debt(_env: Env, _user: Address) -> i128 {
-        0
+    pub fn get_user_debt(env: Env, user: Address) -> i128 {
+        if env.storage().persistent().get(&user).unwrap_or(true) {
+            1_000
+        } else {
+            0
+        }
     }
 
     pub fn is_liquidatable(env: Env, user: Address) -> bool {
@@ -19,6 +23,29 @@ impl MockLendingPool {
 
     pub fn set_liquidatable(env: Env, user: Address, liquidatable: bool) {
         env.storage().persistent().set(&user, &liquidatable);
+    }
+}
+
+#[contract]
+pub struct MockOracle;
+
+#[contractimpl]
+impl MockOracle {
+    pub fn get_price(env: Env, asset: Address) -> Option<shared::PriceData> {
+        env.storage().persistent().get(&asset)
+    }
+
+    pub fn get_price_or_fail(env: Env, asset: Address) -> shared::PriceData {
+        Self::get_price(env, asset).expect("price not found")
+    }
+
+    pub fn set_price(env: Env, asset: Address, price: i128) {
+        let price_data = shared::PriceData {
+            price,
+            timestamp: env.ledger().timestamp(),
+            write_timestamp: env.ledger().timestamp(),
+        };
+        env.storage().persistent().set(&asset, &price_data);
     }
 }
 
@@ -40,7 +67,7 @@ fn setup_env() -> (
 
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
-    let oracle = Address::generate(&env);
+    let oracle = env.register(MockOracle, ());
     let lending_pool = env.register(MockLendingPool, ());
     let liquidation_engine = Address::generate(&env);
 
@@ -53,6 +80,7 @@ fn setup_env() -> (
     let token_admin_client = token::StellarAssetClient::new(&env, &token_contract_id);
 
     client.add_supported_asset(&token_contract_id);
+    MockOracleClient::new(&env, &oracle).set_price(&token_contract_id, &10_000_000);
 
     (
         env,
@@ -455,12 +483,13 @@ fn test_seize_i128_max_fails_insufficient() {
 
 #[test]
 fn test_seize_multi_asset_only_affects_target() {
-    let (env, client, _admin, user, _oracle, token_id, token_client, token_admin) = setup_env();
+    let (env, client, _admin, user, oracle, token_id, token_client, token_admin) = setup_env();
     let engine = Address::generate(&env);
 
     let token_admin2 = Address::generate(&env);
     let token_contract2 = env.register_stellar_asset_contract_v2(token_admin2);
     let token_id2 = token_contract2.address();
+    MockOracleClient::new(&env, &oracle).set_price(&token_id2, &10_000_000);
     let token_client2 = token::Client::new(&env, &token_id2);
     let token_admin_client2 = token::StellarAssetClient::new(&env, &token_id2);
 

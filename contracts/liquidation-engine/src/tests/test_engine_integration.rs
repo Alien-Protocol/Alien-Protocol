@@ -237,8 +237,7 @@ fn test_deposit_borrow_price_crash_liquidate_lifecycle() {
         let leftover_hf = vault.get_health_factor(&user);
         assert!(
             leftover_hf >= shared::HEALTHY_HF_BPS,
-            "leftover HF must be >= 10_000 bps, got {}",
-            leftover_hf
+            "leftover HF must be >= 10_000 bps, got {leftover_hf}"
         );
     }
 }
@@ -350,8 +349,7 @@ fn test_max_repay_partial_or_full_close_matches_math() {
     let hf1_after = vault.get_health_factor(&user1);
     assert!(
         hf1_after >= shared::HEALTHY_HF_BPS,
-        "leftover HF must remain healthy (>= 10_000), got {}",
-        hf1_after
+        "leftover HF must remain healthy (>= 10_000), got {hf1_after}"
     );
 
     // Reset price to initial $1.00 so user2 has full LTV headroom to borrow $500

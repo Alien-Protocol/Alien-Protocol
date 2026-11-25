@@ -215,16 +215,8 @@ pub fn liquidate(
         _ => return Err(EngineError::NotInitialized),
     };
 
-    // Pull the repayment from the liquidator into the engine, then forward it
-    // to the pool on the engine's own behalf.
     if token::Client::new(&env, &borrow_asset)
         .try_transfer(&liquidator, &engine_address, &repay)
-        .is_err()
-    {
-        return Err(EngineError::InvalidAmount);
-    }
-    if pool
-        .try_repay_for(&engine_address, &user, &borrow_asset, &repay)
         .is_err()
     {
         return Err(EngineError::InvalidAmount);
@@ -322,6 +314,13 @@ pub fn liquidate(
     }
 
     if remaining_value > 0 {
+        return Err(EngineError::InvalidAmount);
+    }
+
+    if pool
+        .try_repay_for(&engine_address, &user, &borrow_asset, &repay)
+        .is_err()
+    {
         return Err(EngineError::InvalidAmount);
     }
 

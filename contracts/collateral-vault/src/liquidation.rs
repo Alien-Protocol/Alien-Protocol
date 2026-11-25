@@ -28,7 +28,16 @@ pub fn execute_seize(
 
     if let Some(pool_addr) = storage::get_lending_pool(env) {
         let pool_client = LendingPoolClient::new(env, &pool_addr);
-        if !pool_client.is_liquidatable(&user) {
+
+        let debt = match pool_client.try_get_user_debt(&user) {
+            Ok(Ok(debt)) => debt,
+            _ => return Err(VaultError::NotLiquidatable),
+        };
+        let health_factor = match crate::risk::health_factor_bps(env, &user, debt) {
+            Ok(health_factor) => health_factor,
+            Err(_) => return Err(VaultError::NotLiquidatable),
+        };
+        if debt <= 0 || health_factor >= shared::HEALTHY_HF_BPS {
             return Err(VaultError::NotLiquidatable);
         }
     } else {
