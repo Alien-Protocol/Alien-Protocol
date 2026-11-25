@@ -667,3 +667,81 @@ fn test_is_operation_paused_reflects_liquidation_flag() {
     client.unpause_operation(&PauseFlag::Liquidation);
     assert!(!client.is_operation_paused(&PauseFlag::Liquidation));
 }
+
+#[test]
+fn test_is_operation_paused_matches_pause_mask() {
+    let (env, client, _admin, _user, _token_client, _token_admin, _token_id) = setup_env();
+
+    let all_flags = [
+        PauseFlag::Deposit,
+        PauseFlag::Borrow,
+        PauseFlag::Withdraw,
+        PauseFlag::Liquidation,
+        PauseFlag::Recovery,
+    ];
+
+    // 1. Initial state: pause mask is 0, all flags return false
+    for flag in all_flags.iter() {
+        assert!(
+            !client.is_operation_paused(flag),
+            "Flag should not be paused initially"
+        );
+    }
+
+    // 2. Pause a subset of flags (Deposit and Liquidation)
+    client.pause_operation(&PauseFlag::Deposit, &Symbol::new(&env, "pause_deposit"));
+    client.pause_operation(
+        &PauseFlag::Liquidation,
+        &Symbol::new(&env, "pause_liquidation"),
+    );
+
+    let expected_mask = PauseFlag::Deposit.bit() | PauseFlag::Liquidation.bit();
+
+    for flag in all_flags.iter() {
+        let expected = (expected_mask & flag.bit()) != 0;
+        assert_eq!(
+            client.is_operation_paused(flag),
+            expected,
+            "Flag pause state should match pause bitmask"
+        );
+    }
+
+    // 3. Pause the rest of the flags
+    client.pause_operation(&PauseFlag::Borrow, &Symbol::new(&env, "pause_borrow"));
+    client.pause_operation(&PauseFlag::Withdraw, &Symbol::new(&env, "pause_withdraw"));
+    client.pause_operation(&PauseFlag::Recovery, &Symbol::new(&env, "pause_recovery"));
+
+    for flag in all_flags.iter() {
+        assert!(
+            client.is_operation_paused(flag),
+            "All flags should be paused"
+        );
+    }
+
+    // 4. Unpause some flags one-by-one and verify bitmask synchronization
+    client.unpause_operation(&PauseFlag::Deposit);
+    assert!(!client.is_operation_paused(&PauseFlag::Deposit));
+    assert!(client.is_operation_paused(&PauseFlag::Borrow));
+    assert!(client.is_operation_paused(&PauseFlag::Withdraw));
+    assert!(client.is_operation_paused(&PauseFlag::Liquidation));
+    assert!(client.is_operation_paused(&PauseFlag::Recovery));
+
+    client.unpause_operation(&PauseFlag::Liquidation);
+    assert!(!client.is_operation_paused(&PauseFlag::Deposit));
+    assert!(client.is_operation_paused(&PauseFlag::Borrow));
+    assert!(client.is_operation_paused(&PauseFlag::Withdraw));
+    assert!(!client.is_operation_paused(&PauseFlag::Liquidation));
+    assert!(client.is_operation_paused(&PauseFlag::Recovery));
+
+    // Unpause the rest
+    client.unpause_operation(&PauseFlag::Borrow);
+    client.unpause_operation(&PauseFlag::Withdraw);
+    client.unpause_operation(&PauseFlag::Recovery);
+
+    for flag in all_flags.iter() {
+        assert!(
+            !client.is_operation_paused(flag),
+            "All flags should be unpaused"
+        );
+    }
+}
