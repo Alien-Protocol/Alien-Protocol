@@ -66,6 +66,7 @@ fn test_initialize_twice_fails() {
     );
 }
 pub mod test_admin;
+pub mod test_asset_feed;
 mod test_feeders;
 mod test_get_price_or_fail;
 mod test_pause;

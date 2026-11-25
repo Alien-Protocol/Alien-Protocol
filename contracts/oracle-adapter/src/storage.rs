@@ -1,32 +1,4 @@
-//! Storage scopes for the oracle adapter.
-//!
-//! Decision: keep `Admin`, `StalenessThreshold`, and `Paused` in instance
-//! storage rather than standardizing on the other contracts' persistent admin
-//! keys. These are a small, bounded set of contract-wide settings used by the
-//! oracle's authorization, freshness, and pause checks. Instance storage embeds
-//! them in the contract instance entry, which is already loaded for an
-//! invocation, avoiding a separate ledger entry for each setting. Keeping this
-//! always-loaded data small is the tradeoff; per-asset prices and per-address
-//! feeder permissions can grow, so they remain in persistent storage.
-//!
-//! # TTL and archival
-//!
-//! Instance keys share the contract instance entry's TTL; they have no
-//! independent per-key lifetime. This is acceptable because the singleton
-//! configuration should live and be restored with the oracle instance, not
-//! expire separately while the oracle is otherwise callable. Archival is not
-//! permanent deletion or permission to reinitialize: restore the archived
-//! instance, including its configuration, before executing contract calls.
-//!
-//! These helpers do not extend TTLs, and ordinary reads/writes are not a TTL
-//! maintenance policy. Deployment operators must maintain the instance and
-//! contract code lifetimes (for example, through explicit TTL extension) and
-//! arrange restoration when needed. Persistent prices and feeder permissions
-//! have their own entry TTLs and need separate maintenance/restoration; keeping
-//! the instance alive does not extend those entries. No keys, values, or storage
-//! scopes are changed by this documentation decision.
-
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Symbol, Vec};
 
 use crate::types::{DataKey, PriceData};
 
@@ -98,4 +70,53 @@ pub fn remove_authorized_feeder(env: &Env, feeder: &Address) {
     env.storage()
         .persistent()
         .remove(&DataKey::AuthorizedFeeder(feeder.clone()));
+}
+
+pub fn get_asset_feed(env: &Env, asset: &Address) -> Option<Symbol> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::AssetFeed(asset.clone()))
+}
+
+pub fn set_asset_feed(env: &Env, asset: &Address, feed_id: &Symbol) {
+    if let Some(old_feed) = get_asset_feed(env, asset) {
+        if old_feed != *feed_id {
+            let old_list = get_feed_assets(env, &old_feed);
+            let mut new_old_list = Vec::new(env);
+            for a in old_list.iter() {
+                if a != *asset {
+                    new_old_list.push_back(a);
+                }
+            }
+            env.storage()
+                .persistent()
+                .set(&DataKey::FeedAssets(old_feed), &new_old_list);
+        }
+    }
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::AssetFeed(asset.clone()), feed_id);
+
+    let mut list = get_feed_assets(env, feed_id);
+    let mut found = false;
+    for a in list.iter() {
+        if a == *asset {
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        list.push_back(asset.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::FeedAssets(feed_id.clone()), &list);
+    }
+}
+
+pub fn get_feed_assets(env: &Env, feed_id: &Symbol) -> Vec<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::FeedAssets(feed_id.clone()))
+        .unwrap_or_else(|| Vec::new(env))
 }
