@@ -18,3 +18,5 @@ shared = { path = "../shared" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+collateral-vault = { path = "../collateral-vault" }
+lending-pool = { path = "../lending-pool" }
