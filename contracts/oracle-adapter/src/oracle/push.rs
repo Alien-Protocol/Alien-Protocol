@@ -1,5 +1,3 @@
-extern crate alloc;
-
 use crate::oracle::{processor, storage};
 use crate::OracleError;
 use soroban_sdk::{contractevent, Address, Bytes, Env, Symbol, Vec};
@@ -67,6 +65,17 @@ pub fn write_prices(
             timestamp,
         }
         .publish(&env);
+
+        let mapped_assets = crate::storage::get_feed_assets(&env, &sym);
+        for asset in mapped_assets.iter() {
+            crate::storage::set_price(&env, &asset, &price_data);
+            crate::events::PriceUpdated {
+                asset,
+                price,
+                timestamp,
+            }
+            .publish(&env);
+        }
     }
 
     Ok(())

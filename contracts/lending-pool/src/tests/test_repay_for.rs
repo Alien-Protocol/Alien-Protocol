@@ -21,12 +21,20 @@ impl MockVaultContract {
         0
     }
 
-    pub fn get_position(_env: Env, _user: Address) -> shared::Position {
-        unimplemented!()
+    pub fn get_position(env: Env, user: Address) -> shared::Position {
+        shared::Position {
+            user,
+            collateral: soroban_sdk::Vec::new(&env),
+        }
     }
 
     pub fn get_asset_config(_env: Env, _asset: Address) -> shared::AssetConfig {
-        unimplemented!()
+        shared::AssetConfig {
+            token_decimals: 0,
+            oracle_price_decimals: 0,
+            max_ltv_bps: 0,
+            liquidation_threshold_bps: 0,
+        }
     }
 }
 

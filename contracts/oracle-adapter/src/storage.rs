@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Symbol, Vec};
 
 use crate::types::{DataKey, PriceData};
 
@@ -70,4 +70,53 @@ pub fn remove_authorized_feeder(env: &Env, feeder: &Address) {
     env.storage()
         .persistent()
         .remove(&DataKey::AuthorizedFeeder(feeder.clone()));
+}
+
+pub fn get_asset_feed(env: &Env, asset: &Address) -> Option<Symbol> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::AssetFeed(asset.clone()))
+}
+
+pub fn set_asset_feed(env: &Env, asset: &Address, feed_id: &Symbol) {
+    if let Some(old_feed) = get_asset_feed(env, asset) {
+        if old_feed != *feed_id {
+            let old_list = get_feed_assets(env, &old_feed);
+            let mut new_old_list = Vec::new(env);
+            for a in old_list.iter() {
+                if a != *asset {
+                    new_old_list.push_back(a);
+                }
+            }
+            env.storage()
+                .persistent()
+                .set(&DataKey::FeedAssets(old_feed), &new_old_list);
+        }
+    }
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::AssetFeed(asset.clone()), feed_id);
+
+    let mut list = get_feed_assets(env, feed_id);
+    let mut found = false;
+    for a in list.iter() {
+        if a == *asset {
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        list.push_back(asset.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::FeedAssets(feed_id.clone()), &list);
+    }
+}
+
+pub fn get_feed_assets(env: &Env, feed_id: &Symbol) -> Vec<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::FeedAssets(feed_id.clone()))
+        .unwrap_or_else(|| Vec::new(env))
 }
