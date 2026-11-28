@@ -2,8 +2,24 @@ use crate::events::AssetConfigUpdated;
 use crate::{errors::VaultError, events, storage, types::AssetConfig};
 use soroban_sdk::{Address, Env};
 
-/// Registers an asset with default configuration.
-pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
+fn validate_config(env: &Env, asset: &Address, config: &AssetConfig) -> Result<(), VaultError> {
+    crate::risk::validate_asset_risk_config(
+        config.token_decimals,
+        config.oracle_price_decimals,
+        config.max_ltv_bps,
+        config.liquidation_threshold_bps,
+    )?;
+    match soroban_sdk::token::Client::new(env, asset).try_decimals() {
+        Ok(Ok(n)) if n == config.token_decimals => Ok(()),
+        _ => Err(VaultError::InvalidAssetConfig),
+    }
+}
+
+pub fn add_supported_asset(
+    env: Env,
+    asset: Address,
+    config: AssetConfig,
+) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
@@ -11,8 +27,9 @@ pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
         return Err(VaultError::AlreadySupported);
     }
 
+    validate_config(&env, &asset, &config)?;
     storage::add_supported_asset(&env, &asset);
-    storage::set_asset_config(&env, &asset, &AssetConfig::default());
+    storage::set_asset_config(&env, &asset, &config);
 
     events::AssetAdded { asset }.publish(&env);
     Ok(())
@@ -35,7 +52,7 @@ pub fn set_asset_config(
     }
 
     if storage::has_open_position(&env, &asset) {
-        let existing = storage::get_asset_config(&env, &asset).unwrap_or(AssetConfig::default());
+        let existing = storage::get_asset_config(&env, &asset).unwrap_or_default();
         if existing.token_decimals != token_decimals
             || existing.oracle_price_decimals != oracle_price_decimals
             || existing.max_ltv_bps != max_ltv_bps
@@ -45,22 +62,14 @@ pub fn set_asset_config(
         }
     }
 
-    crate::risk::validate_asset_risk_config(
+    let config = AssetConfig {
         token_decimals,
         oracle_price_decimals,
         max_ltv_bps,
         liquidation_threshold_bps,
-    )?;
-    storage::set_asset_config(
-        &env,
-        &asset,
-        &AssetConfig {
-            token_decimals,
-            oracle_price_decimals,
-            max_ltv_bps,
-            liquidation_threshold_bps,
-        },
-    );
+    };
+    validate_config(&env, &asset, &config)?;
+    storage::set_asset_config(&env, &asset, &config);
 
     AssetConfigUpdated {
         asset: asset.clone(),

@@ -83,6 +83,7 @@ jobs:
             -p collateral-vault \
             -p lending-pool \
             -p liquidation-engine \
+            -p deployment-factory \
             -p oracle-adapter \
             --target wasm32v1-none \
             --release \
@@ -129,3 +130,6 @@ jobs:
 
       - name: Run Cargo tests
         run: cargo test --locked --workspace --all-features --verbose
+
+      - name: Run settlement tests against release WASMs
+        run: make test-wasm

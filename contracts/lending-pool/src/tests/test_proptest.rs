@@ -9,6 +9,9 @@ pub struct MockVaultContract;
 
 #[contractimpl]
 impl MockVaultContract {
+    pub fn can_originate(_env: Env, _pool: Address) -> bool {
+        true
+    }
     pub fn get_position(env: Env, user: Address) -> shared::Position {
         let mut collateral = soroban_sdk::Vec::new(&env);
         collateral.push_back(shared::CollateralAsset {
@@ -49,10 +52,10 @@ fn setup_env() -> (
     env.mock_all_auths();
     env.ledger().set_timestamp(1_000);
 
-    let contract_id = env.register(PoolContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(PoolContract, (&admin,));
     let client = PoolContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let vault_id = env.register(MockVaultContract, ());
     let oracle = Address::generate(&env);

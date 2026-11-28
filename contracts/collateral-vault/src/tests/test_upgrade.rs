@@ -35,10 +35,10 @@ fn setup_env() -> (
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
     let lending_pool = Address::generate(&env);
@@ -52,7 +52,7 @@ fn setup_env() -> (
     let token_client = token::Client::new(&env, &token_id);
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
-    client.add_supported_asset(&token_id);
+    client.add_supported_asset(&token_id, &shared::AssetConfig::default());
 
     (
         env,
@@ -83,10 +83,12 @@ fn test_upgrade_and_migrate_preserve_state() {
     let wasm = Bytes::from_slice(&env, TEST_WASM);
     let wasm_hash = env.deployer().upload_contract_wasm(wasm);
 
-    client.upgrade(&wasm_hash);
+    client.upgrade(&wasm_hash, &3);
+    client.finalize_upgrade();
+    assert!(client.try_finalize_upgrade().is_err());
     client.migrate(&2);
 
-    assert_eq!(client.get_contract_version(), 2);
+    assert_eq!(client.get_contract_version(), 3);
     assert_eq!(client.get_storage_schema_version(), 2);
     assert_eq!(client.get_admin(), Some(admin));
     env.as_contract(&contract_id, || {
@@ -102,10 +104,10 @@ fn test_upgrade_and_migrate_preserve_state() {
 #[test]
 fn test_upgrade_rejects_unauthorized_address() {
     let env = Env::default();
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let oracle = Address::generate(&env);
     let attacker = Address::generate(&env);
     let lending_pool = Address::generate(&env);
@@ -135,12 +137,12 @@ fn test_upgrade_rejects_unauthorized_address() {
         invoke: &MockAuthInvoke {
             contract: &contract_id,
             fn_name: "upgrade",
-            args: (wasm_hash.clone(),).into_val(&env),
+            args: (wasm_hash.clone(), 3u32).into_val(&env),
             sub_invokes: &[],
         },
     }]);
 
-    let result = client.try_upgrade(&wasm_hash);
+    let result = client.try_upgrade(&wasm_hash, &3);
     assert!(result.is_err());
 }
 
@@ -180,7 +182,7 @@ fn test_migration_rejects_repeated_and_out_of_order_versions() {
     assert_eq!(client.get_position_balance(&user, &token_id), 500);
     assert_eq!(token_client.balance(&user), 500);
 
-    let skipped = client.try_migrate(&3);
+    let skipped = client.try_migrate(&4);
     assert!(matches!(skipped, Err(Ok(VaultError::MigrationSkipped))));
     assert_eq!(client.get_storage_schema_version(), 2);
     assert_eq!(client.get_admin(), Some(admin));
@@ -215,7 +217,7 @@ fn test_migrate_preserves_state_native() {
     let before_oracle = env.as_contract(&contract_id, || storage::get_oracle(&env));
     let before_is_supported = client.is_supported_asset(&token_id);
 
-    assert_eq!(before_contract_version, 1);
+    assert_eq!(before_contract_version, 3);
     assert_eq!(before_schema_version, 1);
     assert_eq!(before_admin, Some(admin.clone()));
     assert_eq!(before_oracle, Some(oracle.clone()));
@@ -253,10 +255,10 @@ fn test_migrate_preserves_state_native() {
 #[test]
 fn test_migrate_rejects_unauthorized_address() {
     let env = Env::default();
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let oracle = Address::generate(&env);
     let attacker = Address::generate(&env);
     let lending_pool = Address::generate(&env);
@@ -299,4 +301,20 @@ fn test_migrate_rejects_unauthorized_address() {
     // Schema version and admin remain unchanged afterwards
     assert_eq!(client.get_storage_schema_version(), 1);
     assert_eq!(client.get_admin(), Some(admin));
+}
+
+#[test]
+fn finalization_checks_the_version_of_the_installed_code() {
+    let (env, _, vault, _, _, _, _, _, _) = setup_env();
+    let hash = env
+        .deployer()
+        .upload_contract_wasm(Bytes::from_slice(&env, TEST_WASM));
+    vault.upgrade(&hash, &4);
+    assert_eq!(vault.get_contract_version(), 3);
+    assert_eq!(
+        vault.try_finalize_upgrade(),
+        Err(Ok(VaultError::InvalidInputs))
+    );
+    vault.upgrade(&hash, &3);
+    vault.finalize_upgrade();
 }

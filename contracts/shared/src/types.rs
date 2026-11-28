@@ -38,6 +38,20 @@ pub struct AssetConfig {
     pub liquidation_threshold_bps: u32,
 }
 
+pub const DEFAULT_TOKEN_DECIMALS: u32 = 7;
+pub const DEFAULT_ORACLE_PRICE_DECIMALS: u32 = 7;
+
+impl Default for AssetConfig {
+    fn default() -> Self {
+        Self {
+            token_decimals: DEFAULT_TOKEN_DECIMALS,
+            oracle_price_decimals: DEFAULT_ORACLE_PRICE_DECIMALS,
+            max_ltv_bps: crate::DEFAULT_MAX_LTV_BPS,
+            liquidation_threshold_bps: crate::DEFAULT_LIQUIDATION_THRESHOLD_BPS,
+        }
+    }
+}
+
 /// Represents a single collateral asset held by a user.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
@@ -59,19 +73,31 @@ pub fn accrue_linear_interest(
     rate_bps: u32,
     elapsed_seconds: u64,
 ) -> Result<i128, SharedError> {
-    if principal < 0 {
+    Ok(accrue_with_remainder(principal, rate_bps, elapsed_seconds, 0)?.0)
+}
+
+/// Carries fractional base units across accruals, including principal changes.
+pub fn accrue_with_remainder(
+    principal: i128,
+    rate_bps: u32,
+    elapsed_seconds: u64,
+    remainder: i128,
+) -> Result<(i128, i128), SharedError> {
+    let denominator = BPS_DENOMINATOR * i128::from(SECONDS_PER_YEAR);
+    if principal < 0 || !(0..denominator).contains(&remainder) {
         return Err(SharedError::InvalidAmount);
     }
-    let annual = principal
-        .checked_mul(rate_bps as i128)
-        .ok_or(SharedError::Overflow)?
-        .checked_div(BPS_DENOMINATOR)
-        .ok_or(SharedError::DivisionByZero)?;
-    annual
-        .checked_mul(elapsed_seconds as i128)
-        .ok_or(SharedError::Overflow)?
-        .checked_div(SECONDS_PER_YEAR as i128)
-        .ok_or(SharedError::DivisionByZero)
+    let rate = principal
+        .checked_mul(i128::from(rate_bps))
+        .ok_or(SharedError::Overflow)?;
+    let elapsed = i128::from(elapsed_seconds);
+    // Both factors in the fractional term are bounded by the denominator and u64.
+    let fractional = (rate % denominator) * elapsed + remainder;
+    let whole = (rate / denominator)
+        .checked_mul(elapsed)
+        .and_then(|amount| amount.checked_add(fractional / denominator))
+        .ok_or(SharedError::Overflow)?;
+    Ok((whole, fractional % denominator))
 }
 
 pub fn health_factor_bps(

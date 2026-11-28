@@ -15,10 +15,10 @@ fn setup_env() -> (
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let lending_pool = Address::generate(&env);
     let user = Address::generate(&env);
 
@@ -36,7 +36,7 @@ fn test_deposit_event_topics() {
     let oracle = Address::generate(&env);
     let liquidation_engine = Address::generate(&env);
     client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
-    client.add_supported_asset(&token_id);
+    client.add_supported_asset(&token_id, &shared::AssetConfig::default());
 
     // Set up user token balance
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
@@ -71,8 +71,10 @@ fn test_asset_added_event_fields_and_topics() {
     let liquidation_engine = Address::generate(&env);
     client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
 
-    let asset = Address::generate(&env);
-    client.add_supported_asset(&asset);
+    let asset = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
+    client.add_supported_asset(&asset, &shared::AssetConfig::default());
 
     let last_event = env.events().all().last().unwrap();
     assert_eq!(last_event.0, client.address);

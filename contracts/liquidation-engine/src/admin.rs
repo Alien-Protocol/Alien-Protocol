@@ -23,6 +23,9 @@ pub fn initialize(
     }
 
     admin.require_auth();
+    if !shared::take_initializer(&env, &admin) {
+        return Err(EngineError::Unauthorized);
+    }
     assert_distinct(
         &admin,
         &[

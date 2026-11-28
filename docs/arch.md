@@ -516,7 +516,7 @@ Alien Protocol V1 uses a fixed APR model so the first production contract is sim
 - Each debt position stores `principal`, `accrued_interest`, `interest_rate_bps`, and `last_accrual_at`
 - Total debt is derived as `principal + accrued_interest`
 - Interest is accrued before every `borrow`, `repay`, `liquidate`, and `get_debt` read
-- Repayments apply interest first, then principal
+- Repayments apply interest first, then principal. Collected interest increases the redemption value of current liquidity-provider shares.
 - Partial repayment is allowed as long as the remaining debt stays above a protocol minimum debt size
 
 ### Accrual Formula
@@ -556,7 +556,7 @@ Liquidation should not depend solely on the backend worker. The contract must be
 
 - Primary mode: permissionless liquidation by third parties
 - Backstop mode: backend liquidation worker submits when no external liquidator acts
-- Liquidation bonus: 8% of collateral seized is paid to the liquidator
+- Liquidation bonus: the liquidator receives collateral worth the repayment plus 8% of the repaid amount
 - Protocol liquidation reserve is optional for V1 and not required for the core design
 
 ### Full vs Partial Liquidation
@@ -566,14 +566,14 @@ Alien Protocol V1 uses partial liquidation by default.
 - Trigger condition: `HF < 1.0`
 - Target post-liquidation health factor: `1.10`
 - Close factor: maximum 50% of outstanding debt can be repaid in one liquidation call
-- Fallback: if the remaining position would be dust-sized or still unsafe, full liquidation is allowed
+- If the remaining position would be dust-sized or unsafe, full settlement is allowed when collateral covers debt plus bonus. Otherwise, settlement is capped by collateral coverage and unpaid debt remains with the borrower.
 
 This reduces liquidator capital requirements and protects users better than all-or-nothing liquidation.
 
 ### Core Functions
 
 ```rust
-fn liquidate(user: Address, max_repay_amount: i128)
+fn liquidate(liquidator: Address, user: Address, max_repay_amount: i128)
 fn is_liquidatable(user: Address) -> bool
 fn calculate_bonus(repaid_amount: i128) -> i128
 fn calculate_partial_repayment(user: Address) -> i128

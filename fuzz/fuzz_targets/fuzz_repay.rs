@@ -9,10 +9,10 @@ fuzz_target!(|amount: i128| {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(PoolContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(PoolContract, (&admin,));
     let client = PoolContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let vault = Address::generate(&env);
     let oracle = Address::generate(&env);

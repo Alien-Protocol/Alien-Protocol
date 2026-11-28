@@ -8,12 +8,11 @@ use crate::types::PauseFlag;
 use crate::LendingPoolClient;
 
 /// Transfers seized collateral after authenticating the registered liquidation engine. Returns unauthorized, vault-paused, or debit errors without transferring funds.
-pub fn execute_seize(
+pub fn execute_batch(
     env: &Env,
     liquidation_engine: Address,
     user: Address,
-    asset: Address,
-    amount: i128,
+    basket: soroban_sdk::Vec<shared::CollateralAsset>,
 ) -> Result<(), VaultError> {
     liquidation_engine.require_auth();
 
@@ -44,22 +43,25 @@ pub fn execute_seize(
         return Err(VaultError::NotLiquidatable);
     }
 
-    let _new_balance = checked_debit(env, &user, &asset, amount)?;
+    for item in basket.iter() {
+        let asset = item.asset;
+        let amount = item.amount;
+        checked_debit(env, &user, &asset, amount)?;
 
-    let token_client = token::Client::new(env, &asset);
-    token_client.transfer(
-        &env.current_contract_address(),
-        &liquidation_engine,
-        &amount,
-    );
+        let token_client = token::Client::new(env, &asset);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &liquidation_engine,
+            &amount,
+        );
 
-    events::CollateralSeized {
-        user,
-        asset,
-        amount,
-        liquidation_engine,
+        events::CollateralSeized {
+            user: user.clone(),
+            asset,
+            amount,
+            liquidation_engine: liquidation_engine.clone(),
+        }
+        .publish(env);
     }
-    .publish(env);
-
     Ok(())
 }

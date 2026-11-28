@@ -54,27 +54,5 @@ pub const LIQUIDATION_BONUS_BPS: u32 = 800;
 /// cap with `TARGET_HF_BPS` to determine the effective repay amount.
 pub const CLOSE_FACTOR_BPS: u32 = 5_000;
 
-/// Minimum remaining debt below which a residual balance is treated as dust
-/// and forced to zero during liquidation / repayment.
-///
-/// Dust here means a debt remainder so small that it is economically
-/// insignificant relative to transaction fees and cannot be repaid without
-/// costing more than the debt itself. Leaving such a remainder would block
-/// position closure and create a perpetually uncloseable position.
-///
-/// One quote unit (1.0 in quote units, i.e. `PROTOCOL_QUOTE_PRECISION`) is chosen
-/// deliberately: it is the smallest non-zero amount representable at the
-/// protocol's quote precision, so any remaining debt at or below this threshold
-/// is below the granularity of the accounting system and effectively zero.
-/// Tiering the threshold to the precision (and not an arbitrary larger value)
-/// keeps the dust rule consistent with the unit of account and avoids writing
-/// off small but non-trivial balances.
-///
-/// Code paths that depend on this constant:
-/// - The liquidation solver's dust fallback: when the computed repay would leave
-///   a remaining debt at or below this value, the solver instead repays the full
-///   debt and closes the position.
-/// - Per TODO §1.3, this should also gate repay dust in the pool: repays that
-///   would leave less than or equal to this amount outstanding are treated as
-///   full repayments.
+/// Smallest positive balance allowed after a repayment, in quote base units.
 pub const MIN_REMAINING_DEBT: i128 = PROTOCOL_QUOTE_PRECISION;

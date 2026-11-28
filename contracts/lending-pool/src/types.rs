@@ -43,7 +43,9 @@ pub enum DataKey {
     InterestRateBps,
     PauseMask,
     TotalSupply,
+    TotalShares,
     TotalBorrowed,
     Supply(Address),
     Debt(Address),
+    InterestRemainder(Address),
 }

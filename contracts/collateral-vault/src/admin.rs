@@ -11,6 +11,16 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
         return Err(VaultError::AlreadyAdmin);
     }
 
+    if [
+        storage::get_lending_pool(&env),
+        storage::get_oracle(&env),
+        storage::get_liquidation_engine(&env),
+    ]
+    .contains(&Some(new_admin.clone()))
+    {
+        return Err(VaultError::InvalidAddress);
+    }
+
     storage::set_admin(&env, &new_admin);
 
     events::AdminChanged {
@@ -27,14 +37,28 @@ pub fn set_lending_pool(env: Env, lending_pool: Address) -> Result<(), VaultErro
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
-    if let Some(oracle) = storage::get_oracle(&env) {
-        if lending_pool == oracle {
-            return Err(VaultError::InvalidAddress);
-        }
+    if [
+        Some(admin),
+        storage::get_oracle(&env),
+        storage::get_liquidation_engine(&env),
+    ]
+    .contains(&Some(lending_pool.clone()))
+    {
+        return Err(VaultError::InvalidAddress);
     }
 
     let old_pool = storage::get_lending_pool(&env);
 
+    if let Some(ref previous) = old_pool {
+        if *previous != lending_pool
+            && !matches!(
+                crate::LendingPoolClient::new(&env, previous).try_get_total_borrowed(),
+                Ok(Ok(0))
+            )
+        {
+            return Err(VaultError::OutstandingDebt);
+        }
+    }
     storage::set_lending_pool(&env, &lending_pool);
 
     events::LendingPoolUpdated {
@@ -51,10 +75,14 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
-    if let Some(pool) = storage::get_lending_pool(&env) {
-        if oracle == pool {
-            return Err(VaultError::InvalidAddress);
-        }
+    if [
+        Some(admin),
+        storage::get_lending_pool(&env),
+        storage::get_liquidation_engine(&env),
+    ]
+    .contains(&Some(oracle.clone()))
+    {
+        return Err(VaultError::InvalidAddress);
     }
 
     let old_oracle = storage::get_oracle(&env);
@@ -73,6 +101,16 @@ pub fn set_oracle(env: Env, oracle: Address) -> Result<(), VaultError> {
 pub fn set_liquidation_engine(env: Env, engine: Address) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
+
+    if [
+        Some(admin),
+        storage::get_lending_pool(&env),
+        storage::get_oracle(&env),
+    ]
+    .contains(&Some(engine.clone()))
+    {
+        return Err(VaultError::InvalidAddress);
+    }
 
     let old_engine = storage::get_liquidation_engine(&env);
     storage::set_liquidation_engine(&env, &engine);

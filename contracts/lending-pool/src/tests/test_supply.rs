@@ -10,6 +10,9 @@ pub struct MockVaultContract;
 
 #[contractimpl]
 impl MockVaultContract {
+    pub fn can_originate(_env: Env, _pool: Address) -> bool {
+        true
+    }
     pub fn get_position(env: Env, user: Address) -> shared::Position {
         let mut collateral = soroban_sdk::Vec::new(&env);
         collateral.push_back(shared::CollateralAsset {
@@ -50,10 +53,10 @@ fn setup_env() -> (
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(PoolContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(PoolContract, (&admin,));
     let client = PoolContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let vault = env.register(MockVaultContract, ());
     let oracle = Address::generate(&env);
@@ -258,4 +261,32 @@ fn test_utilization_over_supply_clamps_to_ten_thousand() {
     });
 
     assert_eq!(client.get_utilization_bps(), 10_000);
+}
+
+#[test]
+fn legacy_supply_and_rounding_preserve_existing_claims() {
+    let (env, pool, _, first, _, _, token, issuer) = setup_env();
+    let late = Address::generate(&env);
+    // Pre-share storage held principal in Supply and TotalSupply.
+    env.as_contract(&pool.address, || {
+        storage::set_user_supply(&env, &first, 2);
+        storage::set_total_supply(&env, 2);
+        liquidity::credit_interest(&env, 1).unwrap();
+    });
+    issuer.mint(&pool.address, &3);
+    issuer.mint(&late, &3);
+    assert_eq!(pool.get_user_supply(&first), 3);
+    assert_eq!(
+        pool.try_supply(&late, &1),
+        Err(Ok(PoolError::InvalidAmount))
+    );
+    assert_eq!(token.balance(&late), 3);
+    pool.supply(&late, &3);
+    pool.withdraw_liquidity(&late, &1);
+    assert_eq!(pool.get_user_supply(&late), 1);
+    pool.withdraw_liquidity(&late, &1);
+    let final_claim = pool.get_user_supply(&first);
+    assert_eq!(final_claim, 4);
+    pool.withdraw_liquidity(&first, &final_claim);
+    assert_eq!(token.balance(&pool.address), 0);
 }

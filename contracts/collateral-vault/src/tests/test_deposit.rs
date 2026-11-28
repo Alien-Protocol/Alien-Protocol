@@ -17,10 +17,10 @@ fn setup_env() -> (
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
     let lending_pool = Address::generate(&env);
@@ -34,7 +34,7 @@ fn setup_env() -> (
     let token_client = token::Client::new(&env, &token_contract_id);
     let token_admin_client = token::StellarAssetClient::new(&env, &token_contract_id);
 
-    client.add_supported_asset(&token_contract_id);
+    client.add_supported_asset(&token_contract_id, &shared::AssetConfig::default());
 
     (
         env,
@@ -131,7 +131,7 @@ fn test_deposit_second_asset_appends_to_position() {
     let token_id2 = token_contract2.address();
     let token_admin_client2 = token::StellarAssetClient::new(&env, &token_id2);
 
-    client.add_supported_asset(&token_id2);
+    client.add_supported_asset(&token_id2, &shared::AssetConfig::default());
 
     token_admin1.mint(&user, &1000);
     token_admin_client2.mint(&user, &1000);

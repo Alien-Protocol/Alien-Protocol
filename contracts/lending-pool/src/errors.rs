@@ -25,6 +25,8 @@ pub enum PoolError {
     BelowMinDebt = 19,
     RepayPaused = 20,
     NotImplemented = 21,
+    RiskUnavailable = 22,
+    OutstandingDebt = 23,
 }
 
 impl From<shared::SharedError> for PoolError {

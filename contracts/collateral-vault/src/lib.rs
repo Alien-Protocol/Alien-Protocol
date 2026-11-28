@@ -2,7 +2,8 @@
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Symbol, Vec};
 
 use errors::VaultError;
-use types::{PauseFlag, Position};
+pub use types::PauseFlag;
+use types::Position;
 
 mod risk;
 
@@ -14,6 +15,7 @@ pub trait Oracle {
 
 #[soroban_sdk::contractclient(name = "LendingPoolClient")]
 pub trait LendingPool {
+    fn get_total_borrowed(env: Env) -> i128;
     fn get_user_debt(env: Env, user: Address) -> i128;
     fn is_liquidatable(env: Env, user: Address) -> bool;
 }
@@ -23,6 +25,10 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
+    pub fn __constructor(env: Env, admin: Address) {
+        shared::bind_initializer(&env, &admin);
+    }
+
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -45,6 +51,9 @@ impl VaultContract {
         }
 
         admin.require_auth();
+        if !shared::take_initializer(&env, &admin) {
+            return Err(VaultError::Unauthorized);
+        }
 
         storage::set_admin(&env, &admin);
         storage::set_lending_pool(&env, &lending_pool);
@@ -65,16 +74,23 @@ impl VaultContract {
         Ok(())
     }
 
-    pub fn get_contract_version(env: Env) -> u32 {
-        upgrade::get_contract_version(&env)
+    pub fn get_contract_version(_env: Env) -> u32 {
+        upgrade::get_contract_version()
     }
 
     pub fn get_storage_schema_version(env: Env) -> u32 {
         upgrade::get_storage_schema_version(&env)
     }
 
-    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
-        upgrade::upgrade(env, wasm_hash)
+    pub fn upgrade(
+        env: Env,
+        wasm_hash: BytesN<32>,
+        expected_version: u32,
+    ) -> Result<(), VaultError> {
+        upgrade::upgrade(env, wasm_hash, expected_version)
+    }
+    pub fn finalize_upgrade(env: Env) -> Result<(), VaultError> {
+        upgrade::finalize_upgrade(env)
     }
 
     pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), VaultError> {
@@ -117,8 +133,12 @@ impl VaultContract {
         storage::is_operation_paused(&env, &operation)
     }
 
-    pub fn add_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
-        assets::add_supported_asset(env, asset)
+    pub fn add_supported_asset(
+        env: Env,
+        asset: Address,
+        config: types::AssetConfig,
+    ) -> Result<(), VaultError> {
+        assets::add_supported_asset(env, asset, config)
     }
 
     pub fn remove_supported_asset(env: Env, asset: Address) -> Result<(), VaultError> {
@@ -158,12 +178,21 @@ impl VaultContract {
         } else {
             0
         };
+        Self::health_factor_for_debt(env, user, debt)
+    }
+
+    /// Quotes health for a supplied debt without calling back into the pool.
+    pub fn health_factor_for_debt(env: Env, user: Address, debt: i128) -> i128 {
         match risk::health_factor_bps(&env, &user, debt) {
             Ok(hf) => hf,
             Err(e) => soroban_sdk::panic_with_error!(&env, e),
         }
     }
 
+    pub fn can_originate(env: Env, pool: Address) -> bool {
+        storage::get_lending_pool(&env) == Some(pool)
+            && !storage::is_operation_paused(&env, &PauseFlag::Borrow)
+    }
     pub fn get_admin(env: Env) -> Option<Address> {
         storage::get_admin(&env)
     }
@@ -258,6 +287,21 @@ impl VaultContract {
         storage::get_all_positions(&env)
     }
 
+    /// Reads up to 64 positions from the active index at the current ledger.
+    pub fn get_positions_page(env: Env, offset: u32, limit: u32) -> Vec<Position> {
+        let mut positions = Vec::new(&env);
+        for user in storage::index_page(&env, offset, limit.min(64)).iter() {
+            if let Some(position) = storage::get_position(&env, &user) {
+                positions.push_back(position);
+            }
+        }
+        positions
+    }
+
+    pub fn migrate_position_index(env: Env, limit: u32) -> u32 {
+        storage::migrate_index(&env, limit)
+    }
+
     pub fn seize_collateral(
         env: Env,
         liquidation_engine: Address,
@@ -265,18 +309,49 @@ impl VaultContract {
         asset: Address,
         amount: i128,
     ) -> Result<(), VaultError> {
-        liquidation::execute_seize(&env, liquidation_engine, user, asset, amount)
+        liquidation::execute_batch(
+            &env,
+            liquidation_engine,
+            user,
+            Vec::from_array(&env, [shared::CollateralAsset { asset, amount }]),
+        )
+    }
+    pub fn seize_batch(
+        env: Env,
+        liquidation_engine: Address,
+        user: Address,
+        pool: Address,
+        oracle: Address,
+        basket: Vec<shared::CollateralAsset>,
+    ) -> Result<(), VaultError> {
+        if storage::get_lending_pool(&env) != Some(pool)
+            || storage::get_oracle(&env) != Some(oracle)
+        {
+            return Err(VaultError::InvalidAddress);
+        }
+        liquidation::execute_batch(&env, liquidation_engine, user, basket)
     }
 
     pub fn is_withdrawal_safe(env: Env, user: Address, asset: Address, amount: i128) -> bool {
+        if amount <= 0
+            || env
+                .storage()
+                .persistent()
+                .has(&types::DataKey::PositionIndex)
+            || storage::is_operation_paused(&env, &PauseFlag::Withdraw)
+            || !storage::is_supported_asset(&env, &asset)
+            || amount > storage::get_position_balance(&env, &user, &asset)
+        {
+            return false;
+        }
         let debt = if let Some(pool_addr) = storage::get_lending_pool(&env) {
             let pool_client = LendingPoolClient::new(&env, &pool_addr);
             match pool_client.try_get_user_debt(&user) {
                 Ok(Ok(debt)) => debt,
-                _ => 0,
+                _ => return false,
             }
         } else {
-            0
+            return false;
         };
 
         if debt == 0 {

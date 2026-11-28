@@ -26,10 +26,10 @@ fn setup_env() -> (
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
     let pool_id = env.register(MockLendingPool, ());
@@ -43,7 +43,7 @@ fn setup_env() -> (
     let token_client = token::Client::new(&env, &token_contract_id);
     let token_admin_client = token::StellarAssetClient::new(&env, &token_contract_id);
 
-    client.add_supported_asset(&token_contract_id);
+    client.add_supported_asset(&token_contract_id, &shared::AssetConfig::default());
 
     (
         env,
@@ -59,9 +59,11 @@ fn setup_env() -> (
 #[test]
 fn test_add_asset_success() {
     let (env, client, _admin, _user, _token_id, _token_client, _token_admin) = setup_env();
-    let other_token = Address::generate(&env);
+    let other_token = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
 
-    client.add_supported_asset(&other_token);
+    client.add_supported_asset(&other_token, &shared::AssetConfig::default());
     assert!(client.is_supported_asset(&other_token));
 }
 
@@ -69,7 +71,7 @@ fn test_add_asset_success() {
 fn test_add_asset_duplicate_fails() {
     let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
 
-    let res = client.try_add_supported_asset(&token_id);
+    let res = client.try_add_supported_asset(&token_id, &shared::AssetConfig::default());
     assert!(res.is_err());
 }
 
@@ -153,10 +155,10 @@ fn test_set_asset_config_success_when_no_open_positions() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let oracle = Address::generate(&env);
     let pool_id = env.register(MockLendingPool, ());
     let liquidation_engine = Address::generate(&env);
@@ -165,19 +167,21 @@ fn test_set_asset_config_success_when_no_open_positions() {
     client.initialize(&admin, &pool_id, &oracle, &liquidation_engine);
 
     // Add a supported asset
-    let asset = Address::generate(&env);
-    client.add_supported_asset(&asset);
+    let asset = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
+    client.add_supported_asset(&asset, &shared::AssetConfig::default());
 
     // Assert that no open positions exist
     assert_eq!(client.get_all_positions().len(), 0);
 
     // Call set_asset_config with valid parameters and assert Ok(()) is returned
-    let res = client.try_set_asset_config(&asset, &6, &8, &7_000, &8_000);
+    let res = client.try_set_asset_config(&asset, &7, &8, &7_000, &8_000);
     assert_eq!(res, Ok(Ok(())));
 
     // Verify get_asset_config returns the updated values
     let cfg = client.get_asset_config(&asset);
-    assert_eq!(cfg.token_decimals, 6);
+    assert_eq!(cfg.token_decimals, 7);
     assert_eq!(cfg.oracle_price_decimals, 8);
     assert_eq!(cfg.max_ltv_bps, 7_000);
     assert_eq!(cfg.liquidation_threshold_bps, 8_000);
@@ -188,17 +192,17 @@ fn test_set_asset_config_idempotent() {
     let (_env, client, _admin, _user, token_id, _token_client, _token_admin) = setup_env();
 
     // Call set_asset_config with valid parameters
-    let first_res = client.try_set_asset_config(&token_id, &6, &8, &7_000, &8_000);
+    let first_res = client.try_set_asset_config(&token_id, &7, &8, &7_000, &8_000);
     assert_eq!(first_res, Ok(Ok(())));
 
     let cfg1 = client.get_asset_config(&token_id);
-    assert_eq!(cfg1.token_decimals, 6);
+    assert_eq!(cfg1.token_decimals, 7);
     assert_eq!(cfg1.oracle_price_decimals, 8);
     assert_eq!(cfg1.max_ltv_bps, 7_000);
     assert_eq!(cfg1.liquidation_threshold_bps, 8_000);
 
     // Verify calling set_asset_config with the same parameters is idempotent
-    let second_res = client.try_set_asset_config(&token_id, &6, &8, &7_000, &8_000);
+    let second_res = client.try_set_asset_config(&token_id, &7, &8, &7_000, &8_000);
     assert_eq!(second_res, Ok(Ok(())));
 
     let cfg2 = client.get_asset_config(&token_id);
@@ -213,18 +217,18 @@ fn test_set_asset_config_after_full_withdraw_succeeds() {
     client.deposit(&user, &token_id, &500);
 
     // Updating config when positions exist fails with ImmutableMetadata
-    let err_res = client.try_set_asset_config(&token_id, &6, &8, &7_000, &8_000);
+    let err_res = client.try_set_asset_config(&token_id, &7, &8, &7_000, &8_000);
     assert_eq!(err_res, Err(Ok(VaultError::ImmutableMetadata)));
 
     // Withdraw all positions
     client.withdraw(&user, &token_id, &500);
 
     // Calling set_asset_config now succeeds because no open positions remain
-    let res = client.try_set_asset_config(&token_id, &6, &8, &7_000, &8_000);
+    let res = client.try_set_asset_config(&token_id, &7, &8, &7_000, &8_000);
     assert_eq!(res, Ok(Ok(())));
 
     let cfg = client.get_asset_config(&token_id);
-    assert_eq!(cfg.token_decimals, 6);
+    assert_eq!(cfg.token_decimals, 7);
     assert_eq!(cfg.oracle_price_decimals, 8);
     assert_eq!(cfg.max_ltv_bps, 7_000);
     assert_eq!(cfg.liquidation_threshold_bps, 8_000);
@@ -284,13 +288,11 @@ fn test_set_asset_config_emits_event() {
     use soroban_sdk::testutils::Events;
     use soroban_sdk::{IntoVal, Symbol};
 
-    let (env, client, _admin, asset, _, _, _) = setup_env();
+    let (env, client, _admin, _, asset, _, _) = setup_env();
 
     env.mock_all_auths();
 
-    client.add_supported_asset(&asset);
-
-    client.set_asset_config(&asset, &18, &8, &8000, &8500);
+    client.set_asset_config(&asset, &7, &8, &8000, &8500);
 
     let events = env.events().all();
     let last_event = events.last().unwrap();

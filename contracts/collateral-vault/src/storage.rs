@@ -105,7 +105,7 @@ pub fn get_asset_config(env: &Env, asset: &Address) -> Option<AssetConfig> {
 }
 
 pub fn get_asset_config_or_default(env: &Env, asset: &Address) -> AssetConfig {
-    get_asset_config(env, asset).unwrap_or(AssetConfig::default())
+    get_asset_config(env, asset).unwrap_or_default()
 }
 
 pub fn set_asset_config(env: &Env, asset: &Address, config: &AssetConfig) {
@@ -115,13 +115,12 @@ pub fn set_asset_config(env: &Env, asset: &Address, config: &AssetConfig) {
 }
 
 pub fn has_open_position(env: &Env, asset: &Address) -> bool {
-    let index = get_position_index(env);
-    for user in index.iter() {
-        if get_position_balance(env, &user, asset) > 0 {
-            return true;
-        }
-    }
-    false
+    require_migrated_index(env);
+    env.storage()
+        .persistent()
+        .get::<_, u32>(&DataKey::AssetHolders(asset.clone()))
+        .unwrap_or(0)
+        > 0
 }
 
 pub fn get_oracle(env: &Env) -> Option<Address> {
@@ -155,35 +154,102 @@ pub fn set_position_balance(env: &Env, user: &Address, asset: &Address, balance:
         .set(&DataKey::Position(user.clone(), asset.clone()), &balance);
 }
 
-pub fn get_position_index(env: &Env) -> Vec<Address> {
+fn indexed_count(env: &Env) -> u32 {
     env.storage()
         .persistent()
-        .get(&DataKey::PositionIndex)
-        .unwrap_or_else(|| Vec::new(env))
+        .get(&DataKey::PositionCount)
+        .unwrap_or(0)
+}
+
+pub fn require_migrated_index(env: &Env) {
+    if env.storage().persistent().has(&DataKey::PositionIndex) {
+        soroban_sdk::panic_with_error!(env, crate::errors::VaultError::IndexMigrationRequired);
+    }
+}
+
+pub fn index_page(env: &Env, offset: u32, limit: u32) -> Vec<Address> {
+    let state = env.storage().persistent();
+    let count = indexed_count(env);
+    let mut users = Vec::new(env);
+    let end = offset.saturating_add(limit);
+    for slot in offset..end.min(count) {
+        users.push_back(state.get(&DataKey::PositionSlot(slot)).unwrap());
+    }
+    if end > count {
+        if let Some(legacy) = state.get::<_, Vec<Address>>(&DataKey::PositionIndex) {
+            let cursor: u32 = state.get(&DataKey::IndexCursor).unwrap_or(0);
+            let start = cursor.saturating_add(offset.saturating_sub(count));
+            let stop = cursor.saturating_add(end - count).min(legacy.len());
+            for i in start..stop {
+                users.push_back(legacy.get_unchecked(i));
+            }
+        }
+    }
+    users
+}
+
+pub fn get_position_index(env: &Env) -> Vec<Address> {
+    index_page(env, 0, u32::MAX)
 }
 
 pub fn add_to_position_index(env: &Env, user: &Address) {
-    let mut index = get_position_index(env);
-    if !index.contains(user) {
-        index.push_back(user.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::PositionIndex, &index);
+    let state = env.storage().persistent();
+    let key = DataKey::UserSlot(user.clone());
+    if state.has(&key) {
+        return;
     }
+    let slot = indexed_count(env);
+    state.set(&DataKey::PositionSlot(slot), user);
+    state.set(&key, &slot);
+    state.set(&DataKey::PositionCount, &(slot + 1));
 }
 
-/// Remove a user from the position index (called when their balance reaches zero).
 pub fn remove_from_position_index(env: &Env, user: &Address) {
-    let index = get_position_index(env);
-    let mut new_index: Vec<Address> = Vec::new(env);
-    for addr in index.iter() {
-        if &addr != user {
-            new_index.push_back(addr);
+    let state = env.storage().persistent();
+    let key = DataKey::UserSlot(user.clone());
+    let slot: u32 = state.get(&key).unwrap();
+    let last = indexed_count(env) - 1;
+    if slot != last {
+        let moved: Address = state.get(&DataKey::PositionSlot(last)).unwrap();
+        state.set(&DataKey::PositionSlot(slot), &moved);
+        state.set(&DataKey::UserSlot(moved), &slot);
+    }
+    state.remove(&DataKey::PositionSlot(last));
+    state.remove(&key);
+    state.set(&DataKey::PositionCount, &last);
+}
+
+pub fn update_holders(env: &Env, asset: &Address, added: bool) {
+    let state = env.storage().persistent();
+    let key = DataKey::AssetHolders(asset.clone());
+    let count: u32 = state.get(&key).unwrap_or(0);
+    state.set(&key, &if added { count + 1 } else { count - 1 });
+}
+
+/// Returns the number of legacy users remaining. Balance changes resume at zero.
+pub fn migrate_index(env: &Env, limit: u32) -> u32 {
+    let state = env.storage().persistent();
+    let Some(legacy) = state.get::<_, Vec<Address>>(&DataKey::PositionIndex) else {
+        return 0;
+    };
+    let cursor: u32 = state.get(&DataKey::IndexCursor).unwrap_or(0);
+    let end = cursor.saturating_add(limit.min(32)).min(legacy.len());
+    for i in cursor..end {
+        let user = legacy.get_unchecked(i);
+        add_to_position_index(env, &user);
+        for asset in get_user_assets(env, &user).iter() {
+            if get_position_balance(env, &user, &asset) > 0 {
+                update_holders(env, &asset, true);
+            }
         }
     }
-    env.storage()
-        .persistent()
-        .set(&DataKey::PositionIndex, &new_index);
+    if end == legacy.len() {
+        state.remove(&DataKey::IndexCursor);
+        state.remove(&DataKey::PositionIndex);
+    } else {
+        state.set(&DataKey::IndexCursor, &end);
+    }
+    legacy.len() - end
 }
 
 /// Track which assets a user has deposited into.
@@ -220,11 +286,6 @@ pub fn remove_user_asset(env: &Env, user: &Address, asset: &Address) {
 
 /// Build a Position for a user by loading all their non-zero balances.
 pub fn get_position(env: &Env, user: &Address) -> Option<Position> {
-    let index = get_position_index(env);
-    if !index.contains(user) {
-        return None;
-    }
-
     let all_assets = get_user_assets(env, user);
     let mut collateral: Vec<CollateralAsset> = Vec::new(env);
 
@@ -260,15 +321,7 @@ pub fn get_all_positions(env: &Env) -> Vec<Position> {
     positions
 }
 
-pub const DEFAULT_CONTRACT_VERSION: u32 = 1;
 pub const DEFAULT_STORAGE_SCHEMA_VERSION: u32 = 1;
-
-pub fn get_contract_version(env: &Env) -> u32 {
-    env.storage()
-        .persistent()
-        .get(&DataKey::ContractVersion)
-        .unwrap_or(DEFAULT_CONTRACT_VERSION)
-}
 
 pub fn set_contract_version(env: &Env, version: u32) {
     env.storage()

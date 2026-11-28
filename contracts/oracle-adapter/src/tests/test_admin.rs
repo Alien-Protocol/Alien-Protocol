@@ -105,7 +105,7 @@ fn test_get_admin_returns_correct_address() {
 #[test]
 fn test_get_admin_before_init_returns_none() {
     let env = Env::default();
-    let contract_id = env.register(OracleContract, ());
+    let contract_id = env.register(OracleContract, (&Address::generate(&env),));
     let client = OracleContractClient::new(&env, &contract_id);
 
     let result = client.get_admin();
@@ -115,10 +115,25 @@ fn test_get_admin_before_init_returns_none() {
 #[test]
 fn test_initialize_requires_admin_auth() {
     let env = Env::default();
-    let contract_id = env.register(OracleContract, ());
-    let client = OracleContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
+    let contract_id = env.register(OracleContract, (&admin,));
+    let client = OracleContractClient::new(&env, &contract_id);
 
     let result = client.try_initialize(&admin, &300);
     assert!(result.is_err());
+}
+
+#[test]
+fn initialize_rejects_zero_freshness_window() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let oracle = OracleContractClient::new(&env, &env.register(OracleContract, (&admin,)));
+
+    let error = oracle.try_initialize(&admin, &0).unwrap_err().unwrap();
+    assert_eq!(
+        error,
+        soroban_sdk::Error::from_contract_error(OracleError::InvalidThreshold as u32)
+    );
+    assert_eq!(oracle.get_admin(), None);
 }

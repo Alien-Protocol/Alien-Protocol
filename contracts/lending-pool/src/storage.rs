@@ -79,6 +79,21 @@ pub fn set_total_supply(env: &Env, amount: i128) {
         .set(&DataKey::TotalSupply, &amount);
 }
 
+/// Legacy deposits were recorded at par. Snapshot this value before the first
+/// mutation that changes the share price.
+pub fn total_shares(env: &Env) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TotalShares)
+        .unwrap_or_else(|| get_total_supply(env))
+}
+
+pub fn set_total_shares(env: &Env, shares: i128) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::TotalShares, &shares);
+}
+
 pub fn get_total_borrowed(env: &Env) -> i128 {
     env.storage()
         .persistent()
@@ -116,6 +131,9 @@ pub fn set_debt(env: &Env, user: &Address, debt: &Debt) {
 }
 
 pub fn remove_debt(env: &Env, user: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::InterestRemainder(user.clone()));
     env.storage()
         .persistent()
         .remove(&DataKey::Debt(user.clone()));

@@ -10,8 +10,9 @@ use crate::types::PauseFlag;
 #[soroban_sdk::contractclient(name = "VaultClient")]
 #[allow(dead_code)]
 pub trait Vault {
+    fn can_originate(env: Env, pool: Address) -> bool;
     fn get_collateral_value(env: Env, user: Address) -> i128;
-    fn get_health_factor(env: Env, user: Address) -> i128;
+    fn health_factor_for_debt(env: Env, user: Address, debt: i128) -> i128;
     fn get_position(env: Env, user: Address) -> shared::Position;
     fn get_asset_config(env: Env, asset: Address) -> shared::AssetConfig;
 }
@@ -61,6 +62,10 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
         return Err(PoolError::BorrowPaused);
     }
 
+    let vault = storage::get_vault(&env).ok_or(PoolError::NotInitialized)?;
+    if !VaultClient::new(&env, &vault).can_originate(&env.current_contract_address()) {
+        return Err(PoolError::BorrowPaused);
+    }
     let mut user_debt = debt::accrue_interest(env.clone(), user.clone())?;
 
     if get_available_liquidity(env.clone()) < amount {
@@ -90,10 +95,10 @@ pub fn borrow(env: Env, user: Address, asset: Address, amount: i128) -> Result<(
         .ok_or(PoolError::Overflow)?;
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    if token_client
-        .try_transfer(&env.current_contract_address(), &user, &amount)
-        .is_err()
-    {
+    if !matches!(
+        token_client.try_transfer(&env.current_contract_address(), &user, &amount),
+        Ok(Ok(()))
+    ) {
         return Err(PoolError::InsufficientLiquidity);
     }
 

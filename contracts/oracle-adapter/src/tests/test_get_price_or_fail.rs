@@ -12,10 +12,10 @@ fn setup_env() -> (Env, OracleContractClient<'static>, Address) {
     // Set timestamp >= price timestamps used in these tests (all ≤ 1_000).
     env.ledger().set_timestamp(1_000);
 
-    let contract_id = env.register(OracleContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(OracleContract, (&admin,));
     let client = OracleContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     client.initialize(&admin, &300);
 
     (env, client, admin)

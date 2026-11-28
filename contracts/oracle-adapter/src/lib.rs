@@ -32,11 +32,21 @@ fn admin_or_panic(env: &Env) -> Address {
 
 #[contractimpl]
 impl OracleContract {
+    pub fn __constructor(env: Env, admin: Address) {
+        shared::bind_initializer(&env, &admin);
+    }
+
     pub fn initialize(env: Env, admin: Address, staleness_threshold: u64) {
         if storage::is_initialized(&env) {
             soroban_sdk::panic_with_error!(&env, OracleError::AlreadyInitialized);
         }
         admin.require_auth();
+        if !shared::take_initializer(&env, &admin) {
+            soroban_sdk::panic_with_error!(&env, OracleError::Unauthorized);
+        }
+        if staleness_threshold == 0 {
+            soroban_sdk::panic_with_error!(&env, OracleError::InvalidThreshold);
+        }
         storage::set_admin(&env, &admin);
         storage::set_staleness_threshold(&env, staleness_threshold);
         storage::set_paused(&env, false);
@@ -62,6 +72,7 @@ impl OracleContract {
         }
         caller.require_auth();
 
+        oracle::processor::feed_id_from_symbol(&env, &feed_id)?;
         storage::set_asset_feed(&env, &asset, &feed_id);
 
         if let Some(feed_price) = oracle::storage::get_feed_price(&env, &feed_id) {
@@ -84,6 +95,7 @@ impl OracleContract {
     }
 
     pub fn is_price_fresh(env: Env, asset: Address) -> bool {
+        let mapped = storage::get_asset_feed(&env, &asset).is_some();
         let price_data = match Self::get_price(env.clone(), asset) {
             Some(data) => data,
             None => return false,
@@ -93,18 +105,19 @@ impl OracleContract {
             None => return false,
         };
         let ledger_time = env.ledger().timestamp();
-        let (ledger_sec, price_sec) = if price_data.timestamp > 10_000_000_000 {
-            let p_sec = price_data.timestamp / 1000;
-            let l_sec = if ledger_time > 10_000_000_000 {
-                ledger_time / 1000
-            } else {
-                ledger_time
+        // RedStone signs milliseconds, while manual publishers submit seconds.
+        let reference_time = if mapped {
+            let Some(now_ms) = ledger_time.checked_mul(1000) else {
+                return false;
             };
-            (l_sec, p_sec)
+            if price_data.timestamp > now_ms {
+                return false;
+            }
+            price_data.timestamp / 1000
         } else {
-            (ledger_time, price_data.timestamp)
+            price_data.timestamp
         };
-        match ledger_sec.checked_sub(price_sec) {
+        match ledger_time.checked_sub(reference_time) {
             Some(delta) => delta <= threshold,
             None => false,
         }
@@ -136,6 +149,9 @@ impl OracleContract {
             soroban_sdk::panic_with_error!(&env, OracleError::OraclePaused);
         }
 
+        if storage::get_asset_feed(&env, &asset).is_some() {
+            soroban_sdk::panic_with_error!(&env, OracleError::MappedAsset);
+        }
         if price <= 0 {
             soroban_sdk::panic_with_error!(&env, OracleError::InvalidPrice);
         }
@@ -305,6 +321,14 @@ impl OracleContract {
 
         if threshold == 0 || threshold > signers.len() || threshold > (u8::MAX as u32) {
             return Err(OracleError::InvalidThreshold);
+        }
+
+        let mut seen = soroban_sdk::Map::new(&env);
+        for signer in signers.iter() {
+            if signer.len() != 20 || seen.contains_key(signer.clone()) {
+                return Err(OracleError::InvalidSigner);
+            }
+            seen.set(signer, ());
         }
 
         oracle::storage::set_redstone_signers(&env, &signers);

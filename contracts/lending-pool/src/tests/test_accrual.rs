@@ -15,10 +15,10 @@ fn setup_env() -> (
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(PoolContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(PoolContract, (&admin,));
     let client = PoolContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let vault = Address::generate(&env);
     let oracle = Address::generate(&env);
@@ -218,4 +218,19 @@ fn test_get_user_debt_matches_debt_total() {
 
     assert_eq!(user_debt, debt.total().unwrap());
     assert_eq!(user_debt, principal + initial_interest + 80_000_000);
+}
+
+#[test]
+fn split_accrual_matches_single_accrual_for_legacy_debts() {
+    let (env, pool, _, first, _, _) = setup_env();
+    let second = Address::generate(&env);
+    for user in [&first, &second] {
+        set_user_debt(&env, &pool.address, user, 50_000_003, 0, 800, 1000);
+    }
+    for timestamp in 1001..=1020 {
+        env.ledger().set_timestamp(timestamp);
+        pool.accrue_interest(&first);
+    }
+    assert_eq!(pool.get_debt(&first), pool.get_debt(&second));
+    assert_eq!(pool.get_debt(&first).accrued_interest, 2);
 }

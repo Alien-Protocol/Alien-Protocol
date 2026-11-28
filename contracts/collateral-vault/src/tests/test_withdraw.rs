@@ -69,13 +69,13 @@ fn setup_env() -> (
     env.mock_all_auths();
     env.ledger().set_timestamp(1000);
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
     let oracle_id = env.register(MockOracle, ());
     let oracle_client = MockOracleClient::new(&env, &oracle_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
     let pool_id = env.register(MockLendingPool, ());
@@ -91,7 +91,7 @@ fn setup_env() -> (
     let token_client = token::Client::new(&env, &token_id);
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
-    client.add_supported_asset(&token_id);
+    client.add_supported_asset(&token_id, &shared::AssetConfig::default());
 
     // Default price: 1 token = 100USD (7 decimals)
     oracle_client.set_price(&token_id, &1_000_000_000, &1000);
@@ -202,7 +202,7 @@ fn test_withdraw_when_paused_fails() {
 #[test]
 fn test_withdraw_without_auth_fails() {
     let env = Env::default();
-    let contract_id = env.register(VaultContract, ());
+    let contract_id = env.register(VaultContract, (&Address::generate(&env),));
     let client = VaultContractClient::new(&env, &contract_id);
     let user = Address::generate(&env);
     let token = Address::generate(&env);
@@ -340,4 +340,92 @@ fn test_withdraw_tokens_returned() {
     client.withdraw(&user, &token_id, &200);
 
     assert_eq!(token_client.balance(&user), 700);
+}
+
+#[test]
+fn unavailable_debt_source_preserves_custody() {
+    let (env, vault, _, user, token, issuer, _, _, asset) = setup_env();
+    issuer.mint(&user, &500);
+    vault.deposit(&user, &asset, &500);
+    env.as_contract(&vault.address, || {
+        storage::set_lending_pool(&env, &Address::generate(&env))
+    });
+    assert!(!vault.is_withdrawal_safe(&user, &asset, &500));
+    assert!(vault.try_withdraw(&user, &asset, &500).is_err());
+    assert_eq!(vault.get_position_balance(&user, &asset), 500);
+    assert_eq!(token.balance(&vault.address), 500);
+}
+
+#[test]
+fn position_pages_follow_the_active_index() {
+    let (env, vault, _, first, _, issuer, _, _, asset) = setup_env();
+    let second = Address::generate(&env);
+    for user in [&first, &second] {
+        issuer.mint(user, &500);
+        vault.deposit(user, &asset, &500);
+    }
+    assert_eq!(
+        vault.get_positions_page(&0, &1).first().unwrap().user,
+        first
+    );
+    assert_eq!(
+        vault.get_positions_page(&1, &64).first().unwrap().user,
+        second
+    );
+    assert!(vault.get_positions_page(&u32::MAX, &64).is_empty());
+    assert!(vault.get_positions_page(&0, &0).is_empty());
+    vault.withdraw(&first, &asset, &500);
+    assert_eq!(vault.get_positions_page(&0, &64), vault.get_all_positions());
+}
+
+#[test]
+fn debt_free_preview_respects_execution_preconditions() {
+    let (env, vault, _, user, _, issuer, _, _, asset) = setup_env();
+    assert!(!vault.is_withdrawal_safe(&user, &asset, &1));
+    issuer.mint(&user, &3);
+    vault.deposit(&user, &asset, &3);
+    for invalid in [0, -1, 4] {
+        assert!(!vault.is_withdrawal_safe(&user, &asset, &invalid));
+    }
+    assert!(vault.is_withdrawal_safe(&user, &asset, &3));
+    vault.pause_operation(&PauseFlag::Withdraw, &Symbol::new(&env, "hold"));
+    assert!(!vault.is_withdrawal_safe(&user, &asset, &3));
+}
+
+#[test]
+fn legacy_index_migrates_in_resumable_batches() {
+    use crate::types::DataKey;
+    let (env, vault, _, first, _, issuer, _, _, asset) = setup_env();
+    let second = Address::generate(&env);
+    for user in [&first, &second] {
+        issuer.mint(user, &2);
+        vault.deposit(user, &asset, &2);
+    }
+    env.as_contract(&vault.address, || {
+        let state = env.storage().persistent();
+        let users = storage::get_position_index(&env);
+        state.set(&DataKey::PositionIndex, &users);
+        for (slot, user) in users.iter().enumerate() {
+            state.remove(&DataKey::PositionSlot(slot as u32));
+            state.remove(&DataKey::UserSlot(user));
+        }
+        state.remove(&DataKey::AssetHolders(asset.clone()));
+        state.remove(&DataKey::PositionCount);
+    });
+    assert_eq!(vault.migrate_position_index(&1), 1);
+    assert!(vault.try_withdraw(&first, &asset, &1).is_err());
+    assert_eq!(
+        vault.get_positions_page(&1, &1).first().unwrap().user,
+        second
+    );
+    assert_eq!(vault.migrate_position_index(&32), 0);
+    assert_eq!(vault.migrate_position_index(&32), 0);
+    vault.withdraw(&first, &asset, &2);
+    assert_eq!(vault.get_position_index().first().unwrap(), second);
+    assert_eq!(
+        vault.try_remove_supported_asset(&asset),
+        Err(Ok(VaultError::AssetHasOpenPositions))
+    );
+    vault.withdraw(&second, &asset, &2);
+    vault.remove_supported_asset(&asset);
 }

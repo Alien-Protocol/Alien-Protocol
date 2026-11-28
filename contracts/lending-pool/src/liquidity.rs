@@ -1,9 +1,37 @@
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{token, Address, Env, I256};
 
 use crate::errors::PoolError;
 use crate::events;
 use crate::storage;
 use crate::types::PauseFlag;
+
+/// Proportional conversions use a wide intermediate. All inputs are
+/// nonnegative and the result is bounded by the pool's assets or shares.
+fn convert(env: &Env, value: i128, numerator: i128, denominator: i128, round_up: bool) -> i128 {
+    let product = I256::from_i128(env, value).mul(&I256::from_i128(env, numerator));
+    let divisor = I256::from_i128(env, denominator);
+    let adjusted = if round_up {
+        product.add(&I256::from_i128(env, denominator - 1))
+    } else {
+        product
+    };
+    adjusted
+        .div(&divisor)
+        .to_i128()
+        .expect("share conversion overflow")
+}
+
+pub fn credit_interest(env: &Env, interest: i128) -> Result<(), PoolError> {
+    let assets = storage::get_total_supply(env);
+    if interest > 0 && assets > 0 {
+        storage::set_total_shares(env, storage::total_shares(env));
+        storage::set_total_supply(
+            env,
+            assets.checked_add(interest).ok_or(PoolError::Overflow)?,
+        );
+    }
+    Ok(())
+}
 
 /// Supply `amount` of the borrow asset into the pool, increasing
 /// `user`'s supply balance and the pool's total supply.
@@ -50,13 +78,23 @@ pub fn supply(env: Env, user: Address, amount: i128) -> Result<(), PoolError> {
     let token_client = token::Client::new(&env, &borrow_asset);
     token_client.transfer(&user, env.current_contract_address(), &amount);
 
+    let current_total = storage::get_total_supply(&env);
+    let shares = storage::total_shares(&env);
+    let minted = if current_total == 0 {
+        amount
+    } else {
+        convert(&env, amount, shares, current_total, false)
+    };
+    if minted == 0 {
+        return Err(PoolError::InvalidAmount);
+    }
+    storage::set_total_shares(&env, shares.checked_add(minted).ok_or(PoolError::Overflow)?);
     let current_supply = storage::get_user_supply(&env, &user);
     let new_supply = current_supply
-        .checked_add(amount)
+        .checked_add(minted)
         .ok_or(PoolError::Overflow)?;
     storage::set_user_supply(&env, &user, new_supply);
 
-    let current_total = storage::get_total_supply(&env);
     let new_total = current_total
         .checked_add(amount)
         .ok_or(PoolError::Overflow)?;
@@ -105,7 +143,7 @@ pub fn withdraw_liquidity(env: Env, user: Address, amount: i128) -> Result<(), P
         return Err(PoolError::PoolPaused);
     }
 
-    let user_supply = storage::get_user_supply(&env, &user);
+    let user_supply = get_user_supply(env.clone(), user.clone());
     if user_supply < amount {
         return Err(PoolError::InsufficientSupply);
     }
@@ -120,10 +158,19 @@ pub fn withdraw_liquidity(env: Env, user: Address, amount: i128) -> Result<(), P
     let token_client = token::Client::new(&env, &borrow_asset);
     token_client.transfer(&env.current_contract_address(), &user, &amount);
 
-    let new_supply = user_supply.checked_sub(amount).ok_or(PoolError::Overflow)?;
-    storage::set_user_supply(&env, &user, new_supply);
-
     let current_total = storage::get_total_supply(&env);
+    let shares = storage::total_shares(&env);
+    let owned = storage::get_user_supply(&env, &user);
+    let burned = if amount == user_supply {
+        owned
+    } else {
+        convert(&env, amount, shares, current_total, true)
+    };
+    if burned == owned && amount < user_supply {
+        return Err(PoolError::InvalidAmount);
+    }
+    storage::set_user_supply(&env, &user, owned - burned);
+    storage::set_total_shares(&env, shares - burned);
     let new_total = current_total
         .checked_sub(amount)
         .ok_or(PoolError::Overflow)?;
@@ -135,7 +182,17 @@ pub fn withdraw_liquidity(env: Env, user: Address, amount: i128) -> Result<(), P
 }
 
 pub fn get_user_supply(env: Env, user: Address) -> i128 {
-    crate::storage::get_user_supply(&env, &user)
+    let owned = storage::get_user_supply(&env, &user);
+    if owned == 0 {
+        return 0;
+    }
+    convert(
+        &env,
+        owned,
+        storage::get_total_supply(&env),
+        storage::total_shares(&env),
+        false,
+    )
 }
 
 pub fn get_total_supply(env: Env) -> i128 {

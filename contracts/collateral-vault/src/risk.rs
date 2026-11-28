@@ -1,22 +1,6 @@
 use crate::{errors::VaultError, storage, types::AssetConfig};
 use soroban_sdk::{Address, Env};
 
-/// Protocol-wide fixed-point precision used for quote currency values.
-/// Collateral, debt, and liquidation thresholds all share this precision so
-/// they remain economically comparable regardless of token or oracle scaling.
-pub const PROTOCOL_QUOTE_PRECISION: i128 = 10_000_000;
-/// Standardized precision used when normalizing token base-unit balances.
-pub const TOKEN_AMOUNT_PRECISION: i128 = PROTOCOL_QUOTE_PRECISION;
-/// Standardized precision used when normalizing oracle prices.
-pub const ORACLE_PRICE_PRECISION: i128 = PROTOCOL_QUOTE_PRECISION;
-
-/// Rounding policy for risk calculations.
-/// - collateral valuation and debt comparisons use floor rounding
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RoundingMode {
-    Floor,
-}
-
 pub fn validate_asset_config(
     token_decimals: u32,
     oracle_price_decimals: u32,
@@ -30,70 +14,6 @@ pub fn validate_asset_config(
     }
 
     Ok(())
-}
-
-fn normalize_with_precision(
-    amount: i128,
-    decimals: u32,
-    precision: i128,
-) -> Result<i128, VaultError> {
-    let scale = 10_i128
-        .checked_pow(decimals.min(18))
-        .ok_or(VaultError::InvalidInputs)?;
-    let scaled = amount
-        .checked_mul(precision)
-        .ok_or(VaultError::InvalidInputs)?;
-    Ok(scaled / scale)
-}
-
-pub fn normalize_token_amount(amount: i128, token_decimals: u32) -> Result<i128, VaultError> {
-    Ok(rounded_quote_amount(
-        normalize_with_precision(amount, token_decimals, TOKEN_AMOUNT_PRECISION)?,
-        RoundingMode::Floor,
-    ))
-}
-
-pub fn normalize_oracle_price(price: i128, oracle_price_decimals: u32) -> Result<i128, VaultError> {
-    Ok(rounded_quote_amount(
-        normalize_with_precision(price, oracle_price_decimals, ORACLE_PRICE_PRECISION)?,
-        RoundingMode::Floor,
-    ))
-}
-
-/// Converts a token amount and oracle price into protocol quote precision.
-///
-/// `amount` and `price` are raw base-unit values whose decimal scales are
-/// supplied by `token_decimals` and `oracle_price_decimals`. The result is
-/// conservatively rounded down at each integer division.
-///
-/// # Panics
-///
-/// Panics when either decimal configuration cannot be normalized or when an
-/// intermediate multiplication exceeds `i128`.
-pub fn collateral_value(
-    amount: i128,
-    price: i128,
-    token_decimals: u32,
-    oracle_price_decimals: u32,
-) -> i128 {
-    let normalized_amount = normalize_token_amount(amount, token_decimals)
-        .unwrap_or_else(|_| panic!("overflow in normalization"));
-    let normalized_price = normalize_oracle_price(price, oracle_price_decimals)
-        .unwrap_or_else(|_| panic!("overflow in normalization"));
-
-    rounded_quote_amount(
-        normalized_amount
-            .checked_mul(normalized_price)
-            .unwrap_or_else(|| panic!("overflow in collateral valuation"))
-            / PROTOCOL_QUOTE_PRECISION,
-        RoundingMode::Floor,
-    )
-}
-
-pub fn rounded_quote_amount(amount: i128, mode: RoundingMode) -> i128 {
-    match mode {
-        RoundingMode::Floor => amount,
-    }
 }
 
 pub fn asset_config_for(env: &Env, asset: &Address) -> AssetConfig {
@@ -131,18 +51,20 @@ pub fn normalized_collateral_value(env: &Env, user: &Address) -> i128 {
     for item in position.collateral.iter() {
         let config = validate_and_load_asset_config(env, &item.asset);
         let price_data = oracle_client.get_price_or_fail(&item.asset);
-        let item_value = collateral_value(
+        let item_value = shared::valuation::quote_value(
+            env,
             item.amount,
             price_data.price,
             config.token_decimals,
             config.oracle_price_decimals,
-        );
+        )
+        .unwrap_or_else(|_| soroban_sdk::panic_with_error!(env, VaultError::InvalidInputs));
         total = total
             .checked_add(item_value)
             .unwrap_or_else(|| panic!("overflow in total value calculation"));
     }
 
-    rounded_quote_amount(total, RoundingMode::Floor)
+    total
 }
 
 /// Validates decimal scales and basis-point risk limits for an asset.
@@ -241,7 +163,7 @@ pub fn is_post_withdraw_healthy(
     withdraw_amount: i128,
     debt: i128,
 ) -> Result<bool, VaultError> {
-    if debt <= 0 {
+    if debt == 0 {
         return Ok(true);
     }
 
@@ -272,12 +194,14 @@ pub fn is_post_withdraw_healthy(
         if post_amount > 0 {
             let config = validate_and_load_asset_config(env, &item.asset);
             let price_data = oracle_client.get_price_or_fail(&item.asset);
-            let item_value = collateral_value(
+            let item_value = shared::valuation::quote_value(
+                env,
                 post_amount,
                 price_data.price,
                 config.token_decimals,
                 config.oracle_price_decimals,
-            );
+            )
+            .map_err(|_| VaultError::InvalidInputs)?;
             total_value = total_value
                 .checked_add(item_value)
                 .unwrap_or_else(|| panic!("overflow in total value calculation"));
@@ -294,17 +218,13 @@ pub fn is_post_withdraw_healthy(
         None => return Ok(false),
     };
 
-    let post_collateral_value = rounded_quote_amount(total_value, RoundingMode::Floor);
-    let hf_bps =
-        shared::health_factor_bps(post_collateral_value, debt, lt_bps).map_err(
-            |err| match err {
-                shared::SharedError::InvalidAmount => VaultError::InvalidAmount,
-                shared::SharedError::Overflow => VaultError::InvalidInputs,
-                shared::SharedError::InvalidBps => VaultError::InvalidAssetConfig,
-                shared::SharedError::NotImplemented => VaultError::NotImplemented,
-                shared::SharedError::DivisionByZero => VaultError::InvalidInputs,
-            },
-        )?;
+    let hf_bps = shared::health_factor_bps(total_value, debt, lt_bps).map_err(|err| match err {
+        shared::SharedError::InvalidAmount => VaultError::InvalidAmount,
+        shared::SharedError::Overflow => VaultError::InvalidInputs,
+        shared::SharedError::InvalidBps => VaultError::InvalidAssetConfig,
+        shared::SharedError::NotImplemented => VaultError::NotImplemented,
+        shared::SharedError::DivisionByZero => VaultError::InvalidInputs,
+    })?;
 
     Ok(hf_bps >= shared::BPS_DENOMINATOR)
 }

@@ -1,8 +1,8 @@
 CARGO ?= cargo
 WASM_TARGET ?= wasm32v1-none
-CONTRACTS := collateral-vault lending-pool liquidation-engine oracle-adapter
+CONTRACTS := deployment-factory collateral-vault lending-pool liquidation-engine oracle-adapter
 
-.PHONY: all check fmt wasm-fixture clippy cargo-check test build
+.PHONY: all check fmt wasm-fixture clippy cargo-check test build test-wasm
 
 # Run the same checks as CI, in sequence.
 all: check
@@ -13,7 +13,7 @@ check:
 	$(MAKE) clippy
 	$(MAKE) cargo-check
 	$(MAKE) test
-	$(MAKE) build
+	$(MAKE) test-wasm
 
 fmt:
 	$(CARGO) fmt --all --check
@@ -33,3 +33,6 @@ test: wasm-fixture
 
 build:
 	$(CARGO) build --locked $(foreach contract,$(CONTRACTS),-p $(contract)) --target $(WASM_TARGET) --release
+
+test-wasm: build
+	ALIEN_PROTOCOL_WASM_DIR="$(abspath target/$(WASM_TARGET)/release)" $(CARGO) test --locked -p liquidation-engine tests::test_engine_integration

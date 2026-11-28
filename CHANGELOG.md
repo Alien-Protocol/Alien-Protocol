@@ -11,7 +11,7 @@ for published contract releases.
 - `0.1.0` marks the first testnet ABI freeze, subject to maintainer approval:
   contract error codes, persistent `DataKey` layouts, and event topics are part
   of the compatibility commitment. Do not renumber existing error codes after
-  testnet (see `docs/TODO.md` §1.6).
+  testnet (see `docs/TODO.md`).
 - Follow Semantic Versioning for subsequent releases: patch versions cover
   compatible fixes; pre-1.0 minor versions may introduce breaking changes with
   documented migration guidance. At and after 1.0.0, use a major version for
@@ -20,6 +20,24 @@ for published contract releases.
   schema version counters.
 
 ## [Unreleased]
+
+### Audit corrections
+
+- Bound initialization to a constructor-supplied owner on all four contracts and added an atomic deployment factory.
+- Vault version 3 requires complete collateral configuration at listing and enforces token decimals. It indexes positions in separate ledger entries and supports resumable migration from the legacy vector.
+- Unified valuation and seizure conversion with wide intermediates. Multi-asset liquidations use one pre-settlement health check. Unavailable risk data propagates to eligibility callers.
+- Enforced vault borrowing pauses, pool rotation checks, withdrawal preview preconditions and oracle source and timestamp checks.
+- Vault upgrade finalization verifies the installed hash and release version. See the [operating guide](docs/contracts.md) for ABI and migration details.
+
+### Contract integration and accounting
+
+- Distributed collected borrower interest through liquidity-provider shares. Existing supply balances are recognized at par.
+- Capped underwater settlements at the collateral value available for repayment plus bonus. Residual debt stays with the borrower.
+- Added paginated position reads and a vault health quote for a supplied debt.
+- Required a successful debt lookup for withdrawals and seven-decimal token metadata at pool initialization.
+- Preserved fractional interest in an optional per-borrower storage entry. Existing debt records keep their shape.
+- Routed liquidation payment directly from the signer to the pool. Wallets should simulate the updated authorization tree.
+- Added four-contract integration checks for settlement, stale prices and rollback, with a release-WASM test target.
 
 ### Added
 

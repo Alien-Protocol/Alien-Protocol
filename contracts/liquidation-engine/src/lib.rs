@@ -9,6 +9,10 @@ pub struct LiquidationContract;
 
 #[contractimpl]
 impl LiquidationContract {
+    pub fn __constructor(env: Env, admin: Address) {
+        shared::bind_initializer(&env, &admin);
+    }
+
     pub fn initialize(
         env: Env,
         admin: Address,

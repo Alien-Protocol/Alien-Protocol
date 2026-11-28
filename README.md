@@ -92,7 +92,7 @@ The diagram represents the target protocol flow. Individual modules are being co
 | [`oracle-adapter`](contracts/oracle-adapter) | Asset prices, freshness checks, authorized feeders, and RedStone push/pull models | 🟢 In development |
 | [`lending-pool`](contracts/lending-pool) | Liquidity, borrowing, repayment, and debt accounting | 🟢 In development |
 | [`liquidation-engine`](contracts/liquidation-engine) | Position health monitoring and liquidation execution | 🟢 In development |
-| [`shared`](contracts/shared) | Shared protocol types, errors, constants, and events | 🟢 In development |
+| [`shared`](contracts/shared) | Shared protocol types, errors, constants, and math | 🟢 In development |
 
 ## ✨ Current capabilities
 
@@ -104,8 +104,6 @@ The diagram represents the target protocol flow. Individual modules are being co
 - Administrative pause and role-transfer controls.
 - Oracle price publication with staleness validation.
 - RedStone push- and pull-model oracle integration.
-- Borrowing, repayment, interest accrual, and debt accounting via the lending pool.
-- Liquidation execution with partial-solver support and health-factor enforcement via the liquidation engine.
 - Native contract tests and automated formatting, linting, build, and test checks.
 
 ## 🚀 Getting started
@@ -155,16 +153,9 @@ The Stellar CLI builds every contract crate in the workspace, uses the release p
 
 ## 🧪 Quality checks
 
-Run the full local verification suite before opening a pull request:
+Run `make check` to check formatting, lint the workspace, run native tests, build the deployment factory and all four protocol WASMs and exercise their settlement flow in the local Soroban host. Run `make test-wasm` for the compiled-contract suite alone.
 
-```bash
-cargo fmt --all --check
-cargo build -p collateral-vault --target wasm32v1-none --release
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo check --workspace
-cargo test --workspace --all-features
-stellar contract build --locked
-```
+The operations guide covers initialization order, quote units, authorization, risk parameters, pause controls and storage lifetime. The work queue lists outstanding release decisions. [Contract operations](docs/contracts.md) · [Work queue](docs/TODO.md)
 
 ## 📁 Repository structure
 

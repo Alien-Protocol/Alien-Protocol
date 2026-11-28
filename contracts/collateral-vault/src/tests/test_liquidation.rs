@@ -62,10 +62,10 @@ fn setup_env() -> (
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = env.register(MockOracle, ());
     let lending_pool = env.register(MockLendingPool, ());
@@ -79,7 +79,7 @@ fn setup_env() -> (
     let token_client = token::Client::new(&env, &token_contract_id);
     let token_admin_client = token::StellarAssetClient::new(&env, &token_contract_id);
 
-    client.add_supported_asset(&token_contract_id);
+    client.add_supported_asset(&token_contract_id, &shared::AssetConfig::default());
     MockOracleClient::new(&env, &oracle).set_price(&token_contract_id, &10_000_000);
 
     (
@@ -494,7 +494,7 @@ fn test_seize_multi_asset_only_affects_target() {
     let token_admin_client2 = token::StellarAssetClient::new(&env, &token_id2);
 
     client.set_liquidation_engine(&engine);
-    client.add_supported_asset(&token_id2);
+    client.add_supported_asset(&token_id2, &shared::AssetConfig::default());
 
     token_admin.mint(&user, &1000);
     token_admin_client2.mint(&user, &1000);

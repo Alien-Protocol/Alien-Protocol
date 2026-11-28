@@ -223,3 +223,22 @@ fn prop_non_positive_deposit_never_credits() {
         Err(SharedError::InvalidAmount)
     );
 }
+
+#[test]
+fn high_precision_quotes_round_once_and_invert_with_ceiling() {
+    use crate::valuation::{quote_value, tokens_for_quote};
+    let env = soroban_sdk::Env::default();
+    let unit = 10_i128.pow(18);
+    assert_eq!(quote_value(&env, unit, unit, 18, 18), Ok(10_000_000));
+    assert_eq!(tokens_for_quote(&env, 10_000_000, unit, 18, 18), Ok(unit));
+    // Each token base unit is worth 1.5 quote base units here.
+    assert_eq!(quote_value(&env, 2, 15 * 10_i128.pow(28), 18, 18), Ok(3));
+    assert_eq!(
+        tokens_for_quote(&env, 2, 15 * 10_i128.pow(28), 18, 18),
+        Ok(2)
+    );
+    assert_eq!(
+        quote_value(&env, i128::MAX, i128::MAX, 18, 18),
+        Err(crate::SharedError::Overflow)
+    );
+}

@@ -29,9 +29,9 @@ pub fn checked_debit(
     amount: i128,
 ) -> Result<i128, VaultError> {
     validate_positive_amount(amount)?;
+    storage::require_migrated_index(env);
 
-    let index = storage::get_position_index(env);
-    if !index.contains(user) {
+    if storage::get_user_assets(env, user).is_empty() {
         return Err(VaultError::NoPosition);
     }
 
@@ -46,6 +46,7 @@ pub fn checked_debit(
     storage::set_position_balance(env, user, asset, new_balance);
 
     if new_balance == 0 {
+        storage::update_holders(env, asset, false);
         storage::remove_user_asset(env, user, asset);
     }
 
@@ -70,8 +71,12 @@ pub fn checked_credit(
     amount: i128,
 ) -> Result<i128, VaultError> {
     validate_positive_amount(amount)?;
+    storage::require_migrated_index(env);
 
     let balance = storage::get_position_balance(env, user, asset);
+    if balance == 0 {
+        storage::update_holders(env, asset, true);
+    }
     let new_balance = balance
         .checked_add(amount)
         .ok_or(VaultError::InvalidAmount)?;

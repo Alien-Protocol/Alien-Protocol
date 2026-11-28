@@ -50,10 +50,10 @@ fn apply_repay(
     }
 
     let token_client = token::Client::new(&env, &borrow_asset);
-    if token_client
-        .try_transfer(&payer, env.current_contract_address(), &payment)
-        .is_err()
-    {
+    if !matches!(
+        token_client.try_transfer(&payer, env.current_contract_address(), &payment),
+        Ok(Ok(()))
+    ) {
         return Err(PoolError::InsufficientLiquidity);
     }
 
@@ -76,6 +76,8 @@ fn apply_repay(
         .checked_sub(principal_paid)
         .ok_or(PoolError::Overflow)?;
     storage::set_total_borrowed(&env, new_total_borrowed);
+
+    crate::liquidity::credit_interest(&env, interest_paid)?;
 
     events::Repaid {
         user,
@@ -172,9 +174,9 @@ pub fn is_liquidatable(env: Env, user: Address) -> Result<bool, PoolError> {
     let vault_addr = storage::get_vault(&env).ok_or(PoolError::NotInitialized)?;
     let vault = VaultClient::new(&env, &vault_addr);
 
-    let hf = match vault.try_get_health_factor(&user) {
+    let hf = match vault.try_health_factor_for_debt(&user, &total_debt) {
         Ok(Ok(hf)) => hf,
-        _ => return Ok(false),
+        _ => return Err(PoolError::RiskUnavailable),
     };
 
     Ok(hf < HEALTHY_HF_BPS)

@@ -17,6 +17,7 @@ soroban-sdk = { workspace = true }
 shared = { path = "../shared" }
 
 [dev-dependencies]
+oracle-adapter = { path = "../oracle-adapter" }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 collateral-vault = { path = "../collateral-vault" }
 lending-pool = { path = "../lending-pool" }

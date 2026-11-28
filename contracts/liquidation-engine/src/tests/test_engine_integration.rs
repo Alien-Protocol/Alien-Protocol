@@ -1,63 +1,29 @@
 #![cfg(test)]
 
-//! Vault + Pool + Liquidation Engine integration tests (issue #629).
-//!
-//! These tests wire up the real `VaultContract` (from `collateral-vault`),
-//! the real `PoolContract` (from `lending-pool`), and the real `LiquidationContract`
-//! (from `liquidation-engine`) as separate contract instances in the same `Env`.
-//! Cross-contract calls are exercised end-to-end:
-//! - Vault manages collateral deposits, custody, valuation, and seizure.
-//! - Pool manages liquidity supply, debt accrual, and repayment.
-//! - Engine coordinates liquidation: pulling debt repayment from the liquidator,
-//!   calling `pool.repay_for`, seizing collateral via `vault.seize_collateral`,
-//!   and transferring the seized collateral (including an 8% bonus) to the liquidator.
+//! Native integration tests with the real oracle, vault, lending pool and liquidation engine.
 
 use collateral_vault::{VaultContract, VaultContractClient};
 use lending_pool::{PoolContract, PoolContractClient};
 use soroban_sdk::testutils::{Address as _, Ledger};
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use soroban_sdk::{token, Address, Env};
 
 use super::super::*;
 use crate::errors::EngineError;
 
-#[contract]
-pub struct MockOracle;
-
-#[contractimpl]
-impl MockOracle {
-    pub fn get_price(env: Env, asset: Address) -> Option<shared::PriceData> {
-        env.storage().persistent().get(&asset)
-    }
-
-    pub fn get_price_or_fail(env: Env, asset: Address) -> shared::PriceData {
-        match env.storage().persistent().get(&asset) {
-            Some(price_data) => price_data,
-            None => panic!("price not found"),
-        }
-    }
-
-    pub fn set_price(env: Env, asset: Address, price: i128, timestamp: u64) {
-        let price_data = shared::PriceData {
-            price,
-            timestamp,
-            write_timestamp: env.ledger().timestamp(),
-        };
-        env.storage().persistent().set(&asset, &price_data);
-    }
-}
+use oracle_adapter::{OracleContract, OracleContractClient};
 
 /// 8% APR, matching `shared::V1_BORROW_APR_BPS`.
 const INTEREST_RATE_BPS: u32 = 800;
 /// $1.00 per token at the default 7-decimal oracle/token precision.
 const INITIAL_COLLATERAL_PRICE: i128 = 10_000_000;
 /// Collateral deposit of 1,000 tokens ($1,000 value at initial price).
-const COLLATERAL_DEPOSIT: i128 = 1_000_000_000;
+const COLLATERAL_DEPOSIT: i128 = 10_000_000_000;
 /// Borrow-side liquidity available in the pool ($5,000).
-const LIQUIDITY_SUPPLY: i128 = 5_000_000_000;
+const LIQUIDITY_SUPPLY: i128 = 50_000_000_000;
 /// Borrow amount of $500, within the 70% max-LTV limit ($700 on $1,000 collateral).
-const BORROW_AMOUNT: i128 = 500_000_000;
+const BORROW_AMOUNT: i128 = 5_000_000_000;
 /// Ample borrow asset minted to the liquidator to execute liquidations.
-const LIQUIDATOR_FUNDS: i128 = 5_000_000_000;
+const LIQUIDATOR_FUNDS: i128 = 50_000_000_000;
 
 #[allow(dead_code)]
 struct TestSetup {
@@ -65,7 +31,8 @@ struct TestSetup {
     vault: VaultContractClient<'static>,
     pool: PoolContractClient<'static>,
     engine: LiquidationContractClient<'static>,
-    oracle: MockOracleClient<'static>,
+    admin: Address,
+    oracle: OracleContractClient<'static>,
     collateral_token: Address,
     collateral_admin: token::StellarAssetClient<'static>,
     collateral_client: token::Client<'static>,
@@ -73,12 +40,30 @@ struct TestSetup {
     borrow_admin: token::StellarAssetClient<'static>,
     borrow_client: token::Client<'static>,
     user: Address,
+    lp: Address,
     liquidator: Address,
+}
+
+extern crate std;
+
+fn register_contract(
+    env: &Env,
+    admin: &Address,
+    name: &str,
+    native: impl FnOnce() -> Address,
+) -> Address {
+    if let Some(directory) = std::env::var_os("ALIEN_PROTOCOL_WASM_DIR") {
+        let path = std::path::Path::new(&directory).join(std::format!("{name}.wasm"));
+        let wasm = std::fs::read(&path).expect("build the release WASMs before running the suite");
+        env.register(wasm.as_slice(), (admin,))
+    } else {
+        native()
+    }
 }
 
 fn setup() -> TestSetup {
     let env = Env::default();
-    env.mock_all_auths_allowing_non_root_auth();
+    env.mock_all_auths();
     env.ledger().set_timestamp(1_000);
 
     let admin = Address::generate(&env);
@@ -86,16 +71,26 @@ fn setup() -> TestSetup {
     let lp = Address::generate(&env);
     let liquidator = Address::generate(&env);
 
-    let oracle_id = env.register(MockOracle, ());
-    let oracle = MockOracleClient::new(&env, &oracle_id);
+    let oracle_id = register_contract(&env, &admin, "oracle_adapter", || {
+        env.register(OracleContract, (&admin,))
+    });
+    let oracle = OracleContractClient::new(&env, &oracle_id);
 
-    let vault_id = env.register(VaultContract, ());
+    oracle.initialize(&admin, &60);
+
+    let vault_id = register_contract(&env, &admin, "collateral_vault", || {
+        env.register(VaultContract, (&admin,))
+    });
     let vault = VaultContractClient::new(&env, &vault_id);
 
-    let pool_id = env.register(PoolContract, ());
+    let pool_id = register_contract(&env, &admin, "lending_pool", || {
+        env.register(PoolContract, (&admin,))
+    });
     let pool = PoolContractClient::new(&env, &pool_id);
 
-    let engine_id = env.register(LiquidationContract, ());
+    let engine_id = register_contract(&env, &admin, "liquidation_engine", || {
+        env.register(LiquidationContract, (&admin,))
+    });
     let engine = LiquidationContractClient::new(&env, &engine_id);
 
     let collateral_contract = env.register_stellar_asset_contract_v2(Address::generate(&env));
@@ -125,8 +120,8 @@ fn setup() -> TestSetup {
 
     engine.initialize(&admin, &vault_id, &pool_id, &oracle_id);
 
-    vault.add_supported_asset(&collateral_token);
-    oracle.set_price(&collateral_token, &INITIAL_COLLATERAL_PRICE, &1_000);
+    vault.add_supported_asset(&collateral_token, &shared::AssetConfig::default());
+    oracle.set_price(&admin, &collateral_token, &INITIAL_COLLATERAL_PRICE, &997);
 
     // Provide liquidity to the pool from the LP
     borrow_admin.mint(&lp, &LIQUIDITY_SUPPLY);
@@ -140,6 +135,7 @@ fn setup() -> TestSetup {
         vault,
         pool,
         engine,
+        admin,
         oracle,
         collateral_token,
         collateral_admin,
@@ -148,6 +144,7 @@ fn setup() -> TestSetup {
         borrow_admin,
         borrow_client,
         user,
+        lp,
         liquidator,
     }
 }
@@ -167,6 +164,7 @@ fn test_deposit_borrow_price_crash_liquidate_lifecycle() {
         vault,
         pool,
         engine,
+        admin,
         oracle,
         collateral_token,
         collateral_admin,
@@ -186,7 +184,7 @@ fn test_deposit_borrow_price_crash_liquidate_lifecycle() {
 
     // 2. Borrow under LTV limit (max limit is 70% of $1,000 = $700)
     let limit = pool.calculate_limit(&user);
-    assert_eq!(limit, 700_000_000);
+    assert_eq!(limit, 7_000_000_000);
     pool.borrow(&user, &pool.get_borrow_asset().unwrap(), &BORROW_AMOUNT);
 
     let initial_debt = pool.get_user_debt(&user);
@@ -201,14 +199,41 @@ fn test_deposit_borrow_price_crash_liquidate_lifecycle() {
     // Collateral value becomes $600.
     // HF = (600 * 0.80) / 500 = 0.96 = 9_600 bps (< 10_000 bps)
     let crashed_price: i128 = 6_000_000; // $0.60
-    oracle.set_price(&collateral_token, &crashed_price, &1_000);
+    oracle.set_price(&admin, &collateral_token, &crashed_price, &1_000);
 
     let crashed_hf = vault.get_health_factor(&user);
     assert_eq!(crashed_hf, 9_600);
     assert!(crashed_hf < shared::HEALTHY_HF_BPS);
     assert!(engine.is_liquidatable(&user));
+    assert!(pool.is_liquidatable(&user));
 
-    // 4. Liquidate
+    // Only the liquidator signs. The nested authorization pays the pool directly.
+    use soroban_sdk::{
+        testutils::{MockAuth, MockAuthInvoke},
+        IntoVal,
+    };
+    let env = &engine.env;
+    let repay = engine.calculate_partial_repayment(&user);
+    let asset = pool.get_borrow_asset().unwrap();
+    env.mock_auths(&[MockAuth {
+        address: &liquidator,
+        invoke: &MockAuthInvoke {
+            contract: &engine.address,
+            fn_name: "liquidate",
+            args: (liquidator.clone(), user.clone(), i128::MAX).into_val(env),
+            sub_invokes: &[MockAuthInvoke {
+                contract: &pool.address,
+                fn_name: "repay_for",
+                args: (liquidator.clone(), user.clone(), asset.clone(), repay).into_val(env),
+                sub_invokes: &[MockAuthInvoke {
+                    contract: &asset,
+                    fn_name: "transfer",
+                    args: (liquidator.clone(), pool.address.clone(), repay).into_val(env),
+                    sub_invokes: &[],
+                }],
+            }],
+        },
+    }]);
     let result = engine.liquidate(&liquidator, &user, &i128::MAX);
 
     // 5. Assert debt down
@@ -250,6 +275,7 @@ fn test_liquidation_bonus_is_eight_percent_of_repaid_value() {
         vault,
         pool,
         engine,
+        admin,
         oracle,
         collateral_token,
         collateral_admin,
@@ -267,7 +293,7 @@ fn test_liquidation_bonus_is_eight_percent_of_repaid_value() {
 
     // Crash price to trigger liquidation
     let crashed_price: i128 = 6_000_000; // $0.60
-    oracle.set_price(&collateral_token, &crashed_price, &1_000);
+    oracle.set_price(&admin, &collateral_token, &crashed_price, &1_000);
 
     let liquidator_borrow_before = borrow_client.balance(&liquidator);
     let liquidator_collateral_before = collateral_client.balance(&liquidator);
@@ -314,6 +340,7 @@ fn test_max_repay_partial_or_full_close_matches_math() {
         vault,
         pool,
         engine,
+        admin,
         oracle,
         collateral_token,
         collateral_admin,
@@ -334,10 +361,10 @@ fn test_max_repay_partial_or_full_close_matches_math() {
     // Collateral value = $600, debt = $500.
     // Close factor cap is 50% = $250.
     // calculate_partial_repayment returns $250, leaving leftover HF = 10_560 (>= 10_000).
-    oracle.set_price(&collateral_token, &6_000_000, &1_000);
+    oracle.set_price(&admin, &collateral_token, &6_000_000, &998);
 
     // Liquidator specifies max_repay_amount = $150 (below the $250 close-factor cap)
-    let max_repay: i128 = 150_000_000;
+    let max_repay: i128 = 1_500_000_000;
     let res1 = engine.liquidate(&liquidator, &user1, &max_repay);
 
     // Assert partial liquidation path ran
@@ -353,7 +380,7 @@ fn test_max_repay_partial_or_full_close_matches_math() {
     );
 
     // Reset price to initial $1.00 so user2 has full LTV headroom to borrow $500
-    oracle.set_price(&collateral_token, &INITIAL_COLLATERAL_PRICE, &1_000);
+    oracle.set_price(&admin, &collateral_token, &INITIAL_COLLATERAL_PRICE, &999);
 
     let user2 = Address::generate(&env);
     collateral_admin.mint(&user2, &COLLATERAL_DEPOSIT);
@@ -371,7 +398,7 @@ fn test_max_repay_partial_or_full_close_matches_math() {
     // Post-HF = (280 * 0.80) / 250 = 0.896 = 8_960 bps (< 10_000 bps!).
     // Because post-HF would be unhealthy, calculate_partial_repayment triggers
     // the issue 12 unsafe leftover fallback and returns the FULL debt ($500).
-    oracle.set_price(&collateral_token, &5_500_000, &1_000);
+    oracle.set_price(&admin, &collateral_token, &5_500_000, &1_000);
 
     let calculated_repay = engine.calculate_partial_repayment(&user2);
     let debt2_before = pool.get_user_debt(&user2);
@@ -424,4 +451,227 @@ fn test_healthy_position_cannot_be_liquidated_end_to_end() {
         vault.get_position_balance(&user, &collateral_token),
         COLLATERAL_DEPOSIT
     );
+}
+
+#[test]
+fn stale_price_blocks_new_risk_until_refreshed() {
+    let t = setup();
+    t.collateral_admin.mint(&t.user, &COLLATERAL_DEPOSIT);
+    t.vault
+        .deposit(&t.user, &t.collateral_token, &COLLATERAL_DEPOSIT);
+    t.pool.borrow(&t.user, &t.borrow_token, &BORROW_AMOUNT);
+    t.env.ledger().set_timestamp(1061);
+    assert!(t.engine.try_is_liquidatable(&t.user).is_err());
+    assert!(t.pool.try_is_liquidatable(&t.user).is_err());
+    assert!(t.pool.try_borrow(&t.user, &t.borrow_token, &1).is_err());
+    assert!(t
+        .vault
+        .try_withdraw(&t.user, &t.collateral_token, &1)
+        .is_err());
+    assert!(t
+        .engine
+        .try_liquidate(&t.liquidator, &t.user, &i128::MAX)
+        .is_err());
+    assert_eq!(
+        t.collateral_client.balance(&t.vault.address),
+        COLLATERAL_DEPOSIT
+    );
+    assert_eq!(t.borrow_client.balance(&t.liquidator), LIQUIDATOR_FUNDS);
+    t.oracle.set_price(
+        &t.admin,
+        &t.collateral_token,
+        &INITIAL_COLLATERAL_PRICE,
+        &1061,
+    );
+    t.vault.withdraw(&t.user, &t.collateral_token, &1);
+}
+
+#[test]
+fn failed_final_payment_rolls_back_collateral_movements() {
+    let t = setup();
+    t.collateral_admin.mint(&t.user, &COLLATERAL_DEPOSIT);
+    t.vault
+        .deposit(&t.user, &t.collateral_token, &COLLATERAL_DEPOSIT);
+    t.pool.borrow(&t.user, &t.borrow_token, &BORROW_AMOUNT);
+    t.oracle
+        .set_price(&t.admin, &t.collateral_token, &6_000_000, &1000);
+    let unfunded = Address::generate(&t.env);
+    assert!(t
+        .engine
+        .try_liquidate(&unfunded, &t.user, &i128::MAX)
+        .is_err());
+    assert_eq!(t.collateral_client.balance(&unfunded), 0);
+    assert_eq!(
+        t.collateral_client.balance(&t.vault.address),
+        COLLATERAL_DEPOSIT
+    );
+    assert_eq!(
+        t.vault.get_position_balance(&t.user, &t.collateral_token),
+        COLLATERAL_DEPOSIT
+    );
+    assert_eq!(t.pool.get_user_debt(&t.user), BORROW_AMOUNT);
+}
+
+#[test]
+fn interest_is_redeemable_pro_rata_by_current_suppliers() {
+    let t = setup();
+    let second = Address::generate(&t.env);
+    t.borrow_admin.mint(&second, &LIQUIDITY_SUPPLY);
+    t.pool.supply(&second, &LIQUIDITY_SUPPLY);
+    t.collateral_admin.mint(&t.user, &COLLATERAL_DEPOSIT);
+    t.vault
+        .deposit(&t.user, &t.collateral_token, &COLLATERAL_DEPOSIT);
+    t.pool.borrow(&t.user, &t.borrow_token, &BORROW_AMOUNT);
+    t.env
+        .ledger()
+        .set_timestamp(1000 + shared::SECONDS_PER_YEAR);
+    let interest = BORROW_AMOUNT * 8 / 100;
+    t.borrow_admin.mint(&t.user, &interest);
+    t.pool.repay(&t.user, &t.borrow_token, &i128::MAX);
+    let claim = LIQUIDITY_SUPPLY + interest / 2;
+    assert_eq!(t.pool.get_user_supply(&t.lp), claim);
+    assert_eq!(t.pool.get_user_supply(&second), claim);
+
+    let late = Address::generate(&t.env);
+    t.borrow_admin.mint(&late, &claim);
+    t.pool.supply(&late, &claim);
+    for supplier in [&t.lp, &second, &late] {
+        assert_eq!(t.pool.get_user_supply(supplier), claim);
+        t.pool.withdraw_liquidity(supplier, &claim);
+        assert_eq!(t.borrow_client.balance(supplier), claim);
+    }
+    assert_eq!(t.pool.get_total_supply(), 0);
+    assert_eq!(t.borrow_client.balance(&t.pool.address), 0);
+}
+
+#[test]
+fn collateral_shortfall_leaves_collectible_borrower_debt() {
+    let t = setup();
+    t.collateral_admin.mint(&t.user, &COLLATERAL_DEPOSIT);
+    t.vault
+        .deposit(&t.user, &t.collateral_token, &COLLATERAL_DEPOSIT);
+    t.pool.borrow(&t.user, &t.borrow_token, &BORROW_AMOUNT);
+    // Exactly 270 quote units cover a payment of 250 plus its 8% bonus.
+    t.oracle
+        .set_price(&t.admin, &t.collateral_token, &2_700_000, &1000);
+    let covered = 250 * shared::PROTOCOL_QUOTE_PRECISION;
+    assert_eq!(t.engine.calculate_partial_repayment(&t.user), covered);
+    let result = t.engine.liquidate(&t.liquidator, &t.user, &i128::MAX);
+    assert_eq!(result.repaid, covered);
+    assert_eq!(
+        t.collateral_client.balance(&t.liquidator),
+        COLLATERAL_DEPOSIT
+    );
+    assert_eq!(t.pool.get_user_debt(&t.user), BORROW_AMOUNT - covered);
+    assert_eq!(t.pool.get_user_supply(&t.lp), LIQUIDITY_SUPPLY);
+    t.pool.repay(&t.user, &t.borrow_token, &i128::MAX);
+    assert_eq!(t.pool.get_available_liquidity(), LIQUIDITY_SUPPLY);
+}
+
+#[test]
+fn coarse_collateral_cannot_overpay_a_rounded_seizure() {
+    let t = setup();
+    t.oracle
+        .set_price(&t.admin, &t.collateral_token, &100_000_000, &998);
+    t.collateral_admin.mint(&t.user, &(COLLATERAL_DEPOSIT / 10));
+    t.vault
+        .deposit(&t.user, &t.collateral_token, &(COLLATERAL_DEPOSIT / 10));
+    t.pool.borrow(&t.user, &t.borrow_token, &BORROW_AMOUNT);
+    t.oracle
+        .set_price(&t.admin, &t.collateral_token, &60_000_000, &1000);
+    assert!(t.engine.is_liquidatable(&t.user));
+    assert_eq!(
+        t.engine.try_liquidate(&t.liquidator, &t.user, &1),
+        Err(Ok(EngineError::InvalidAmount))
+    );
+    assert_eq!(t.pool.get_user_debt(&t.user), BORROW_AMOUNT);
+    assert_eq!(t.collateral_client.balance(&t.liquidator), 0);
+    // A repayment with an exactly representable seizure still settles.
+    assert_eq!(
+        t.engine
+            .liquidate(&t.liquidator, &t.user, &1_500_000_000)
+            .repaid,
+        1_500_000_000
+    );
+}
+
+#[test]
+fn batch_seizure_uses_the_initial_mixed_position_threshold() {
+    let t = setup();
+    let low = t
+        .env
+        .register_stellar_asset_contract_v2(Address::generate(&t.env))
+        .address();
+    let config = shared::AssetConfig {
+        max_ltv_bps: 4900,
+        liquidation_threshold_bps: 5000,
+        ..Default::default()
+    };
+    t.vault.add_supported_asset(&low, &config);
+    t.oracle
+        .set_price(&t.admin, &low, &INITIAL_COLLATERAL_PRICE, &997);
+    let unit = shared::PROTOCOL_QUOTE_PRECISION;
+    token::StellarAssetClient::new(&t.env, &low).mint(&t.user, &(2000 * unit));
+    t.vault.deposit(&t.user, &low, &(2000 * unit));
+    t.collateral_admin.mint(&t.user, &(1000 * unit));
+    t.vault
+        .deposit(&t.user, &t.collateral_token, &(1000 * unit));
+    t.pool.borrow(&t.user, &t.borrow_token, &(650 * unit));
+    t.oracle.set_price(&t.admin, &low, &(unit / 10), &1000);
+    let result = t.engine.liquidate(&t.liquidator, &t.user, &i128::MAX);
+    assert_eq!(t.vault.get_position_balance(&t.user, &low), 0);
+    assert!(t.collateral_client.balance(&t.liquidator) > 0);
+    assert_eq!(t.pool.get_user_debt(&t.user), 650 * unit - result.repaid);
+}
+
+#[test]
+fn live_debt_blocks_rotation_and_vault_pause_blocks_origination() {
+    let t = setup();
+    t.collateral_admin.mint(&t.user, &COLLATERAL_DEPOSIT);
+    t.vault
+        .deposit(&t.user, &t.collateral_token, &COLLATERAL_DEPOSIT);
+    t.pool.borrow(&t.user, &t.borrow_token, &BORROW_AMOUNT);
+    assert!(t
+        .vault
+        .try_set_lending_pool(&Address::generate(&t.env))
+        .is_err());
+    assert!(t.pool.try_set_vault(&Address::generate(&t.env)).is_err());
+    t.vault.pause_operation(
+        &collateral_vault::PauseFlag::Borrow,
+        &soroban_sdk::Symbol::new(&t.env, "test"),
+    );
+    assert!(t.pool.try_borrow(&t.user, &t.borrow_token, &1).is_err());
+    t.pool.repay(&t.user, &t.borrow_token, &BORROW_AMOUNT);
+    t.vault.set_lending_pool(&Address::generate(&t.env));
+    t.vault
+        .unpause_operation(&collateral_vault::PauseFlag::Borrow);
+    assert!(t.pool.try_borrow(&t.user, &t.borrow_token, &1).is_err());
+}
+
+#[test]
+fn position_writes_have_bounded_ledger_footprints() {
+    fn measure(background: usize) -> [(u32, u32, u32); 2] {
+        let t = setup();
+        let deposit = |owner: &Address| {
+            t.collateral_admin.mint(owner, &1);
+            t.vault.deposit(owner, &t.collateral_token, &1);
+        };
+        for _ in 0..background {
+            deposit(&Address::generate(&t.env));
+        }
+        let footprint = || {
+            let cost = t.env.cost_estimate().resources();
+            (
+                cost.memory_read_entries,
+                cost.write_entries,
+                cost.write_bytes,
+            )
+        };
+        deposit(&t.user);
+        let insertion = footprint();
+        deposit(&Address::generate(&t.env));
+        t.vault.withdraw(&t.user, &t.collateral_token, &1);
+        [insertion, footprint()]
+    }
+    assert_eq!(measure(3), measure(96));
 }

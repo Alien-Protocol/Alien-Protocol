@@ -40,7 +40,7 @@ fn load_redstone_config(env: &Env) -> Result<(u8, RustVec<SignerAddress>), Oracl
     Ok((threshold, signers))
 }
 
-fn feed_id_from_symbol(env: &Env, symbol: &Symbol) -> Result<FeedId, OracleError> {
+pub(crate) fn feed_id_from_symbol(env: &Env, symbol: &Symbol) -> Result<FeedId, OracleError> {
     let symbol_str = SymbolStr::try_from_val(env, &symbol.to_symbol_val())
         .map_err(|_| OracleError::UnknownFeed)?;
     let rust_str: &str = symbol_str.as_ref();

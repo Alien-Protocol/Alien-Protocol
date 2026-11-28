@@ -255,3 +255,56 @@ fn test_set_redstone_config_validation() {
     let err_too_high = client.try_set_redstone_config(&admin, &signers, &6);
     assert!(err_too_high.is_err());
 }
+
+#[test]
+fn reject_unusable_signer_sets_before_rotation() {
+    let (env, oracle, admin) = setup_env();
+    setup_redstone_config(&env, &oracle, &admin);
+    let original = oracle.get_redstone_config();
+    let signer = hex_to_bytes(&env, PRIMARY_SIGNERS[0]);
+    for invalid in [
+        Vec::from_array(&env, [signer.clone(), signer]),
+        Vec::from_array(&env, [Bytes::new(&env)]),
+    ] {
+        assert_eq!(
+            oracle.try_set_redstone_config(&admin, &invalid, &1),
+            Err(Ok(crate::OracleError::InvalidSigner))
+        );
+        assert_eq!(oracle.get_redstone_config(), original);
+    }
+}
+
+#[test]
+fn mapped_price_survives_future_signed_and_manual_updates() {
+    let (env, oracle, admin) = setup_env();
+    setup_redstone_config(&env, &oracle, &admin);
+    set_ledger_time(&env, 1744829560);
+    let asset = Address::generate(&env);
+    let feed = Symbol::new(&env, "BTC");
+    let feeds = Vec::from_array(&env, [feed.clone()]);
+    oracle.set_asset_feed(&admin, &asset, &feed);
+    assert!(oracle
+        .try_set_price(&admin, &asset, &1, &1744829560)
+        .is_err());
+    oracle.write_prices(&admin, &feeds, &hex_to_bytes(&env, PAYLOAD_3SIG_HEX));
+    let before = oracle.get_price_or_fail(&asset);
+    assert_eq!(
+        oracle.try_write_prices(&admin, &feeds, &hex_to_bytes(&env, PAYLOAD_3SIG_NEWER_HEX)),
+        Err(Ok(crate::OracleError::InvalidTimestamp))
+    );
+    assert_eq!(oracle.get_price_or_fail(&asset), before);
+}
+
+#[test]
+fn only_constructor_owner_can_initialize() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let owner = Address::generate(&env);
+    let id = env.register(crate::OracleContract, (&owner,));
+    let client = OracleContractClient::new(&env, &id);
+    assert!(client
+        .try_initialize(&Address::generate(&env), &60)
+        .is_err());
+    client.initialize(&owner, &60);
+    assert_eq!(client.get_admin(), Some(owner));
+}

@@ -68,13 +68,13 @@ fn setup_env() -> (
     env.mock_all_auths();
     env.ledger().set_timestamp(1000);
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
     let oracle_id = env.register(MockOracle, ());
     let oracle_client = MockOracleClient::new(&env, &oracle_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let pool_id = env.register(MockLendingPool, ());
     let pool_client = MockLendingPoolClient::new(&env, &pool_id);
@@ -87,7 +87,7 @@ fn setup_env() -> (
     let token_id = token_contract.address();
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
-    client.add_supported_asset(&token_id);
+    client.add_supported_asset(&token_id, &shared::AssetConfig::default());
 
     (
         env,

@@ -38,6 +38,14 @@ pub fn write_prices(
         processor::process_redstone_payload(&env, feed_ids.clone(), payload)?;
     let write_timestamp = env.ledger().timestamp();
 
+    if timestamp
+        > write_timestamp
+            .checked_mul(1000)
+            .ok_or(OracleError::InvalidTimestamp)?
+    {
+        return Err(OracleError::InvalidTimestamp);
+    }
+
     for (index, sym) in feed_ids.iter().enumerate() {
         let price_bytes = validated_prices
             .get(index.try_into().map_err(|_| OracleError::InvalidPayload)?)
@@ -87,13 +95,7 @@ pub fn read_prices(
 ) -> Result<Vec<crate::types::PriceData>, OracleError> {
     let mut result = Vec::new(&env);
     for sym in feed_ids.iter() {
-        if sym != Symbol::new(&env, "XLM")
-            && sym != Symbol::new(&env, "USDC")
-            && sym != Symbol::new(&env, "BTC")
-            && sym != Symbol::new(&env, "ETH")
-        {
-            return Err(OracleError::UnknownFeed);
-        }
+        processor::feed_id_from_symbol(&env, &sym)?;
 
         match storage::get_feed_price(&env, &sym) {
             Some(price_data) => {

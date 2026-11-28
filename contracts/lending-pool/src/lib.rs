@@ -9,6 +9,10 @@ pub struct PoolContract;
 
 #[contractimpl]
 impl PoolContract {
+    pub fn __constructor(env: Env, admin: Address) {
+        shared::bind_initializer(&env, &admin);
+    }
+
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -78,6 +82,10 @@ impl PoolContract {
 
     pub fn get_user_supply(env: Env, user: Address) -> i128 {
         liquidity::get_user_supply(env, user)
+    }
+
+    pub fn get_total_borrowed(env: Env) -> i128 {
+        storage::get_total_borrowed(&env)
     }
 
     pub fn get_total_supply(env: Env) -> i128 {

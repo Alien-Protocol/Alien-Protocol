@@ -13,7 +13,7 @@ impl MockVaultContract {
         env.storage().persistent().set(&user, &hf);
     }
 
-    pub fn get_health_factor(env: Env, user: Address) -> i128 {
+    pub fn health_factor_for_debt(env: Env, user: Address, _debt: i128) -> i128 {
         env.storage().persistent().get(&user).unwrap_or(15_000)
     }
 
@@ -52,10 +52,10 @@ fn setup_env() -> (
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(PoolContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(PoolContract, (&admin,));
     let client = PoolContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
     let vault_id = env.register(MockVaultContract, ());

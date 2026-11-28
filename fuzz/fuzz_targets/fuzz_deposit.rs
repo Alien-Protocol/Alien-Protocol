@@ -9,10 +9,10 @@ fuzz_target!(|amount: i128| {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let pool = Address::generate(&env);
     let oracle = Address::generate(&env);
@@ -25,7 +25,7 @@ fuzz_target!(|amount: i128| {
     let token_id = token_contract.address();
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
-    client.add_supported_asset(&token_id);
+    client.add_supported_asset(&token_id, &shared::AssetConfig::default());
 
     if amount > 0 {
         token_admin_client.mint(&user, &amount);

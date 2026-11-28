@@ -86,10 +86,10 @@ fn setup() -> TestSetup {
     let oracle_id = env.register(MockOracle, ());
     let oracle = MockOracleClient::new(&env, &oracle_id);
 
-    let vault_id = env.register(VaultContract, ());
+    let vault_id = env.register(VaultContract, (&admin,));
     let vault = VaultContractClient::new(&env, &vault_id);
 
-    let pool_id = env.register(PoolContract, ());
+    let pool_id = env.register(PoolContract, (&admin,));
     let pool = PoolContractClient::new(&env, &pool_id);
 
     let collateral_contract = env.register_stellar_asset_contract_v2(Address::generate(&env));
@@ -110,7 +110,7 @@ fn setup() -> TestSetup {
         &INTEREST_RATE_BPS,
     );
 
-    vault.add_supported_asset(&collateral_token);
+    vault.add_supported_asset(&collateral_token, &shared::AssetConfig::default());
     oracle.set_price(&collateral_token, &COLLATERAL_PRICE, &1_000);
 
     TestSetup {
@@ -192,17 +192,18 @@ fn test_deposit_supply_borrow_repay_lifecycle() {
         borrow_client.balance(&user),
         USER_STARTING_FUNDS + BORROW_AMOUNT - expected_interest
     );
-    // Only principal moves TotalBorrowed/available liquidity, so paying
-    // interest alone must not change available liquidity.
     assert_eq!(
         pool.get_available_liquidity(),
-        LIQUIDITY_SUPPLY - BORROW_AMOUNT
+        LIQUIDITY_SUPPLY + expected_interest - BORROW_AMOUNT
     );
 
     // -- repay: remaining principal in full --------------------------
     pool.repay(&user, &borrow_token, &BORROW_AMOUNT);
     assert_eq!(pool.get_user_debt(&user), 0);
-    assert_eq!(pool.get_available_liquidity(), LIQUIDITY_SUPPLY);
+    assert_eq!(
+        pool.get_available_liquidity(),
+        LIQUIDITY_SUPPLY + expected_interest
+    );
     assert_eq!(
         borrow_client.balance(&user),
         USER_STARTING_FUNDS - expected_interest
@@ -214,8 +215,11 @@ fn test_deposit_supply_borrow_repay_lifecycle() {
     assert!(!vault.get_position_index().contains(&user));
 
     // -- the LP's liquidity is intact and can be withdrawn too ------------
-    pool.withdraw_liquidity(&lp, &LIQUIDITY_SUPPLY);
-    assert_eq!(borrow_client.balance(&lp), LIQUIDITY_SUPPLY);
+    pool.withdraw_liquidity(&lp, &(LIQUIDITY_SUPPLY + expected_interest));
+    assert_eq!(
+        borrow_client.balance(&lp),
+        LIQUIDITY_SUPPLY + expected_interest
+    );
     assert_eq!(pool.get_total_supply(), 0);
 }
 

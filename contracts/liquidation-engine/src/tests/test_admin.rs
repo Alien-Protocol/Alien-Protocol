@@ -6,19 +6,19 @@ use soroban_sdk::{Address, Env, Map, Symbol, TryFromVal, Val};
 use crate::errors::EngineError;
 use crate::{admin, storage, LiquidationContract, LiquidationContractClient};
 
-fn create_test_env_and_contract() -> (Env, Address) {
+fn create_test_env_and_contract() -> (Env, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(LiquidationContract, ());
-    (env, contract_id)
+    let admin = Address::generate(&env);
+    let contract_id = env.register(LiquidationContract, (&admin,));
+    (env, contract_id, admin)
 }
 
-fn create_test_addresses(env: &Env) -> (Address, Address, Address, Address) {
-    let admin = Address::generate(env);
+fn create_test_addresses(env: &Env) -> (Address, Address, Address) {
     let vault = Address::generate(env);
     let pool = Address::generate(env);
     let oracle = Address::generate(env);
-    (admin, vault, pool, oracle)
+    (vault, pool, oracle)
 }
 
 fn assert_address_update_event(
@@ -43,8 +43,8 @@ fn assert_address_update_event(
 
 #[test]
 fn test_set_vault_emits_vault_updated() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
     let client = LiquidationContractClient::new(&env, &contract_id);
     client.initialize(&admin, &vault, &pool, &oracle);
 
@@ -65,8 +65,8 @@ fn test_set_vault_emits_vault_updated() {
 
 #[test]
 fn test_set_pool_emits_pool_updated() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
     let client = LiquidationContractClient::new(&env, &contract_id);
     client.initialize(&admin, &vault, &pool, &oracle);
 
@@ -87,8 +87,8 @@ fn test_set_pool_emits_pool_updated() {
 
 #[test]
 fn test_set_oracle_emits_oracle_updated() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
     let client = LiquidationContractClient::new(&env, &contract_id);
     client.initialize(&admin, &vault, &pool, &oracle);
 
@@ -109,8 +109,8 @@ fn test_set_oracle_emits_oracle_updated() {
 
 #[test]
 fn test_initialize_success() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
 
     // Initialize should succeed
     let result = env.as_contract(&contract_id, || {
@@ -135,8 +135,8 @@ fn test_initialize_success() {
 
 #[test]
 fn test_initialize_duplicate_fails() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
 
     // First initialize should succeed
     let result = env.as_contract(&contract_id, || {
@@ -165,8 +165,7 @@ fn test_initialize_duplicate_fails() {
 
 #[test]
 fn test_initialize_duplicate_addresses_fail() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let admin = Address::generate(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
     let _vault = Address::generate(&env);
     let pool = Address::generate(&env);
 
@@ -183,8 +182,7 @@ fn test_initialize_duplicate_addresses_fail() {
     assert_eq!(result, Err(EngineError::InvalidAddress));
 
     // Test: admin == pool
-    let (env, contract_id) = create_test_env_and_contract();
-    let admin = Address::generate(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
     let vault = Address::generate(&env);
     let _pool = Address::generate(&env);
     let result = env.as_contract(&contract_id, || {
@@ -199,8 +197,7 @@ fn test_initialize_duplicate_addresses_fail() {
     assert_eq!(result, Err(EngineError::InvalidAddress));
 
     // Test: admin == oracle
-    let (env, contract_id) = create_test_env_and_contract();
-    let admin = Address::generate(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
     let vault = Address::generate(&env);
     let _pool = Address::generate(&env);
     let result = env.as_contract(&contract_id, || {
@@ -215,8 +212,7 @@ fn test_initialize_duplicate_addresses_fail() {
     assert_eq!(result, Err(EngineError::InvalidAddress));
 
     // Test: vault == pool
-    let (env, contract_id) = create_test_env_and_contract();
-    let admin = Address::generate(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
     let vault = Address::generate(&env);
     let _pool = Address::generate(&env);
     let result = env.as_contract(&contract_id, || {
@@ -231,8 +227,7 @@ fn test_initialize_duplicate_addresses_fail() {
     assert_eq!(result, Err(EngineError::InvalidAddress));
 
     // Test: vault == oracle
-    let (env, contract_id) = create_test_env_and_contract();
-    let admin = Address::generate(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
     let vault = Address::generate(&env);
     let pool = Address::generate(&env);
     let result = env.as_contract(&contract_id, || {
@@ -247,8 +242,7 @@ fn test_initialize_duplicate_addresses_fail() {
     assert_eq!(result, Err(EngineError::InvalidAddress));
 
     // Test: pool == oracle
-    let (env, contract_id) = create_test_env_and_contract();
-    let admin = Address::generate(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
     let _vault = Address::generate(&env);
     let pool = Address::generate(&env);
     let result = env.as_contract(&contract_id, || {
@@ -265,8 +259,8 @@ fn test_initialize_duplicate_addresses_fail() {
 
 #[test]
 fn test_initialize_requires_admin_auth() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
 
     // This test passes when admin.require_auth() is called properly.
     // The initialize function should require the admin address to authorize.
@@ -286,8 +280,8 @@ fn test_initialize_requires_admin_auth() {
 
 #[test]
 fn test_set_admin_success() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
     let new_admin = Address::generate(&env);
 
     // Initialize first
@@ -316,8 +310,8 @@ fn test_set_admin_success() {
 
 #[test]
 fn test_set_admin_same_address_fails() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
 
     // Initialize first
     let result = env.as_contract(&contract_id, || {
@@ -340,8 +334,8 @@ fn test_set_admin_same_address_fails() {
 
 #[test]
 fn test_getters_match_initialize_args() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
     let client = LiquidationContractClient::new(&env, &contract_id);
 
     client.initialize(&admin, &vault, &pool, &oracle);
@@ -354,8 +348,8 @@ fn test_getters_match_initialize_args() {
 
 #[test]
 fn test_set_oracle_success() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
     let new_oracle = Address::generate(&env);
 
     // Initialize first
@@ -387,8 +381,8 @@ fn test_set_oracle_success() {
 
 #[test]
 fn test_set_oracle_collision_with_admin_fails() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
 
     let result = env.as_contract(&contract_id, || {
         admin::initialize(
@@ -410,8 +404,8 @@ fn test_set_oracle_collision_with_admin_fails() {
 
 #[test]
 fn test_set_oracle_collision_with_vault_fails() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
 
     let result = env.as_contract(&contract_id, || {
         admin::initialize(
@@ -433,8 +427,8 @@ fn test_set_oracle_collision_with_vault_fails() {
 
 #[test]
 fn test_set_oracle_collision_with_pool_fails() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
 
     let result = env.as_contract(&contract_id, || {
         admin::initialize(
@@ -456,8 +450,8 @@ fn test_set_oracle_collision_with_pool_fails() {
 
 #[test]
 fn test_set_oracle_requires_admin_auth() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, pool, oracle) = create_test_addresses(&env);
     let new_oracle = Address::generate(&env);
 
     let result = env.as_contract(&contract_id, || {
@@ -483,8 +477,8 @@ fn test_set_oracle_requires_admin_auth() {
 
 #[test]
 fn test_set_oracle_distinct_reflects_getter() {
-    let (env, contract_id) = create_test_env_and_contract();
-    let (admin, vault, _pool, oracle) = create_test_addresses(&env);
+    let (env, contract_id, admin) = create_test_env_and_contract();
+    let (vault, _pool, oracle) = create_test_addresses(&env);
     let pool = Address::generate(&env);
     let new_oracle = Address::generate(&env);
 
@@ -519,8 +513,9 @@ fn test_set_oracle_distinct_reflects_getter() {
 
 fn seed_contract_without_mocked_auth() -> (Env, Address, Address, Address, Address, Address) {
     let env = Env::default();
-    let contract_id = env.register(LiquidationContract, ());
-    let (admin, vault, pool, oracle) = create_test_addresses(&env);
+    let admin = Address::generate(&env);
+    let contract_id = env.register(LiquidationContract, (&admin,));
+    let (vault, pool, oracle) = create_test_addresses(&env);
 
     env.as_contract(&contract_id, || {
         storage::set_admin(&env, &admin);

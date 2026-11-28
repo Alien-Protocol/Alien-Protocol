@@ -4,6 +4,15 @@ use super::super::*;
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{token, Address, Env, Symbol};
 
+#[soroban_sdk::contract]
+struct EmptyPool;
+#[soroban_sdk::contractimpl]
+impl EmptyPool {
+    pub fn get_total_borrowed(_env: Env) -> i128 {
+        0
+    }
+}
+
 fn setup_env() -> (
     Env,
     VaultContractClient<'static>,
@@ -19,13 +28,13 @@ fn setup_env() -> (
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let oracle = Address::generate(&env);
-    let lending_pool = Address::generate(&env);
+    let lending_pool = env.register(EmptyPool, ());
     let liquidation_engine = Address::generate(&env);
 
     client.initialize(&admin, &lending_pool, &oracle, &liquidation_engine);
@@ -36,7 +45,7 @@ fn setup_env() -> (
     let token_client = token::Client::new(&env, &token_contract_id);
     let token_admin_client = token::StellarAssetClient::new(&env, &token_contract_id);
 
-    client.add_supported_asset(&token_contract_id);
+    client.add_supported_asset(&token_contract_id, &shared::AssetConfig::default());
 
     (
         env,
@@ -103,10 +112,10 @@ fn test_initialize_duplicate_fails() {
 fn test_initialize_admin_equals_lending_pool_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(VaultContract, ());
+    let same_address = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&same_address,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let same_address = Address::generate(&env);
     let oracle = Address::generate(&env);
     let engine = Address::generate(&env);
 
@@ -118,10 +127,10 @@ fn test_initialize_admin_equals_lending_pool_fails() {
 fn test_initialize_admin_equals_oracle_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(VaultContract, ());
+    let same_address = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&same_address,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let same_address = Address::generate(&env);
     let pool = Address::generate(&env);
     let engine = Address::generate(&env);
 
@@ -133,10 +142,10 @@ fn test_initialize_admin_equals_oracle_fails() {
 fn test_initialize_admin_equals_liquidation_engine_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(VaultContract, ());
+    let same_address = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&same_address,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let same_address = Address::generate(&env);
     let pool = Address::generate(&env);
     let oracle = Address::generate(&env);
 
@@ -148,10 +157,10 @@ fn test_initialize_admin_equals_liquidation_engine_fails() {
 fn test_initialize_pool_equals_oracle_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let same_address = Address::generate(&env);
     let engine = Address::generate(&env);
 
@@ -163,10 +172,10 @@ fn test_initialize_pool_equals_oracle_fails() {
 fn test_initialize_pool_equals_liquidation_engine_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let same_address = Address::generate(&env);
     let oracle = Address::generate(&env);
 
@@ -178,10 +187,10 @@ fn test_initialize_pool_equals_liquidation_engine_fails() {
 fn test_initialize_oracle_equals_liquidation_engine_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     let pool = Address::generate(&env);
     let same_address = Address::generate(&env);
 
@@ -836,7 +845,7 @@ fn test_uninitialized_admin_setters_return_err() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let contract_id = env.register(VaultContract, (&Address::generate(&env),));
     let client = VaultContractClient::new(&env, &contract_id);
 
     let some_addr = Address::generate(&env);
@@ -871,7 +880,7 @@ fn test_uninitialized_set_admin_returns_err() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(VaultContract, ());
+    let contract_id = env.register(VaultContract, (&Address::generate(&env),));
     let client = VaultContractClient::new(&env, &contract_id);
 
     // set_admin already behaves this way and the issue requires it remain unchanged.

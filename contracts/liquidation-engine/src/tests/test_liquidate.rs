@@ -10,12 +10,8 @@ use crate::liquidate::{PoolPauseFlag, VaultPauseFlag};
 // ---------------------------------------------------------------------------
 // Minimal mock Vault / Pool / Oracle contracts.
 //
-// The production `collateral-vault` and `lending-pool` contracts have
-// dependent logic (debt accrual, `repay_for`) that is not implemented yet in
-// this snapshot of the repo, so the liquidation-engine's own test suite
-// exercises `liquidate.rs` against small, directly-controllable stand-ins
-// that expose the same function names/signatures the engine's `VaultClient`,
-// `PoolClient`, and `OracleClient` invoke.
+// These fixtures isolate engine decisions. The integration suite exercises
+// the same entry points against all four production contracts.
 // ---------------------------------------------------------------------------
 
 #[contracttype]
@@ -107,19 +103,22 @@ impl MockVaultContract {
             .unwrap_or(0)
     }
 
-    pub fn seize_collateral(
+    pub fn seize_batch(
         env: Env,
         liquidation_engine: Address,
         _user: Address,
-        asset: Address,
-        amount: i128,
+        _pool: Address,
+        _oracle: Address,
+        basket: soroban_sdk::Vec<shared::CollateralAsset>,
     ) {
         liquidation_engine.require_auth();
-        token::Client::new(&env, &asset).transfer(
-            &env.current_contract_address(),
-            &liquidation_engine,
-            &amount,
-        );
+        for item in basket.iter() {
+            token::Client::new(&env, &item.asset).transfer(
+                &env.current_contract_address(),
+                &liquidation_engine,
+                &item.amount,
+            );
+        }
     }
 }
 
@@ -283,7 +282,8 @@ fn setup() -> Env_ {
     // isn't enough here.
     env.mock_all_auths_allowing_non_root_auth();
 
-    let engine_id = env.register(LiquidationContract, ());
+    let admin = Address::generate(&env);
+    let engine_id = env.register(LiquidationContract, (&admin,));
     let engine = LiquidationContractClient::new(&env, &engine_id);
 
     let vault_id = env.register(MockVaultContract, ());
@@ -295,7 +295,6 @@ fn setup() -> Env_ {
     let oracle_id = env.register(MockOracleContract, ());
     let oracle = MockOracleContractClient::new(&env, &oracle_id);
 
-    let admin = Address::generate(&env);
     let liquidator = Address::generate(&env);
     let user = Address::generate(&env);
 
@@ -541,7 +540,7 @@ fn test_liquidate_requires_liquidator_auth() {
     // `liquidator.require_auth()` in `liquidate` must fail the call.
     let env = Env::default();
 
-    let engine_id = env.register(LiquidationContract, ());
+    let engine_id = env.register(LiquidationContract, (&Address::generate(&env),));
     let engine = LiquidationContractClient::new(&env, &engine_id);
 
     let liquidator = Address::generate(&env);

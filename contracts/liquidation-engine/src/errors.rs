@@ -17,4 +17,5 @@ pub enum EngineError {
     VaultPaused = 10,
     /// The lending pool has `PauseFlag::Repay` set.
     PoolPaused = 11,
+    RiskUnavailable = 12,
 }

@@ -19,6 +19,9 @@ pub fn initialize(
     }
 
     admin.require_auth();
+    if !shared::take_initializer(&env, &admin) {
+        return Err(PoolError::Unauthorized);
+    }
 
     if admin == vault
         || admin == oracle
@@ -34,6 +37,12 @@ pub fn initialize(
         return Err(PoolError::InvalidRate);
     }
 
+    if !matches!(
+        soroban_sdk::token::Client::new(&env, &borrow_asset).try_decimals(),
+        Ok(Ok(shared::DEFAULT_TOKEN_DECIMALS))
+    ) {
+        return Err(PoolError::UnsupportedAsset);
+    }
     storage::set_admin(&env, &admin);
     storage::set_vault(&env, &vault);
     storage::set_oracle(&env, &oracle);
@@ -59,6 +68,16 @@ pub fn set_admin(env: Env, new_admin: Address) -> Result<(), PoolError> {
 
     if current_admin == new_admin {
         return Err(PoolError::AlreadyAdmin);
+    }
+
+    if [
+        storage::get_vault(&env),
+        storage::get_oracle(&env),
+        storage::get_borrow_asset(&env),
+    ]
+    .contains(&Some(new_admin.clone()))
+    {
+        return Err(PoolError::InvalidAddress);
     }
 
     let new_admin_clone = new_admin.clone();
@@ -93,6 +112,9 @@ pub fn set_vault(env: Env, vault: Address) -> Result<(), PoolError> {
     }
 
     let old_vault = storage::get_vault(&env).ok_or(PoolError::NotInitialized)?;
+    if old_vault != vault && storage::get_total_borrowed(&env) != 0 {
+        return Err(PoolError::OutstandingDebt);
+    }
     storage::set_vault(&env, &vault);
     events::VaultUpdated {
         old_vault,

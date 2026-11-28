@@ -41,6 +41,9 @@ impl MockBorrowVault {
         );
     }
 
+    pub fn can_originate(_env: Env, _pool: Address) -> bool {
+        true
+    }
     pub fn get_position(env: Env, user: Address) -> shared::Position {
         let collateral = env
             .storage()
@@ -78,11 +81,12 @@ impl Fixture {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
-        let pool_id = env.register(PoolContract, ());
+        let admin = Address::generate(&env);
+        let pool_id = env.register(PoolContract, (&admin,));
         let pool = PoolContractClient::new(&env, &pool_id);
         let vault_id = env.register(MockBorrowVault, ());
         let vault = MockBorrowVaultClient::new(&env, &vault_id);
-        let admin = Address::generate(&env);
+
         let user = Address::generate(&env);
         let oracle = Address::generate(&env);
         let token_admin_id = Address::generate(&env);

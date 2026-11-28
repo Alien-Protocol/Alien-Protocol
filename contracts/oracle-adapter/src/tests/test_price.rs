@@ -13,10 +13,10 @@ fn setup_env_mock_all_auths() -> (Env, OracleContractClient<'static>, Address) {
     // so the future-timestamp guard in set_price never rejects test data.
     env.ledger().set_timestamp(1_000_000_000);
 
-    let contract_id = env.register(OracleContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(OracleContract, (&admin,));
     let client = OracleContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     client.initialize(&admin, &300);
 
     (env, client, admin)
@@ -27,10 +27,10 @@ fn setup_env_no_mock_auths() -> (Env, OracleContractClient<'static>, Address) {
     // Start ledger timestamp well above typical test timestamps.
     env.ledger().set_timestamp(1_000_000_000);
 
-    let contract_id = env.register(OracleContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(OracleContract, (&admin,));
     let client = OracleContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     env.mock_all_auths();
     client.initialize(&admin, &300);
     env.set_auths(&[]);

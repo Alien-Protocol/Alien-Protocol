@@ -6,28 +6,47 @@ use crate::{
     storage,
 };
 
-pub const CURRENT_CONTRACT_VERSION: u32 = 2;
-pub const CURRENT_STORAGE_SCHEMA_VERSION: u32 = 2;
+pub const CURRENT_CONTRACT_VERSION: u32 = 3;
+pub const CURRENT_STORAGE_SCHEMA_VERSION: u32 = 3;
 
-pub fn get_contract_version(env: &Env) -> u32 {
-    storage::get_contract_version(env)
+pub fn get_contract_version() -> u32 {
+    CURRENT_CONTRACT_VERSION
 }
 
 pub fn get_storage_schema_version(env: &Env) -> u32 {
     storage::get_storage_schema_version(env)
 }
 
-pub fn upgrade(env: Env, wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+pub fn upgrade(env: Env, wasm_hash: BytesN<32>, expected_version: u32) -> Result<(), VaultError> {
     let admin = storage::get_admin(&env).ok_or(VaultError::NotInitialized)?;
     admin.require_auth();
 
-    let old_version = storage::get_contract_version(&env);
+    env.storage().persistent().set(
+        &crate::types::DataKey::PendingUpgrade,
+        &(
+            admin,
+            CURRENT_CONTRACT_VERSION,
+            expected_version,
+            wasm_hash.clone(),
+        ),
+    );
+    env.deployer().update_current_contract_wasm(wasm_hash);
+    Ok(())
+}
 
-    env.deployer()
-        .update_current_contract_wasm(wasm_hash.clone());
-
+pub fn finalize_upgrade(env: Env) -> Result<(), VaultError> {
+    let state = env.storage().persistent();
+    let key = crate::types::DataKey::PendingUpgrade;
+    let (admin, old_version, expected, wasm_hash): (soroban_sdk::Address, u32, u32, BytesN<32>) =
+        state.get(&key).ok_or(VaultError::InvalidInputs)?;
+    if expected != CURRENT_CONTRACT_VERSION
+        || env.current_contract_address().executable()
+            != Some(soroban_sdk::Executable::Wasm(wasm_hash.clone()))
+    {
+        return Err(VaultError::InvalidInputs);
+    }
+    state.remove(&key);
     storage::set_contract_version(&env, CURRENT_CONTRACT_VERSION);
-
     ContractUpgraded {
         actor: admin,
         old_contract_version: old_version,
@@ -74,8 +93,12 @@ pub fn migrate(env: Env, target_storage_schema_version: u32) -> Result<(), Vault
     Ok(())
 }
 
-fn migrate_step(_env: &Env, from: u32, to: u32) -> Result<(), VaultError> {
+fn migrate_step(env: &Env, from: u32, to: u32) -> Result<(), VaultError> {
     match (from, to) {
+        (2, 3) => {
+            storage::require_migrated_index(env);
+            Ok(())
+        }
         (1, 2) => Ok(()), // no-op migration: preserves all existing state
         _ => Err(VaultError::MigrationSkipped),
     }

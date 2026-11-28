@@ -68,13 +68,13 @@ fn setup_env() -> (
     // Set a sensible ledger timestamp for tests
     env.ledger().set_timestamp(1000);
 
-    let contract_id = env.register(VaultContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(VaultContract, (&admin,));
     let client = VaultContractClient::new(&env, &contract_id);
 
     let oracle_id = env.register(MockOracleContract, ());
     let oracle_client = MockOracleContractClient::new(&env, &oracle_id);
 
-    let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let pool_id = env.register(MockLendingPoolContract, ());
     let liquidation_engine = Address::generate(&env);
@@ -87,7 +87,7 @@ fn setup_env() -> (
     let token_client = token::Client::new(&env, &token_contract_id);
     let token_admin_client = token::StellarAssetClient::new(&env, &token_contract_id);
 
-    client.add_supported_asset(&token_contract_id);
+    client.add_supported_asset(&token_contract_id, &shared::AssetConfig::default());
 
     (
         env,
@@ -214,28 +214,20 @@ fn test_get_collateral_value_uses_latest_price() {
 }
 
 #[test]
-fn test_get_collateral_value_normalizes_equivalent_balances_across_decimals() {
-    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, oracle) = setup_env();
-
-    client.set_asset_config(&token_id, &6, &7, &7_000, &8_000);
-    token_admin.mint(&user, &1_000_000);
-    client.deposit(&user, &token_id, &1_000_000);
-    oracle.set_price(&token_id, &10_000_000, &1000);
-    assert_eq!(client.get_collateral_value(&user), 10_000_000);
-
-    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, oracle) = setup_env();
-    client.set_asset_config(&token_id, &7, &7, &7_000, &8_000);
-    token_admin.mint(&user, &10_000_000);
-    client.deposit(&user, &token_id, &10_000_000);
-    oracle.set_price(&token_id, &10_000_000, &1000);
-    assert_eq!(client.get_collateral_value(&user), 10_000_000);
-
-    let (_env, client, _admin, user, token_id, _token_client, token_admin, _, oracle) = setup_env();
-    client.set_asset_config(&token_id, &18, &7, &7_000, &8_000);
-    token_admin.mint(&user, &1_000_000_000_000_000_000_i128);
-    client.deposit(&user, &token_id, &1_000_000_000_000_000_000_i128);
-    oracle.set_price(&token_id, &10_000_000, &1000);
-    assert_eq!(client.get_collateral_value(&user), 10_000_000);
+fn test_listing_requires_matching_token_metadata() {
+    let (env, client, _, _, _, _, _, _, _) = setup_env();
+    let token = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
+    let config = shared::AssetConfig {
+        token_decimals: 18,
+        ..Default::default()
+    };
+    assert_eq!(
+        client.try_add_supported_asset(&token, &config),
+        Err(Ok(VaultError::InvalidAssetConfig))
+    );
+    assert!(!client.is_supported_asset(&token));
 }
 
 #[test]

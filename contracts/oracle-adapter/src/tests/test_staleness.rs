@@ -31,10 +31,10 @@ fn test_set_staleness_threshold_zero_fails() {
 #[test]
 fn test_set_staleness_threshold_non_admin_fails() {
     let env = Env::default();
-    let contract_id = env.register(OracleContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(OracleContract, (&admin,));
     let client = OracleContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     env.mock_all_auths();
     client.initialize(&admin, &300);
     env.set_auths(&[]);

@@ -31,8 +31,16 @@ pub fn accrue_interest(env: Env, user: Address) -> Result<Debt, PoolError> {
     let elapsed = now.saturating_sub(debt.last_accrual_at);
 
     if elapsed > 0 {
-        let interest =
-            shared::accrue_linear_interest(debt.principal, debt.interest_rate_bps, elapsed)?;
+        let key = crate::types::DataKey::InterestRemainder(user.clone());
+        let state = env.storage().persistent();
+        let remainder = state.get(&key).unwrap_or(0);
+        let (interest, remainder) = shared::accrue_with_remainder(
+            debt.principal,
+            debt.interest_rate_bps,
+            elapsed,
+            remainder,
+        )?;
+        state.set(&key, &remainder);
         debt.accrued_interest = debt
             .accrued_interest
             .checked_add(interest)

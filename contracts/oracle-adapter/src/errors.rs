@@ -22,4 +22,6 @@ pub enum OracleError {
     InvalidTimestamp = 16,
     InvalidThreshold = 17,
     AssetFeedNotFound = 18,
+    InvalidSigner = 19,
+    MappedAsset = 20,
 }

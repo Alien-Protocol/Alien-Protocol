@@ -1,118 +1,26 @@
-# Alien Protocol — TODO
+# Alien Protocol work queue
 
-Living checklist of work still open. Status reflects the repo as of **16 October 2026**.
-
-Use this with `docs/arch.md` (target design) and `README.md` (honest component status). Check items off in PRs; do not treat unchecked items as “in progress” unless an issue is linked.
-
-**Legend:** `[ ]` todo · `[~]` partial / in progress · `[x]` done enough for current phase
-
----
-
-## Snapshot
-
-| Area | Status | Notes |
-|------|--------|--------|
-| Collateral vault | `[~]` | Core custody + risk paths exist; now consumes `shared::PriceData`; full 4-way integration still open |
-| Oracle adapter | `[~]` | Feeder + RedStone paths exist; `set_price` now rejects stale/future timestamps and stores `write_timestamp` |
-| Lending pool | `[~]` | Borrow/repay/repay_for/supply + linear APR accrual implemented against real storage |
-| Liquidation engine | `[~]` | Real `liquidate`, `is_liquidatable`, partial-repay solver, 8% bonus, 50% close factor; cross-contract tests still use mocks |
-| Shared crate | `[~]` | `PriceData`/`Debt`/`AssetConfig`/HF+interest helpers/constants exist and are now consumed by vault/pool/engine; `events` module still empty; oracle does not depend on it |
-| Cross-contract integration | `[~]` | Vault↔pool tests with mock oracle; no full vault↔pool↔oracle↔engine suite |
-| Testnet deploy | `[ ]` | No scripts, IDs, or network config in-repo |
-| Backend | `[ ]` | No `backend/` tree |
-| Frontend | `[ ]` | No `frontend/` tree |
-| Production ops | `[ ]` | Contract CI only |
-
-**Suggested focus order:** close contract integration gaps → testnet deploy scripts → thin backend reads → indexer/worker → frontend.
-
----
+Contract status reviewed on 28 November 2026. The implementation and operating assumptions are described in [V1 contract operations](contracts.md).
 
 ## 1. Smart contracts
 
-### 1.1 Cross-contract / system integration
+| Stage | Verified deliverable | Remaining work |
+| --- | --- | --- |
+| 1. Interfaces and custody | Shared price, position and risk-config types. Vault withdrawal requires a successful debt read. Risk metadata is locked for open collateral. | Measure network costs for slot-based indexing and rehearse batched migration on testnet. Review issuer clawback and asset-freeze handling for each proposed collateral token. |
+| 2. Lending and liquidation | Fixed APR with fractional carry, interest-first repayment, dust checks, health-factor query without a pool callback, direct liquidator-to-pool settlement, pro-rata distribution of paid interest and collateral-limited recovery. | Validate stressed withdrawal liquidity and token granularity for launch assets. |
+| 3. Integration and tests | Four-contract lifecycle, partial and full liquidation, explicit liquidator authorization, stale-price rejection and rollback after failed payment. Vault upgrade and migration tests run in the standard suite. | Exercise issuer restrictions and deployment wiring on testnet. |
+| 4. Operations and review | Local build, tests, risk model, pause sequence and operator TTL duties documented. | Independent contract review, dependency review and resource measurements before a funded release. |
 
-- [ ] End-to-end native test: **real** `collateral-vault` + `lending-pool` + `oracle-adapter` + `liquidation-engine` in one `Env`
-- [x] Unify `PriceData` across vault / oracle / shared (vault now re-exports `shared::PriceData`; all three fields match)
-- [ ] Prove vault valuation against the real `oracle-adapter` (not only `MockOracle`)
-- [ ] Prove engine `liquidate` against real vault + pool + oracle (today liquidate tests use mock contracts)
-- [ ] Document and enforce init order: oracle → vault → pool → engine (addresses, allowlists, borrow asset)
-- [ ] Confirm seize path only succeeds when position is actually liquidatable under protocol HF rules
-- [ ] TTL / archival strategy for persistent keys (positions, debts, prices) — extend on hot paths or document operator duty
-
-### 1.2 Collateral vault
-
-- [x] `initialize`, deposit / withdraw, pause flags, admin / role setters
-- [x] Asset allowlist + per-asset config (decimals, LTV, liquidation threshold)
-- [x] Position tracking, `seize_collateral`, upgrade + migrate skeleton
-- [x] Health / collateral value helpers using oracle client
-- [ ] Fix or remove ignored WASM upgrade test (`test_upgrade` ignored for env host limits on SDK 23)
-- [ ] Real storage migrate steps when schema > 2 needs data transforms (today `1 → 2` is effectively a no-op)
-- [ ] Harden clawback / freeze / missing-trustline failure modes for RWA SACs
-- [ ] Bound or paginate `get_all_positions` / position index growth for production scale
-- [ ] Revisit withdrawal safety vs per-asset liquidation threshold (ensure aligned with `shared` HF helpers everywhere)
-
-### 1.3 Lending pool
-
-- [x] Supply / withdraw liquidity, borrow / repay / repay_for
-- [x] Debt storage + linear APR accrual helpers (`accrue_interest`, `shared::accrue_linear_interest`)
-- [x] Pause (bitmask), admin, vault/oracle wiring
-- [~] Vault composition tests (`test_pool_integration`) — still mock oracle
-- [ ] Replace remaining `unimplemented!()` mock vault stubs in repay tests with real vault or thin complete mocks
-- [ ] Utilization-driven behavior beyond reads (V1 may stay fixed APR; document clearly)
-- [ ] Dust / minimum remaining debt enforcement vs `shared::MIN_REMAINING_DEBT` on all repay paths
-- [ ] Interest-first repayment edge cases (full repay, dust leftover, pause mid-accrual)
-- [ ] Explicit borrow-asset allowlist / USDC SAC assumptions documented for deploy
-
-### 1.4 Liquidation engine
-
-- [x] `liquidate`, `is_liquidatable`, bonus / partial repayment solver (50% close factor, 8% bonus, HF→1.10 target, dust fallback)
-- [x] Admin + vault/pool/oracle setters with pairwise collision checks
-- [x] Engine-only seize verified via `vault.get_liquidation_engine()` match + HF < 1.0 gate
-- [ ] Integration tests with **real** vault, pool, and oracle-adapter
-- [ ] Full vs partial liquidation fallback when leftover would be unsafe or dust (solver exists; prove with tests)
-- [ ] Permissionless liquidator UX path verified (auth trees, token approvals, events)
-- [ ] Align HF / close-factor / bonus constants with vault withdraw safety in one shared source of truth
-- [ ] Pause / circuit-breaker behavior if vault or pool is paused mid-liquidation
-
-### 1.5 Oracle adapter
-
-- [x] Admin/feeder `set_price`, staleness, pause, RedStone push/pull
-- [x] `initialize` requires admin auth
-- [x] `set_price` rejects non-increasing and future timestamps; stores `write_timestamp`
-- [ ] Single price model consumed by vault and engine (address-keyed vs RedStone symbol-keyed mapping)
-- [ ] Map RWA / collateral asset addresses ↔ RedStone feed IDs for production assets
-- [ ] Multi-feeder / deviation bounds (architecture Phase 3 aggregation — not required for V1 demo)
-- [ ] Fail-closed policy documented for every consumer (`get_price_or_fail` only)
-
-### 1.6 Shared crate
-
-- [x] `PriceData`, `Debt`, `AssetConfig`, interest / HF / LTV helpers, constants
-- [x] Deduplicate vault-local `PriceData` in favor of `shared` (vault + engine now `use shared::PriceData`)
-- [ ] Deduplicate `AssetConfig` / `Position` across remaining feature crates where ABI-safe
-- [ ] Fill the empty `shared/src/events.rs` with shared event topics or docs so indexers have one schema
-- [ ] Add `shared` as a dependency of `oracle-adapter` (currently the only contract that does not use it)
-- [ ] Keep error codes stable; never renumber after testnet
-
-### 1.7 Contract quality / security
-
-- [ ] Scout / static analysis pass before testnet
-- [ ] Auth-tree review on all wrappers that call `token.transfer` / `repay_for` / `seize_collateral`
-- [ ] Fuzz or property tests for deposit/withdraw/borrow/repay/liquidate value paths
-- [x] Private vulnerability reporting path (`SECURITY.md` at repo root)
-- [ ] Threat model / per-contract attack-surface doc (`docs/security.md`) — beyond the reporting policy already in `SECURITY.md`
-- [ ] Pause runbook (who pauses what, in which order)
-- [ ] No mainnet funds until external review plan exists (README already warns unaudited)
-
----
+Future schema changes require migration tests against existing data. Keep published error codes stable. The oracle supports manual address prices and signed RedStone feed mappings. Deployment-specific addresses, feed IDs, decimals, signers and thresholds must be verified for the chosen network.
 
 ## 2. Deploy & tooling
 
-- [~] `rust-toolchain.toml` exists at repo root — confirm it is pinned to an exact version (not `stable`) and matches CI
+- [x] Local Rust toolchain pinned to 1.88.0.
 - [ ] Deploy scripts: build → upload → deploy → initialize (testnet first)
 - [ ] Network config (RPC URL, passphrase, identity names) without committing secrets
 - [ ] Record contract IDs, WASM hashes, commit SHA after each deploy
 - [ ] Align CONTRIBUTING / CI: `stellar contract build --locked` vs `cargo build --target wasm32v1-none`
-- [ ] Makefile or `justfile` for common verify commands
+- [x] Makefile or `justfile` for common verify commands
 - [ ] Friendbot / key generation docs for contributors
 
 ---
@@ -164,10 +72,9 @@ backend/
 - [x] `.github/CONTRIBUTING.md`
 - [x] `SECURITY.md` + private vulnerability reporting path (exists at repo root; linked from README)
 - [x] `CHANGELOG.md` at repo root
-- [ ] Keep README component status table in sync with this TODO (pool/engine still marked “Scaffolded” but are now implemented)
-- [ ] `docs/api.md` when backend routes exist
-- [ ] `docs/risk-model.md` (per-asset LTV table from arch, as implemented)
-- [x] Refresh or archive `private/implementation-status.md` (Aug 2026; pool/engine no longer hello stubs, shared crate wired, `PriceData` unified)
+- [x] README links to local verification and the V1 contract operations guide.
+- [ ] Document backend routes when the backend exists.
+- [x] Document implemented V1 risk parameters and pause controls.
 - [ ] Deployment / ops runbook
 
 ---
@@ -193,10 +100,3 @@ From arch V2–V4 — leave unchecked until V1 ships:
 - [ ] Institutional permissioned pools
 
 ---
-
-## How to use this file
-
-1. Open or claim a GitHub issue for any non-trivial checkbox.
-2. Prefer one PR per checkbox cluster (e.g. “unify PriceData” separate from “Axum scaffold”).
-3. When closing a contract gap, add or extend a test that would have failed before the fix.
-4. Update the **Snapshot** table when a whole row changes status.

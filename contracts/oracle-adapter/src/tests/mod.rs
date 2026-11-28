@@ -9,10 +9,10 @@ pub(crate) fn setup_env() -> (Env, OracleContractClient<'static>, Address) {
     // timestamps (e.g. 1_000–100_000) are always <= ledger time.
     env.ledger().set_timestamp(1_000_000_000);
 
-    let contract_id = env.register(OracleContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(OracleContract, (&admin,));
     let client = OracleContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     client.initialize(&admin, &300);
 
     (env, client, admin)
@@ -24,10 +24,10 @@ fn test_initialize_success() {
     env.mock_all_auths();
     env.ledger().set_timestamp(1_000_000_000);
 
-    let contract_id = env.register(OracleContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(OracleContract, (&admin,));
     let client = OracleContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     client.initialize(&admin, &300);
 
     let asset = Address::generate(&env);
@@ -41,10 +41,10 @@ fn test_initialize_success() {
 #[test]
 fn test_initialize_emits_event() {
     let env = Env::default();
-    let contract_id = env.register(OracleContract, ());
+    let admin = Address::generate(&env);
+    let contract_id = env.register(OracleContract, (&admin,));
     let client = OracleContractClient::new(&env, &contract_id);
 
-    let admin = Address::generate(&env);
     env.mock_all_auths();
     client.initialize(&admin, &300);
 
