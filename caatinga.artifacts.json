@@ -1,0 +1,110 @@
+{
+  "project": "alien-protocol",
+  "networks": {
+    "testnet": {
+      "contracts": {
+        "deployment-factory": {
+          "contractId": "CBPT6ZGCIXA2L2H6VWVFELVWJOAAKSQ7S6Q5JL2QOUNUZQEADPPPEG33",
+          "wasmHash": "641a4af2f6d367c8018c06bc12703892040d7233296443117a3afdeeb1eb9dca",
+          "deployedAt": "2026-11-28T09:34:25.679Z",
+          "sourcePath": "./contracts/deployment-factory",
+          "wasmPath": "./target/wasm32v1-none/release/deployment_factory.wasm",
+          "dependencies": [],
+          "resolvedDeployArgs": {},
+          "metadata": {
+            "gitCommit": "d0cbeed37b93791d833610b1c862e108f7e2f51c",
+            "rustcVersion": "rustc 1.94.1 (e408947bf 2026-03-25)",
+            "caatingaVersion": "3.14.0",
+            "network": "testnet",
+            "timestamp": "2026-11-28T09:34:25.677Z",
+            "checksum": "641a4af2f6d367c8018c06bc12703892040d7233296443117a3afdeeb1eb9dca"
+          }
+        },
+        "oracle-adapter": {
+          "contractId": "CA3A7ZB7YXWWMNROIWAM6GX74HQPKSST6RQHAESRWI37KVOZG7SDJ5AU",
+          "wasmHash": "ec58bdb3c90fcee2154e3e620ca34012718ddd72b3cdced5f65d92533570d973",
+          "deployedAt": "2026-11-28T09:34:41.039Z",
+          "sourcePath": "./contracts/oracle-adapter",
+          "wasmPath": "./target/wasm32v1-none/release/oracle_adapter.wasm",
+          "dependencies": [],
+          "resolvedDeployArgs": {
+            "admin": "GCJGOM2HPJGHEAGVFGIFN7SVTGWOZIH27E7JL7Q4D4VVIC4NZ7UK2VRK"
+          },
+          "metadata": {
+            "gitCommit": "d0cbeed37b93791d833610b1c862e108f7e2f51c",
+            "rustcVersion": "rustc 1.94.1 (e408947bf 2026-03-25)",
+            "caatingaVersion": "3.14.0",
+            "network": "testnet",
+            "timestamp": "2026-11-28T09:34:41.038Z",
+            "checksum": "ec58bdb3c90fcee2154e3e620ca34012718ddd72b3cdced5f65d92533570d973"
+          }
+        },
+        "lending-pool": {
+          "contractId": "CB7QKTIZLPENLBHHHBGDNPSWRQYZ4TJ2CNCCX3LZVDZGW4FZSWZZQERN",
+          "wasmHash": "8dd3cfde4e13160edf51e3983a6e3a5e1263bf8ac4cac443d36f24abbb9903ce",
+          "deployedAt": "2026-11-28T09:34:50.148Z",
+          "sourcePath": "./contracts/lending-pool",
+          "wasmPath": "./target/wasm32v1-none/release/lending_pool.wasm",
+          "dependencies": [],
+          "resolvedDeployArgs": {
+            "admin": "GCJGOM2HPJGHEAGVFGIFN7SVTGWOZIH27E7JL7Q4D4VVIC4NZ7UK2VRK"
+          },
+          "metadata": {
+            "gitCommit": "d0cbeed37b93791d833610b1c862e108f7e2f51c",
+            "rustcVersion": "rustc 1.94.1 (e408947bf 2026-03-25)",
+            "caatingaVersion": "3.14.0",
+            "network": "testnet",
+            "timestamp": "2026-11-28T09:34:50.147Z",
+            "checksum": "8dd3cfde4e13160edf51e3983a6e3a5e1263bf8ac4cac443d36f24abbb9903ce"
+          }
+        },
+        "collateral-vault": {
+          "contractId": "CAS6NDY4D5QTCRWLT3AUJIIEJTTJKXQU4WZ7OYQ6N2WQPJZPR3RVOLOY",
+          "wasmHash": "bca0b33cd16eab333255a7294035645676b8929ef6da545d5f80ecfba3c9e321",
+          "deployedAt": "2026-11-28T09:35:06.225Z",
+          "sourcePath": "./contracts/collateral-vault",
+          "wasmPath": "./target/wasm32v1-none/release/collateral_vault.wasm",
+          "dependencies": [],
+          "resolvedDeployArgs": {
+            "admin": "GCJGOM2HPJGHEAGVFGIFN7SVTGWOZIH27E7JL7Q4D4VVIC4NZ7UK2VRK"
+          },
+          "metadata": {
+            "gitCommit": "d0cbeed37b93791d833610b1c862e108f7e2f51c",
+            "rustcVersion": "rustc 1.94.1 (e408947bf 2026-03-25)",
+            "caatingaVersion": "3.14.0",
+            "network": "testnet",
+            "timestamp": "2026-11-28T09:35:06.224Z",
+            "checksum": "bca0b33cd16eab333255a7294035645676b8929ef6da545d5f80ecfba3c9e321"
+          }
+        },
+        "liquidation-engine": {
+          "contractId": "CC2FQTPDJLZS3SWS73EHPXVCPJOHRANT24GRYH4MZDH727MT6YXXXL6A",
+          "wasmHash": "cd8783fdfb8b34e872cd5525e4ab04a3398a45b77809f8eac90b961ba2de5e74",
+          "deployedAt": "2026-11-28T09:35:21.583Z",
+          "sourcePath": "./contracts/liquidation-engine",
+          "wasmPath": "./target/wasm32v1-none/release/liquidation_engine.wasm",
+          "dependencies": [],
+          "resolvedDeployArgs": {
+            "admin": "GCJGOM2HPJGHEAGVFGIFN7SVTGWOZIH27E7JL7Q4D4VVIC4NZ7UK2VRK"
+          },
+          "metadata": {
+            "gitCommit": "d0cbeed37b93791d833610b1c862e108f7e2f51c",
+            "rustcVersion": "rustc 1.94.1 (e408947bf 2026-03-25)",
+            "caatingaVersion": "3.14.0",
+            "network": "testnet",
+            "timestamp": "2026-11-28T09:35:21.583Z",
+            "checksum": "cd8783fdfb8b34e872cd5525e4ab04a3398a45b77809f8eac90b961ba2de5e74"
+          }
+        }
+      },
+      "dependencyGraph": {
+        "deployment-factory": [],
+        "oracle-adapter": [],
+        "lending-pool": [],
+        "collateral-vault": [],
+        "liquidation-engine": []
+      }
+    }
+  },
+  "version": 2
+}

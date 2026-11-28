@@ -21,6 +21,12 @@ for published contract releases.
 
 ## [Unreleased]
 
+### Tooling
+
+- Added Caatinga configuration for building, deploying, tracking, and checking the five Soroban contracts on testnet, with pinned CLI dependencies and a deployment guide.
+- Updated the pinned Rust toolchain and CI to a Caatinga-supported version.
+- Deployed the five contracts to testnet and recorded their addresses and WASM hashes in `docs/deployment.md`.
+
 ### Audit corrections
 
 - Bound initialization to a constructor-supplied owner on all four contracts and added an atomic deployment factory.

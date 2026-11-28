@@ -1,0 +1,25 @@
+{
+  "name": "alien-protocol-contracts",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "contracts:doctor": "ctg doctor --network testnet",
+    "contracts:build": "ctg build",
+    "contracts:deploy": "ctg deploy --network testnet",
+    "contracts:status": "ctg status --network testnet",
+    "contracts:smoke": "ctg smoke --network testnet",
+    "contracts:generate": "ctg generate --network testnet"
+  },
+  "devDependencies": {
+    "@caatinga/cli": "3.14.0",
+    "@caatinga/core": "3.14.0",
+    "@stellar/stellar-sdk": "16.0.1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "buffer": "6.0.3"
+  }
+}

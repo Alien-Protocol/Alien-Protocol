@@ -157,6 +157,8 @@ Run `make check` to check formatting, lint the workspace, run native tests, buil
 
 The operations guide covers initialization order, quote units, authorization, risk parameters, pause controls and storage lifetime. The work queue lists outstanding release decisions. [Contract operations](docs/contracts.md) · [Work queue](docs/TODO.md)
 
+To build, deploy, and track contract addresses with Caatinga, follow the [Caatinga testnet workflow](docs/caatinga.md). The [testnet deployment record](docs/deployment.md) lists the current contract addresses and WASM hashes.
+
 ## 📁 Repository structure
 
 ```text
@@ -166,6 +168,7 @@ Alien-Protocol/
 │   ├── ISSUE_TEMPLATE/       # Contribution templates
 │   └── workflows/            # Contract CI
 ├── contracts/
+│   ├── deployment-factory/   # Atomic deployment helper
 │   ├── collateral-vault/     # Collateral custody and positions
 │   ├── lending-pool/         # Borrowing and liquidity
 │   ├── liquidation-engine/   # Unhealthy-position liquidation
@@ -176,6 +179,9 @@ Alien-Protocol/
 │   └── TODO.md               # Open contract and project work
 ├── LICENSE
 ├── Cargo.toml                # Rust workspace configuration
+├── caatinga.config.ts        # Caatinga build and deploy configuration
+├── caatinga.artifacts.json   # Network-scoped contract IDs after deploy
+├── package.json              # Pinned Caatinga CLI dependencies
 └── README.md
 ```
 

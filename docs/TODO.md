@@ -15,7 +15,7 @@ Future schema changes require migration tests against existing data. Keep publis
 
 ## 2. Deploy & tooling
 
-- [x] Local Rust toolchain pinned to 1.88.0.
+- [x] Local Rust toolchain pinned to 1.94.1.
 - [ ] Deploy scripts: build → upload → deploy → initialize (testnet first)
 - [ ] Network config (RPC URL, passphrase, identity names) without committing secrets
 - [ ] Record contract IDs, WASM hashes, commit SHA after each deploy
